@@ -744,6 +744,84 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   return (
     <div className="space-y-4">
 
+      {/* ── STANDALONE EDIT SHEET (works from card list OR from viewer) ── */}
+      {viewerEditOpen && editingDoc && !viewerOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setViewerEditOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 600,
+              background: 'rgba(0,0,0,0.45)',
+              animation: 'vaultFadeIn 0.18s ease',
+            }}
+          />
+          <style>{`
+            @keyframes vaultFadeIn { from { opacity: 0 } to { opacity: 1 } }
+            @keyframes vaultSlideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+          `}</style>
+          {/* Sheet */}
+          <div
+            style={{
+              position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 601,
+              background: '#fff', borderRadius: '20px 20px 0 0',
+              boxShadow: '0 -8px 40px rgba(0,0,0,0.3)',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+              display: 'flex', flexDirection: 'column',
+              maxHeight: '80dvh',
+              animation: 'vaultSlideUp 0.22s cubic-bezier(0.32,0.72,0,1)',
+            }}
+          >
+            {/* Handle */}
+            <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.14)' }} />
+            </div>
+            {/* Header */}
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 20px 12px', borderBottom: '1px solid #f0f0f0' }}>
+              <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: -0.3 }}>Editar documento</p>
+              <button onClick={() => setViewerEditOpen(false)} style={{ width: 32, height: 32, borderRadius: 10, background: '#f4f4f5', border: 'none', fontSize: 14, color: '#555', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}>✕</button>
+            </div>
+            {/* Form body */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Nome</label>
+                <input type="text" value={editingDoc.title} onChange={(e) => setEditingDoc((p) => p ? { ...p, title: e.target.value } : p)} style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7', borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111', outline: 'none', background: '#fafafa' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Categoria</label>
+                <select value={editingDoc.category} onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value, subcategory: '' } : p)} style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7', borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111', outline: 'none', background: '#fafafa', appearance: 'none' }}>
+                  {CATEGORY_OPTIONS.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
+                </select>
+              </div>
+              {(SUBCATEGORY_OPTIONS[editingDoc.category] ?? []).length > 0 && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Subcategoria</label>
+                  <select value={editingDoc.subcategory ?? ''} onChange={(e) => setEditingDoc((p) => p ? { ...p, subcategory: e.target.value } : p)} style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7', borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111', outline: 'none', background: '#fafafa', appearance: 'none' }}>
+                    <option value="">— opcional —</option>
+                    {SUBCATEGORY_OPTIONS[editingDoc.category].map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>📅 Data</label>
+                <input type="date" value={editingDoc.date} onChange={(e) => setEditingDoc((p) => p ? { ...p, date: e.target.value } : p)} style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7', borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111', outline: 'none', background: '#fafafa' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>🏥 Estabelecimento</label>
+                <EstablishmentInput value={editingDoc.establishment} onChange={(v) => setEditingDoc((p) => p ? { ...p, establishment: v } : p)} historyNames={(docs.map((d) => d.establishment_name).filter((v, i, a) => !!v && a.indexOf(v) === i) as string[])} className="" placeholder="Ex: Clínica VetCenter" />
+              </div>
+            </div>
+            {/* Footer */}
+            <div style={{ flexShrink: 0, display: 'flex', gap: 10, padding: '12px 20px 16px', borderTop: '1px solid #f0f0f0' }}>
+              <button onClick={() => setViewerEditOpen(false)} style={{ flex: 0, padding: '13px 22px', borderRadius: 14, cursor: 'pointer', background: '#f4f4f5', border: 'none', fontSize: 14, fontWeight: 600, color: '#555', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}>Cancelar</button>
+              <button onClick={async () => { await handleSaveEdit(); setViewerEditOpen(false); }} disabled={editingDoc.saving} style={{ flex: 1, padding: '13px 20px', borderRadius: 14, cursor: 'pointer', background: '#0056D2', border: 'none', fontSize: 14, fontWeight: 700, color: '#fff', WebkitTapHighlightColor: 'transparent', opacity: editingDoc.saving ? 0.6 : 1 } as React.CSSProperties}>
+                {editingDoc.saving ? '⏳ Salvando…' : '✓ Salvar'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── FULL-SCREEN DOCUMENT VIEWER ─────────────────────────────── */}
       {viewerOpen && (
         <div
@@ -1189,20 +1267,21 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           {/* ── Content area ── */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', backgroundColor: '#000' }}>
 
-            {/* Navigation arrows */}
-            {navigableDocs.length > 1 && viewerZoom <= 1 && (
+            {/* Navigation arrows — always rendered when there are multiple docs, opacity handles visibility */}
+            {navigableDocs.length > 1 && (
               <>
                 <button
-                  onClick={() => { void navigateViewer(-1); }}
+                  onClick={() => { if (viewerDocIndex > 0) void navigateViewer(-1); }}
                   style={{
-                    position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)',
-                    zIndex: 10, width: 44, height: 72, borderRadius: 12,
-                    background: 'rgba(0,0,0,0.38)', border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#fff', fontSize: 30,
+                    position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)',
+                    zIndex: 10, width: 48, height: 80, borderRadius: 14,
+                    background: viewerDocIndex <= 0 ? 'transparent' : 'rgba(0,0,0,0.45)',
+                    border: viewerDocIndex <= 0 ? 'none' : '1px solid rgba(255,255,255,0.12)',
+                    color: '#fff', fontSize: 32,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: viewerDocIndex <= 0 ? 'default' : 'pointer',
-                    opacity: viewerDocIndex <= 0 ? 0 : 0.7,
-                    transition: 'opacity 0.2s',
+                    opacity: viewerDocIndex <= 0 ? 0 : 1,
+                    transition: 'opacity 0.25s, background 0.2s',
                     pointerEvents: viewerDocIndex <= 0 ? 'none' : 'auto',
                     WebkitTapHighlightColor: 'transparent',
                   } as React.CSSProperties}
@@ -1211,16 +1290,17 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                   ‹
                 </button>
                 <button
-                  onClick={() => { void navigateViewer(1); }}
+                  onClick={() => { if (viewerDocIndex < navigableDocs.length - 1) void navigateViewer(1); }}
                   style={{
-                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                    zIndex: 10, width: 44, height: 72, borderRadius: 12,
-                    background: 'rgba(0,0,0,0.38)', border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#fff', fontSize: 30,
+                    position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+                    zIndex: 10, width: 48, height: 80, borderRadius: 14,
+                    background: viewerDocIndex >= navigableDocs.length - 1 ? 'transparent' : 'rgba(0,0,0,0.45)',
+                    border: viewerDocIndex >= navigableDocs.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.12)',
+                    color: '#fff', fontSize: 32,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: viewerDocIndex >= navigableDocs.length - 1 ? 'default' : 'pointer',
-                    opacity: viewerDocIndex >= navigableDocs.length - 1 ? 0 : 0.7,
-                    transition: 'opacity 0.2s',
+                    opacity: viewerDocIndex >= navigableDocs.length - 1 ? 0 : 1,
+                    transition: 'opacity 0.25s, background 0.2s',
                     pointerEvents: viewerDocIndex >= navigableDocs.length - 1 ? 'none' : 'auto',
                     WebkitTapHighlightColor: 'transparent',
                   } as React.CSSProperties}
@@ -1326,8 +1406,8 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                 </div>
               ) : (
                 // Android / Desktop — iframe com blob funciona bem
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', background: '#1a1a1a' } as React.CSSProperties}>
+                <div style={{ position: 'absolute', inset: 0, backgroundColor: '#000', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', background: '#000' } as React.CSSProperties}>
                     <div
                       style={{
                         width: `${viewerZoom * 100}%`,
@@ -1343,42 +1423,6 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                         style={{ width: '100%', height: '100%', border: 'none', display: 'block', minHeight: 0 }}
                       />
                     </div>
-                  </div>
-                  <div style={{
-                    flexShrink: 0,
-                    padding: '12px 16px',
-                    paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
-                    backgroundColor: 'rgba(0,0,0,0.92)',
-                    display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center',
-                    borderTop: '1px solid rgba(255,255,255,0.08)',
-                  }}>
-                    <a
-                      href={viewerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        flex: 1, maxWidth: 240, background: '#2563eb', color: '#fff',
-                        fontSize: 14, fontWeight: 700, padding: '13px 20px', borderRadius: 14,
-                        textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        WebkitTapHighlightColor: 'transparent',
-                      } as React.CSSProperties}
-                    >
-                      Abrir no leitor ↗
-                    </a>
-                    <a
-                      href={viewerUrl}
-                      download={viewerTitle || 'documento.pdf'}
-                      style={{
-                        width: 50, height: 50, borderRadius: 14, flexShrink: 0,
-                        background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-                        color: '#fff', fontSize: 20,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        textDecoration: 'none', WebkitTapHighlightColor: 'transparent',
-                      } as React.CSSProperties}
-                      aria-label="Baixar PDF"
-                    >
-                      ↓
-                    </a>
                   </div>
                 </div>
               )
@@ -1785,95 +1829,13 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
               {groupLabel}
             </div>
             {groupItems.map((doc) => {
-          const isEditing = editingDoc?.id === doc.id;
-
           return (
             <div
               key={doc.id}
               className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all"
             >
-              {isEditing && editingDoc ? (
-                /* ── Inline edit form ── */
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                    <span>{doc.icon}</span>
-                    <span>Editar documento</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div className="sm:col-span-2">
-                      <label className="text-xs text-gray-500 mb-1 block">Nome</label>
-                      <input
-                        type="text"
-                        value={editingDoc.title}
-                        onChange={(e) => setEditingDoc((p) => p ? { ...p, title: e.target.value } : p)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Categoria</label>
-                      <select
-                        value={editingDoc.category}
-                        onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value, subcategory: '' } : p)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      >
-                        {CATEGORY_OPTIONS.map((c) => (
-                          <option key={c.value} value={c.value}>{c.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {(SUBCATEGORY_OPTIONS[editingDoc.category] ?? []).length > 0 && (
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Subcategoria</label>
-                        <select
-                          value={editingDoc.subcategory ?? ''}
-                          onChange={(e) => setEditingDoc((p) => p ? { ...p, subcategory: e.target.value } : p)}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                        >
-                          <option value="">— opcional —</option>
-                          {SUBCATEGORY_OPTIONS[editingDoc.category].map((s) => (
-                            <option key={s.value} value={s.value}>{s.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">📅 Data</label>
-                      <input
-                        type="date"
-                        value={editingDoc.date}
-                        onChange={(e) => setEditingDoc((p) => p ? { ...p, date: e.target.value } : p)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="text-xs text-gray-500 mb-1 block">🏥 Estabelecimento</label>
-                      <EstablishmentInput
-                        value={editingDoc.establishment}
-                        onChange={(v) => setEditingDoc((p) => p ? { ...p, establishment: v } : p)}
-                        historyNames={(docs.map((d) => d.establishment_name).filter((v, i, a) => !!v && a.indexOf(v) === i) as string[])}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      onClick={() => setEditingDoc(null)}
-                      className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={handleSaveEdit}
-                      disabled={editingDoc.saving}
-                      className="px-4 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-medium hover:bg-[#0047ad] disabled:opacity-50 transition-colors"
-                    >
-                      {editingDoc.saving ? 'Salvando…' : '✓ Salvar'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* ── Normal doc card ── */
-                <div className="flex items-start gap-3">
+              {/* ── Doc card ── */}
+              <div className="flex items-start gap-3">
                   {/* Thumbnail para imagens / ícone para o resto */}
                   {(() => {
                     const mt = doc.mime_type ?? '';
@@ -1924,7 +1886,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
 
                     <div className="flex items-center gap-2">
                       {/* Primary action */}
-                      {(doc.kind === 'file' || doc.kind === 'link') && (
+                      {doc.kind === 'file' && doc.storage_key && (
                         <button
                           onClick={() => handleView(doc)}
                           className="px-4 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-semibold hover:bg-[#0047ad] transition-colors shrink-0"
@@ -1932,28 +1894,35 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                           Ver
                         </button>
                       )}
+                      {doc.kind === 'link' && (
+                        <button
+                          onClick={() => handleView(doc)}
+                          className="px-4 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-200 transition-colors shrink-0"
+                        >
+                          🔗 Link
+                        </button>
+                      )}
 
                       {/* Secondary actions — icon-only, muted */}
                       <div className="flex items-center gap-1 ml-auto">
                         <button
-                          onClick={() => startEdit(doc)}
+                          onClick={() => { startEdit(doc); setViewerEditOpen(true); }}
                           title="Editar"
-                          className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-sm"
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => handleDelete(doc.id)}
                           title="Excluir"
-                          className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm"
                         >
                           🗑️
                         </button>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+              </div>
             </div>
           );
             })}

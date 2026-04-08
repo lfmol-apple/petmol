@@ -891,10 +891,14 @@ def list_documents(
     user: User = Depends(get_current_user),
 ):
     _get_pet_or_404(db, user.id, pet_id)
+    from sqlalchemy import case, nulls_last
     return (
         db.query(PetDocument)
         .filter(PetDocument.pet_id == pet_id)
-        .order_by(PetDocument.created_at.desc())
+        .order_by(
+            nulls_last(PetDocument.document_date.desc()),
+            PetDocument.created_at.desc(),
+        )
         .all()
     )
 
