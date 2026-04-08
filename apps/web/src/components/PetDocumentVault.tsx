@@ -9,219 +9,16 @@ import { trackV1Metric } from '@/lib/v1Metrics';
 import { groupVaultDocumentsByMonth } from '@/components/petDocuments/vaultHelpers';
 import type { VaultPetDocument } from '@/components/petDocuments/types';
 import { localTodayISO } from '@/lib/localDate';
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-interface PetDocument {
-  id: string;
-  pet_id: string;
-  kind: 'file' | 'link';
-  category: string | null;
-  title: string | null;
-  document_date: string | null;
-  establishment_name: string | null;
-  notes: string | null;
-  source: string;
-  url_masked: string | null;
-  storage_key: string | null;
-  mime_type: string | null;
-  size_bytes: number | null;
-  created_at: string;
-  icon: string;
-}
-
-interface BatchDocItem {
-  id: string;
-  title: string;
-  category: string;
-  icon: string;
-  mime_type: string | null;
-  customTitle: string;
-  customCategory: string;
-}
-
-interface BatchConfirm {
-  docs: BatchDocItem[];
-  detectedDate: string | null;
-  detectedEstablishment: string | null;
-  sharedDate: string;
-  sharedEstablishment: string;
-  saving: boolean;
-}
-
-interface DiscoveredItem {
-  url: string;
-  url_masked: string;
-  title: string;
-}
-
-interface EditingDoc {
-  id: string;
-  title: string;
-  category: string;
-  date: string;
-  establishment: string;
-  saving: boolean;
-}
-
-interface Props {
-  petId: string;
-  onDocsChanged?: () => void;
-}
-
-
-function fmtBytes(n: number | null): string {
-  if (!n) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function fmtDate(s: string | null): string {
-  if (!s) return '';
-  try {
-    return new Date(s).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch {
-    return s;
-  }
-}
-
-function replaceFileExtension(fileName: string, ext: string): string {
-  const base = fileName.replace(/\.[^/.]+$/, '');
-  return `${base || 'documento'}${ext}`;
-}
-
-async function loadImageElement(file: File): Promise<HTMLImageElement> {
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    image.decoding = 'async';
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error('Falha ao carregar a imagem.'));
-      image.src = objectUrl;
-    });
-    return image;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-function buildPdfFromJpeg(jpegBytes: Uint8Array, widthPx: number, heightPx: number): Uint8Array {
-  const pageWidth = 595.28;
-  const pageHeight = 841.89;
-  const margin = 24;
-
-  const widthPt = widthPx * 0.75;
-  const heightPt = heightPx * 0.75;
-  const scale = Math.min(
-    (pageWidth - margin * 2) / widthPt,
-    (pageHeight - margin * 2) / heightPt,
-    1
-  );
-
-  const drawWidth = Math.max(1, widthPt * scale);
-  const drawHeight = Math.max(1, heightPt * scale);
-  const offsetX = (pageWidth - drawWidth) / 2;
-  const offsetY = (pageHeight - drawHeight) / 2;
-  const content = `q\n${drawWidth.toFixed(2)} 0 0 ${drawHeight.toFixed(2)} ${offsetX.toFixed(2)} ${offsetY.toFixed(2)} cm\n/Im0 Do\nQ`;
-
-  const encoder = new TextEncoder();
-  const parts: Uint8Array[] = [];
-  let totalLength = 0;
-
-  const pushText = (text: string) => {
-    const bytes = encoder.encode(text);
-    parts.push(bytes);
-    totalLength += bytes.length;
-  };
-
-  const pushBytes = (bytes: Uint8Array) => {
-    parts.push(bytes);
-    totalLength += bytes.length;
-  };
-
-  const offsets: number[] = [0];
-  let currentOffset = 0;
-  const markObject = () => {
-    offsets.push(currentOffset);
-  };
-
-  const addPart = (text: string) => {
-    pushText(text);
-    currentOffset = totalLength;
-  };
-
-  addPart('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
-
-  markObject();
-  addPart('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-
-  markObject();
-  addPart('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
-
-  markObject();
-  addPart(
-    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth.toFixed(2)} ${pageHeight.toFixed(2)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`
-  );
-
-  markObject();
-  addPart(
-    `4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${widthPx} /Height ${heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`
-  );
-  pushBytes(jpegBytes);
-  currentOffset = totalLength;
-  addPart('\nendstream\nendobj\n');
-
-  markObject();
-  addPart(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`);
-
-  const xrefOffset = totalLength;
-  addPart(`xref\n0 ${offsets.length}\n`);
-  addPart('0000000000 65535 f \n');
-  for (let index = 1; index < offsets.length; index += 1) {
-    addPart(`${String(offsets[index]).padStart(10, '0')} 00000 n \n`);
-  }
-  addPart(`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
-
-  const pdf = new Uint8Array(totalLength);
-  let cursor = 0;
-  for (const part of parts) {
-    pdf.set(part, cursor);
-    cursor += part.length;
-  }
-  return pdf;
-}
-
-async function convertImageFileToPdf(file: File): Promise<File> {
-  const image = await loadImageElement(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = image.naturalWidth || image.width;
-  canvas.height = image.naturalHeight || image.height;
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Não foi possível preparar a imagem para PDF.');
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-  const jpegBlob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('Não foi possível gerar o PDF da foto.'));
-    }, 'image/jpeg', 0.92);
-  });
-
-  const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
-  const pdfBytes = buildPdfFromJpeg(jpegBytes, canvas.width, canvas.height);
-  const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
-  new Uint8Array(pdfBuffer).set(pdfBytes);
-  return new File([pdfBuffer], replaceFileExtension(file.name, '.pdf'), {
-    type: 'application/pdf',
-    lastModified: Date.now(),
-  });
-}
+import type {
+  PetDocument,
+  BatchDocItem,
+  BatchConfirm,
+  DiscoveredItem,
+  EditingDoc,
+  PetDocumentVaultProps,
+} from '@/features/documents/types';
+import { fmtBytes, fmtDate } from '@/features/documents/utils';
+import { loadImageElement, buildPdfFromJpeg, convertImageFileToPdf } from '@/features/documents/fileProcessing';
 
 // ── Establishment Input (local suggestions — sem API externa) ──────────────
 
@@ -304,7 +101,7 @@ function EstablishmentInput({
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export function PetDocumentVault({ petId, onDocsChanged }: Props) {
+export function PetDocumentVault({ petId, onDocsChanged }: PetDocumentVaultProps) {
   const { t } = useI18n();
 
   const CATEGORY_TABS = [
@@ -350,14 +147,23 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [viewerZoom, setViewerZoom] = useState(1);
+  const [viewerDocIndex, setViewerDocIndex] = useState<number>(-1);
+  const [viewerEditOpen, setViewerEditOpen] = useState(false);
+  const [viewerDeleteOpen, setViewerDeleteOpen] = useState(false);
+  const viewerSwipeRef = useRef<{ x: number; y: number } | null>(null);
+  // docId → blob URL; lifecycle managed by evictDistantCache + closeViewer
+  const viewerBlobCache = useRef<Map<string, string>>(new Map());
 
   const closeViewer = () => {
-    if (viewerUrl && viewerUrl.startsWith('blob:')) URL.revokeObjectURL(viewerUrl);
+    viewerBlobCache.current.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
+    viewerBlobCache.current.clear();
     setViewerUrl(null);
     setViewerApiUrl(null);
     setViewerError(null);
     setViewerLoading(false);
     setViewerZoom(1);
+    setViewerEditOpen(false);
+    setViewerDeleteOpen(false);
   };
 
   // Add-link state
@@ -419,6 +225,11 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
   const groupedDocs = useMemo(
     () => groupVaultDocumentsByMonth(filtered as VaultPetDocument[]),
     [filtered]
+  );
+
+  const navigableDocs = useMemo(
+    () => docs.filter((d) => !((d.kind === 'link') && !!d.url_masked) && !!d.storage_key),
+    [docs]
   );
 
   // ── Upload ────────────────────────────────────────────────────────────
@@ -759,6 +570,7 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
                : mt === 'application/pdf' || ext === 'pdf' ? 'pdf'
                : 'other';
 
+    setViewerDocIndex(navigableDocs.findIndex((d) => d.id === doc.id));
     setViewerTitle(doc.title ?? 'Documento');
     setViewerMime(mime);
     setViewerApiUrl(apiUrl);
@@ -772,6 +584,7 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
     try {
       const blob = await fetchDocumentBlob(petId, doc.id, { download: mime === 'other' });
       const blobUrl = URL.createObjectURL(blob);
+      viewerBlobCache.current.set(doc.id, blobUrl);
       setViewerUrl(blobUrl);
 
       if (popup) {
@@ -805,6 +618,79 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
     }
   };
 
+  // ── Viewer navigation & prefetch cache ──────────────────────────────
+
+  const prefetchDocBlob = async (doc: PetDocument) => {
+    if (viewerBlobCache.current.has(doc.id)) return;
+    try {
+      const blob = await fetchDocumentBlob(petId, doc.id, { download: false });
+      // Guard against race: another navigation may have cached it while we awaited
+      if (!viewerBlobCache.current.has(doc.id)) {
+        viewerBlobCache.current.set(doc.id, URL.createObjectURL(blob));
+      }
+    } catch { /* silent — prefetch failure is non-fatal */ }
+  };
+
+  const evictDistantCache = (currentId: string, prevId?: string, nextId?: string) => {
+    const keep = new Set([currentId, prevId, nextId].filter(Boolean) as string[]);
+    viewerBlobCache.current.forEach((blobUrl, docId) => {
+      if (!keep.has(docId)) {
+        URL.revokeObjectURL(blobUrl);
+        viewerBlobCache.current.delete(docId);
+      }
+    });
+  };
+
+  const loadViewerDoc = async (doc: PetDocument, atIndex: number) => {
+    const mt = doc.mime_type ?? '';
+    const nameForExt = doc.storage_key || doc.title || '';
+    const ext = nameForExt.split('.').pop()?.toLowerCase() ?? '';
+    const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'bmp'];
+    const mime = mt.startsWith('image/') || imageExts.includes(ext) ? 'image'
+               : mt === 'application/pdf' || ext === 'pdf' ? 'pdf'
+               : 'other';
+    setViewerTitle(doc.title ?? 'Documento');
+    setViewerMime(mime);
+    setViewerError(null);
+    setViewerZoom(1);
+
+    const cached = viewerBlobCache.current.get(doc.id);
+    if (cached) {
+      // Cache hit — instant display, no spinner
+      setViewerUrl(cached);
+      setViewerLoading(false);
+    } else {
+      setViewerUrl(null);
+      setViewerLoading(true);
+      try {
+        const blob = await fetchDocumentBlob(petId, doc.id, { download: false });
+        const blobUrl = URL.createObjectURL(blob);
+        viewerBlobCache.current.set(doc.id, blobUrl);
+        setViewerUrl(blobUrl);
+      } catch {
+        setViewerError('Não foi possível carregar o arquivo.');
+      } finally {
+        setViewerLoading(false);
+      }
+    }
+
+    // Prefetch immediate neighbors in background
+    const prev = atIndex > 0 ? navigableDocs[atIndex - 1] : null;
+    const next = atIndex < navigableDocs.length - 1 ? navigableDocs[atIndex + 1] : null;
+    if (prev) void prefetchDocBlob(prev);
+    if (next) void prefetchDocBlob(next);
+
+    // Evict anything not in {current, prev, next} to bound memory
+    evictDistantCache(doc.id, prev?.id, next?.id);
+  };
+
+  const navigateViewer = async (delta: -1 | 1) => {
+    const nextIdx = viewerDocIndex + delta;
+    if (nextIdx < 0 || nextIdx >= navigableDocs.length) return;
+    setViewerDocIndex(nextIdx);
+    await loadViewerDoc(navigableDocs[nextIdx], nextIdx);
+  };
+
   // ── Total size ────────────────────────────────────────────────────────
 
   const totalBytes = docs.reduce((acc, d) => acc + (d.size_bytes ?? 0), 0);
@@ -821,116 +707,544 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             zIndex: 500, backgroundColor: '#000',
             display: 'flex', flexDirection: 'column',
-            /* dvh garante que respeita a barra dinâmica do Safari iOS */
             width: '100dvw', height: '100dvh',
             overflow: 'hidden',
-            paddingTop: 'env(safe-area-inset-top)',
-            paddingBottom: 'env(safe-area-inset-bottom)',
-            paddingLeft: 'env(safe-area-inset-left)',
-            paddingRight: 'env(safe-area-inset-right)',
+          }}
+          onTouchStart={(e) => {
+            viewerSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          }}
+          onTouchEnd={(e) => {
+            if (!viewerSwipeRef.current || viewerZoom > 1) { viewerSwipeRef.current = null; return; }
+            const dx = e.changedTouches[0].clientX - viewerSwipeRef.current.x;
+            const dy = e.changedTouches[0].clientY - viewerSwipeRef.current.y;
+            viewerSwipeRef.current = null;
+            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+              void navigateViewer(dx < 0 ? 1 : -1);
+            }
           }}
         >
           {/* ── Toolbar ── */}
           <div
             style={{
               flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '12px 16px',
-              backgroundColor: 'rgba(0,0,0,0.90)',
-              gap: 10,
-              minHeight: 56,
+              display: 'flex', alignItems: 'center',
+              paddingTop: 'calc(10px + env(safe-area-inset-top))',
+              paddingBottom: 10,
+              paddingLeft: 'calc(10px + env(safe-area-inset-left))',
+              paddingRight: 'calc(10px + env(safe-area-inset-right))',
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 100%)',
+              gap: 8,
+              minHeight: 'calc(60px + env(safe-area-inset-top))',
+              borderBottom: '1px solid rgba(255,255,255,0.07)',
             }}
           >
-            <span style={{ color: '#fff', fontSize: 14, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
-              {viewerTitle || 'Carregando...'}
-            </span>
-            {/* Abrir/Download só ficam disponíveis quando o blob está pronto */}
+            {/* Close — leftmost for natural thumb reach */}
+            <button
+              onClick={closeViewer}
+              style={{
+                width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                background: 'rgba(255,255,255,0.13)', border: 'none',
+                color: '#fff', fontSize: 16, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                WebkitTapHighlightColor: 'transparent',
+              } as React.CSSProperties}
+              aria-label="Fechar"
+            >
+              ✕
+            </button>
+
+            {/* Title */}
+            <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
+              <p style={{
+                color: '#fff', fontSize: 14, fontWeight: 600, margin: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3,
+              }}>
+                {viewerTitle || (viewerLoading ? 'Carregando…' : 'Documento')}
+              </p>
+            </div>
+
+            {/* Position indicator */}
+            {navigableDocs.length > 1 && viewerDocIndex >= 0 && (
+              <span style={{
+                color: 'rgba(255,255,255,0.35)', fontSize: 11, flexShrink: 0,
+                fontFeatureSettings: '"tnum"', userSelect: 'none',
+              } as React.CSSProperties}>
+                {viewerDocIndex + 1}<span style={{ opacity: 0.5, margin: '0 1px' }}>/</span>{navigableDocs.length}
+              </span>
+            )}
+
+            {/* Actions — only when blob ready */}
             {viewerUrl && (
-              <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+
+                {/* Zoom pill — image and PDF only */}
                 {(viewerMime === 'image' || viewerMime === 'pdf') && (
-                  <>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 0,
+                    background: 'rgba(255,255,255,0.11)', borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    overflow: 'hidden',
+                  }}>
                     <button
                       onClick={() => setViewerZoom((z) => Math.max(0.75, Number((z - 0.25).toFixed(2))))}
-                      style={{ color: '#fff', fontSize: 13, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 10, padding: '7px 12px', background: 'rgba(255,255,255,0.15)', whiteSpace: 'nowrap', flexShrink: 0 }}
+                      style={{
+                        width: 38, height: 40, background: 'transparent', border: 'none',
+                        color: viewerZoom > 0.75 ? '#fff' : 'rgba(255,255,255,0.3)',
+                        fontSize: 19, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        WebkitTapHighlightColor: 'transparent',
+                      } as React.CSSProperties}
+                      aria-label="Reduzir zoom"
                     >
-                      －
+                      −
                     </button>
-                    <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, minWidth: 46, textAlign: 'center' }}>
+                    <span style={{
+                      color: 'rgba(255,255,255,0.75)', fontSize: 11, minWidth: 32, textAlign: 'center',
+                      fontFeatureSettings: '"tnum"', letterSpacing: -0.2, userSelect: 'none',
+                    }}>
                       {Math.round(viewerZoom * 100)}%
                     </span>
                     <button
                       onClick={() => setViewerZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
-                      style={{ color: '#fff', fontSize: 13, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 10, padding: '7px 12px', background: 'rgba(255,255,255,0.15)', whiteSpace: 'nowrap', flexShrink: 0 }}
+                      style={{
+                        width: 38, height: 40, background: 'transparent', border: 'none',
+                        color: viewerZoom < 3 ? '#fff' : 'rgba(255,255,255,0.3)',
+                        fontSize: 19, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        WebkitTapHighlightColor: 'transparent',
+                      } as React.CSSProperties}
+                      aria-label="Aumentar zoom"
                     >
-                      ＋
+                      +
                     </button>
-                  </>
+                  </div>
                 )}
+
+                {/* Download */}
+                <a
+                  href={viewerUrl}
+                  download={viewerTitle || 'documento'}
+                  style={{
+                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    background: 'rgba(255,255,255,0.13)', color: '#fff', fontSize: 17,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    textDecoration: 'none', WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Baixar"
+                  title="Baixar"
+                >
+                  ↓
+                </a>
+
+                {/* Open in new tab */}
                 <a
                   href={viewerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: '#fff', fontSize: 13, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 10, padding: '7px 14px', background: 'rgba(255,255,255,0.15)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 600 }}
+                  style={{
+                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    background: 'rgba(255,255,255,0.13)', color: '#fff', fontSize: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    textDecoration: 'none', WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
                   onClick={(e) => e.stopPropagation()}
+                  aria-label="Abrir em nova aba"
+                  title="Abrir"
                 >
-                  ↗ Abrir
+                  ↗
                 </a>
-                <a
-                  href={viewerUrl}
-                  download={viewerTitle || 'documento'}
-                  style={{ color: '#fff', fontSize: 13, border: '1px solid rgba(255,255,255,0.4)', borderRadius: 10, padding: '7px 12px', background: 'rgba(255,255,255,0.15)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
-                  onClick={(e) => e.stopPropagation()}
+
+                {/* Edit */}
+                <button
+                  onClick={() => {
+                    const doc = navigableDocs[viewerDocIndex];
+                    if (!doc) return;
+                    startEdit(doc);
+                    setViewerEditOpen(true);
+                  }}
+                  style={{
+                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    background: 'rgba(255,255,255,0.13)', border: 'none',
+                    color: '#fff', fontSize: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
+                  aria-label="Editar documento"
+                  title="Editar"
                 >
-                  ⬇️
-                </a>
-              </>
+                  ✏️
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={() => setViewerDeleteOpen(true)}
+                  style={{
+                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    background: 'rgba(220,38,38,0.22)', border: 'none',
+                    color: '#fca5a5', fontSize: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
+                  aria-label="Excluir documento"
+                  title="Excluir"
+                >
+                  🗑️
+                </button>
+              </div>
             )}
-            <button
-              onClick={closeViewer}
-              style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', fontSize: 20, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            >
-              ✕
-            </button>
           </div>
+
+          {/* ── Edit bottom sheet ── */}
+          {viewerEditOpen && editingDoc && (
+            <>
+              {/* Backdrop */}
+              <div
+                onClick={() => setViewerEditOpen(false)}
+                style={{
+                  position: 'absolute', inset: 0, zIndex: 20,
+                  background: 'rgba(0,0,0,0.55)',
+                  animation: 'vaultFadeIn 0.18s ease',
+                }}
+              />
+              <style>{`
+                @keyframes vaultFadeIn { from { opacity: 0 } to { opacity: 1 } }
+                @keyframes vaultSlideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+              `}</style>
+              {/* Sheet */}
+              <div
+                style={{
+                  position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 21,
+                  background: '#fff', borderRadius: '20px 20px 0 0',
+                  boxShadow: '0 -8px 40px rgba(0,0,0,0.4)',
+                  paddingBottom: 'env(safe-area-inset-bottom)',
+                  display: 'flex', flexDirection: 'column',
+                  maxHeight: '72dvh',
+                  animation: 'vaultSlideUp 0.22s cubic-bezier(0.32,0.72,0,1)',
+                }}
+              >
+                {/* Sheet handle */}
+                <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+                  <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.14)' }} />
+                </div>
+
+                {/* Sheet header */}
+                <div style={{
+                  flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 20px 12px',
+                  borderBottom: '1px solid #f0f0f0',
+                }}>
+                  <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: -0.3 }}>
+                    Editar documento
+                  </p>
+                  <button
+                    onClick={() => setViewerEditOpen(false)}
+                    style={{
+                      width: 32, height: 32, borderRadius: 10,
+                      background: '#f4f4f5', border: 'none', fontSize: 14, color: '#555',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      WebkitTapHighlightColor: 'transparent',
+                    } as React.CSSProperties}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Scrollable form body */}
+                <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                  {/* Nome */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Nome</label>
+                    <input
+                      type="text"
+                      value={editingDoc.title}
+                      onChange={(e) => setEditingDoc((p) => p ? { ...p, title: e.target.value } : p)}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7',
+                        borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111',
+                        outline: 'none', background: '#fafafa',
+                      }}
+                    />
+                  </div>
+
+                  {/* Categoria */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Categoria</label>
+                    <select
+                      value={editingDoc.category}
+                      onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value } : p)}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7',
+                        borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111',
+                        outline: 'none', background: '#fafafa', appearance: 'none',
+                      }}
+                    >
+                      {CATEGORY_OPTIONS.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Data */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>📅 Data</label>
+                    <input
+                      type="date"
+                      value={editingDoc.date}
+                      onChange={(e) => setEditingDoc((p) => p ? { ...p, date: e.target.value } : p)}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7',
+                        borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111',
+                        outline: 'none', background: '#fafafa',
+                      }}
+                    />
+                  </div>
+
+                  {/* Estabelecimento */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>🏥 Estabelecimento</label>
+                    <EstablishmentInput
+                      value={editingDoc.establishment}
+                      onChange={(v) => setEditingDoc((p) => p ? { ...p, establishment: v } : p)}
+                      historyNames={(docs.map((d) => d.establishment_name).filter((v, i, a) => !!v && a.indexOf(v) === i) as string[])}
+                      className=""
+                      placeholder="Ex: Clínica VetCenter"
+                    />
+                  </div>
+                </div>
+
+                {/* Footer actions */}
+                <div style={{
+                  flexShrink: 0, display: 'flex', gap: 10, padding: '12px 20px 16px',
+                  borderTop: '1px solid #f0f0f0',
+                }}>
+                  <button
+                    onClick={() => setViewerEditOpen(false)}
+                    style={{
+                      flex: 0, padding: '13px 22px', borderRadius: 14, cursor: 'pointer',
+                      background: '#f4f4f5', border: 'none', fontSize: 14, fontWeight: 600, color: '#555',
+                      WebkitTapHighlightColor: 'transparent',
+                    } as React.CSSProperties}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await handleSaveEdit();
+                      setViewerEditOpen(false);
+                      // refresh viewer title after save
+                      if (editingDoc) setViewerTitle(editingDoc.title.trim() || viewerTitle);
+                    }}
+                    disabled={editingDoc.saving}
+                    style={{
+                      flex: 1, padding: '13px 20px', borderRadius: 14, cursor: 'pointer',
+                      background: '#0056D2', border: 'none', fontSize: 14, fontWeight: 700, color: '#fff',
+                      WebkitTapHighlightColor: 'transparent',
+                      opacity: editingDoc.saving ? 0.6 : 1,
+                    } as React.CSSProperties}
+                  >
+                    {editingDoc.saving ? '⏳ Salvando…' : '✓ Salvar'}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Delete confirmation sheet ── */}
+          {viewerDeleteOpen && (() => {
+            const doc = navigableDocs[viewerDocIndex];
+            return (
+              <>
+                {/* Backdrop */}
+                <div
+                  onClick={() => setViewerDeleteOpen(false)}
+                  style={{
+                    position: 'absolute', inset: 0, zIndex: 20,
+                    background: 'rgba(0,0,0,0.65)',
+                    animation: 'vaultFadeIn 0.18s ease',
+                  }}
+                />
+                {/* Sheet */}
+                <div
+                  style={{
+                    position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 21,
+                    background: '#fff', borderRadius: '20px 20px 0 0',
+                    boxShadow: '0 -8px 40px rgba(0,0,0,0.45)',
+                    paddingBottom: 'env(safe-area-inset-bottom)',
+                    display: 'flex', flexDirection: 'column',
+                    animation: 'vaultSlideUp 0.22s cubic-bezier(0.32,0.72,0,1)',
+                  }}
+                >
+                  {/* Handle */}
+                  <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+                    <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.14)' }} />
+                  </div>
+
+                  {/* Body */}
+                  <div style={{ padding: '12px 24px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Icon */}
+                    <div style={{ width: 52, height: 52, borderRadius: 16, background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 4 }}>
+                      🗑️
+                    </div>
+                    <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#111', letterSpacing: -0.3 }}>
+                      Excluir documento?
+                    </p>
+                    <p style={{ margin: 0, fontSize: 14, color: '#666', lineHeight: 1.5 }}>
+                      <strong style={{ color: '#333' }}>&ldquo;{doc?.title || 'Documento'}&rdquo;</strong> será removido permanentemente. Esta ação não pode ser desfeita.
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{
+                    display: 'flex', gap: 10, padding: '0 20px 16px',
+                    borderTop: '1px solid #f0f0f0', paddingTop: 12,
+                  }}>
+                    <button
+                      onClick={() => setViewerDeleteOpen(false)}
+                      style={{
+                        flex: 1, padding: '13px 20px', borderRadius: 14,
+                        background: '#f4f4f5', border: 'none',
+                        fontSize: 14, fontWeight: 600, color: '#555',
+                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                      } as React.CSSProperties}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const docId = navigableDocs[viewerDocIndex]?.id;
+                        if (!docId) return;
+                        const token = getToken();
+                        if (!token) return;
+                        const res = await fetch(
+                          `${API_BASE_URL}/pets/${petId}/documents/${docId}`,
+                          { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } },
+                        );
+                        if (res.ok || res.status === 204) {
+                          setDocs((prev) => prev.filter((d) => d.id !== docId));
+                          closeViewer();
+                        }
+                      }}
+                      style={{
+                        flex: 1, padding: '13px 20px', borderRadius: 14,
+                        background: '#dc2626', border: 'none',
+                        fontSize: 14, fontWeight: 700, color: '#fff',
+                        cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                      } as React.CSSProperties}
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* ── Content area ── */}
           <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', backgroundColor: '#111' }}>
 
-            {/* Loading spinner */}
+            {/* Navigation arrows */}
+            {navigableDocs.length > 1 && viewerZoom <= 1 && (
+              <>
+                <button
+                  onClick={() => { void navigateViewer(-1); }}
+                  style={{
+                    position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)',
+                    zIndex: 10, width: 44, height: 72, borderRadius: 12,
+                    background: 'rgba(0,0,0,0.38)', border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff', fontSize: 30,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: viewerDocIndex <= 0 ? 'default' : 'pointer',
+                    opacity: viewerDocIndex <= 0 ? 0 : 0.7,
+                    transition: 'opacity 0.2s',
+                    pointerEvents: viewerDocIndex <= 0 ? 'none' : 'auto',
+                    WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
+                  aria-label="Documento anterior"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => { void navigateViewer(1); }}
+                  style={{
+                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                    zIndex: 10, width: 44, height: 72, borderRadius: 12,
+                    background: 'rgba(0,0,0,0.38)', border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#fff', fontSize: 30,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: viewerDocIndex >= navigableDocs.length - 1 ? 'default' : 'pointer',
+                    opacity: viewerDocIndex >= navigableDocs.length - 1 ? 0 : 0.7,
+                    transition: 'opacity 0.2s',
+                    pointerEvents: viewerDocIndex >= navigableDocs.length - 1 ? 'none' : 'auto',
+                    WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
+                  aria-label="Próximo documento"
+                >
+                  ›
+                </button>
+              </>
+            )}
+
+            {/* Loading */}
             {viewerLoading && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
                 <div style={{
-                  width: 48, height: 48, border: '4px solid rgba(255,255,255,0.2)',
-                  borderTopColor: '#fff', borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
+                  width: 52, height: 52,
+                  border: '3px solid rgba(255,255,255,0.08)',
+                  borderTopColor: 'rgba(255,255,255,0.8)',
+                  borderRadius: '50%',
+                  animation: 'vaultSpin 0.7s linear infinite',
                 }} />
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14 }}>Carregando documento...</p>
+                <style>{`@keyframes vaultSpin { to { transform: rotate(360deg); } }`}</style>
+                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, margin: 0, letterSpacing: 0.1 }}>Carregando documento…</p>
               </div>
             )}
 
-            {/* Error state */}
+            {/* Error */}
             {!viewerLoading && viewerError && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32, textAlign: 'center' }}>
-                <span style={{ fontSize: 56 }}>⚠️</span>
-                <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 15, lineHeight: 1.5 }}>{viewerError}</p>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '32px 24px', textAlign: 'center' }}>
+                <div style={{
+                  width: 72, height: 72, borderRadius: 20, fontSize: 34,
+                  background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  ⚠️
+                </div>
+                <div style={{ maxWidth: 260 }}>
+                  <p style={{ color: '#fff', fontSize: 16, fontWeight: 600, margin: '0 0 8px', letterSpacing: -0.2 }}>
+                    Não foi possível carregar
+                  </p>
+                  <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+                    {viewerError}
+                  </p>
+                </div>
+                <button
+                  onClick={closeViewer}
+                  style={{
+                    marginTop: 8, padding: '12px 28px', borderRadius: 14, cursor: 'pointer',
+                    background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.18)',
+                    color: '#fff', fontSize: 14, fontWeight: 600,
+                    WebkitTapHighlightColor: 'transparent',
+                  } as React.CSSProperties}
+                >
+                  Fechar
+                </button>
               </div>
             )}
 
-            {/* Image — scroll interno + zoom assistido */}
+            {/* Image — scroll + zoom assistido */}
             {!viewerLoading && !viewerError && viewerMime === 'image' && viewerUrl && (
               <div
                 style={{
-                  position: 'absolute',
-                  inset: 0,
+                  position: 'absolute', inset: 0,
                   overflow: 'auto',
                   WebkitOverflowScrolling: 'touch',
+                  overscrollBehavior: 'contain',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 12,
+                  alignItems: viewerZoom <= 1 ? 'center' : 'flex-start',
+                  justifyContent: viewerZoom <= 1 ? 'center' : 'flex-start',
+                  padding: viewerZoom <= 1 ? 16 : 0,
                   backgroundColor: '#000',
-                }}
+                } as React.CSSProperties}
               >
                 <img
                   src={viewerUrl}
@@ -938,20 +1252,24 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
                   style={{
                     display: 'block',
                     width: `${viewerZoom * 100}%`,
-                    maxWidth: `${viewerZoom * 100}%`,
+                    maxWidth: viewerZoom <= 1 ? '100%' : 'none',
                     height: 'auto',
                     objectFit: 'contain',
-                    touchAction: 'pinch-zoom',
+                    touchAction: 'pan-x pan-y',
                     userSelect: 'none',
-                  }}
+                    WebkitUserSelect: 'none',
+                    borderRadius: viewerZoom <= 1 ? 8 : 0,
+                    transition: 'width 0.2s ease, border-radius 0.15s ease',
+                  } as React.CSSProperties}
+                  draggable={false}
                 />
               </div>
             )}
 
-            {/* PDF — scroll interno + zoom assistido */}
+            {/* PDF — scroll + zoom assistido */}
             {!viewerLoading && !viewerError && viewerMime === 'pdf' && viewerUrl && (
               isIOS ? (
-                // iOS: <embed> com URL direta — o WebKit renderiza inline fit-to-width sem abrir nova aba
+                // iOS: <embed> com URL direta — o WebKit renderiza inline sem abrir nova aba
                 <embed
                   src={viewerUrl}
                   type="application/pdf"
@@ -960,13 +1278,14 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
               ) : (
                 // Android / Desktop — iframe com blob funciona bem
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', background: '#1a1a1a' }}>
+                  <div style={{ flex: 1, overflow: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', background: '#1a1a1a' } as React.CSSProperties}>
                     <div
                       style={{
                         width: `${viewerZoom * 100}%`,
                         minWidth: '100%',
                         height: '100%',
                         margin: '0 auto',
+                        transition: 'width 0.2s ease',
                       }}
                     >
                       <iframe
@@ -976,14 +1295,40 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
                       />
                     </div>
                   </div>
-                  <div style={{ flexShrink: 0, padding: '8px 16px', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center' }}>
-                    <a href={viewerUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ background: '#2563eb', color: '#fff', fontSize: 14, fontWeight: 700, padding: '9px 22px', borderRadius: 10, textDecoration: 'none' }}>
+                  <div style={{
+                    flexShrink: 0,
+                    padding: '12px 16px',
+                    paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+                    backgroundColor: 'rgba(0,0,0,0.92)',
+                    display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center',
+                    borderTop: '1px solid rgba(255,255,255,0.08)',
+                  }}>
+                    <a
+                      href={viewerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        flex: 1, maxWidth: 240, background: '#2563eb', color: '#fff',
+                        fontSize: 14, fontWeight: 700, padding: '13px 20px', borderRadius: 14,
+                        textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        WebkitTapHighlightColor: 'transparent',
+                      } as React.CSSProperties}
+                    >
                       Abrir no leitor ↗
                     </a>
-                    <a href={viewerUrl} download={viewerTitle || 'documento.pdf'}
-                      style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, textDecoration: 'underline' }}>
-                      Baixar
+                    <a
+                      href={viewerUrl}
+                      download={viewerTitle || 'documento.pdf'}
+                      style={{
+                        width: 50, height: 50, borderRadius: 14, flexShrink: 0,
+                        background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#fff', fontSize: 20,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        textDecoration: 'none', WebkitTapHighlightColor: 'transparent',
+                      } as React.CSSProperties}
+                      aria-label="Baixar PDF"
+                    >
+                      ↓
                     </a>
                   </div>
                 </div>
@@ -1489,27 +1834,34 @@ export function PetDocumentVault({ petId, onDocsChanged }: Props) {
                       <p className="text-xs text-gray-400 truncate mb-2">{doc.url_masked}</p>
                     )}
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      {/* Primary action */}
                       {(doc.kind === 'file' || doc.kind === 'link') && (
                         <button
                           onClick={() => handleView(doc)}
-                          className="px-3 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-medium hover:bg-[#0047ad] transition-colors"
+                          className="px-4 py-1.5 bg-[#0056D2] text-white rounded-lg text-xs font-semibold hover:bg-[#0047ad] transition-colors shrink-0"
                         >
-                          👁️ Ver
+                          Ver
                         </button>
                       )}
-                      <button
-                        onClick={() => startEdit(doc)}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors"
-                      >
-                        ✏️ Editar
-                      </button>
-                      <button
-                        onClick={() => handleDelete(doc.id)}
-                        className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors"
-                      >
-                        🗑️ Excluir
-                      </button>
+
+                      {/* Secondary actions — icon-only, muted */}
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button
+                          onClick={() => startEdit(doc)}
+                          title="Editar"
+                          className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDelete(doc.id)}
+                          title="Excluir"
+                          className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
