@@ -282,6 +282,9 @@ def run_sqlite_migrations(engine: Engine) -> None:
         # ── pet_documents.event_id ─────────────────────────────────────────
         changed |= _sqlite_add_column_if_missing(conn, "pet_documents", "event_id", "TEXT")
 
+        # ── pet_documents.subcategory ──────────────────────────────────────
+        changed |= _sqlite_add_column_if_missing(conn, "pet_documents", "subcategory", "TEXT")
+
         # ── canonicalization fields: vaccine_records ────────────────────────
         changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "vaccine_name_raw", "TEXT")
         changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "vaccine_name_canonical", "TEXT")

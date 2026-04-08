@@ -1062,6 +1062,7 @@ class PatchDocumentRequest(BaseModel):
     document_date: Optional[date_type] = None
     establishment_name: Optional[str] = None
     category: Optional[str] = None
+    subcategory: Optional[str] = None
     title: Optional[str] = None
     notes: Optional[str] = None
 
@@ -1090,6 +1091,8 @@ def patch_document(
         doc.establishment_name = body.establishment_name
     if body.category is not None:
         doc.category = body.category
+    if body.subcategory is not None:
+        doc.subcategory = body.subcategory
     if body.title is not None:
         doc.title = body.title[:255]
     if body.notes is not None:

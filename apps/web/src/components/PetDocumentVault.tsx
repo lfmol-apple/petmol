@@ -123,6 +123,43 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
     { value: 'other',        label: '📎 ' + t('upload.type_other') },
   ];
 
+  const SUBCATEGORY_OPTIONS: Record<string, { value: string; label: string }[]> = {
+    vaccine: [
+      { value: 'vaccine_card',     label: 'Carteirinha de vacina' },
+      { value: 'vaccine_proof',    label: 'Comprovante de vacina' },
+      { value: 'vaccine_protocol', label: 'Protocolo vacinal' },
+    ],
+    exam: [
+      { value: 'blood_test', label: 'Exame de sangue' },
+      { value: 'urine_test', label: 'Exame de urina' },
+      { value: 'stool_test', label: 'Exame de fezes' },
+      { value: 'lab_other',  label: 'Outro exame laboratorial' },
+    ],
+    photo: [
+      { value: 'xray',        label: 'Raio-x' },
+      { value: 'ultrasound',  label: 'Ultrassom' },
+      { value: 'tomography',  label: 'Tomografia' },
+      { value: 'mri',         label: 'Ressonância' },
+      { value: 'photo_other', label: 'Outra imagem' },
+    ],
+    report: [
+      { value: 'imaging_report',  label: 'Laudo de imagem' },
+      { value: 'discharge_report', label: 'Relatório de alta' },
+      { value: 'surgery_report',  label: 'Relatório cirúrgico' },
+      { value: 'clinical_report', label: 'Relatório clínico' },
+    ],
+    prescription: [
+      { value: 'medication_prescription', label: 'Receita de medicação' },
+      { value: 'diet_prescription',       label: 'Receita alimentar' },
+      { value: 'care_instructions',       label: 'Orientações de cuidado' },
+    ],
+    other: [
+      { value: 'receipt', label: 'Recibo' },
+      { value: 'invoice', label: 'Nota / fatura' },
+      { value: 'misc',    label: 'Diversos' },
+    ],
+  };
+
   const [docs, setDocs] = useState<PetDocument[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -171,6 +208,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
   const [linkCategory, setLinkCategory] = useState('other');
+  const [linkSubcategory, setLinkSubcategory] = useState('');
   const [savingLink, setSavingLink] = useState(false);
   const [createTimelineEvent, setCreateTimelineEvent] = useState(true);
 
@@ -182,6 +220,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const [discovered, setDiscovered] = useState<DiscoveredItem[]>([]);
   const [selectedDiscover, setSelectedDiscover] = useState<Set<string>>(new Set());
   const [importCategory, setImportCategory] = useState('other');
+  const [importSubcategory, setImportSubcategory] = useState('');
 
   // ── Fetch ──────────────────────────────────────────────────────────────
 
@@ -379,6 +418,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
       id: doc.id,
       title: doc.title || 'Documento',
       category: doc.category || 'other',
+      subcategory: doc.subcategory || '',
       date: doc.document_date || localTodayISO(),
       establishment: doc.establishment_name || '',
       saving: false,
@@ -397,6 +437,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
         body: JSON.stringify({
           title: editingDoc.title.trim() || null,
           category: editingDoc.category,
+          subcategory: editingDoc.subcategory || null,
           document_date: editingDoc.date || null,
           establishment_name: editingDoc.establishment.trim() || null,
         }),
@@ -427,7 +468,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url: linkUrl.trim(), title: linkTitle.trim() || undefined, category: linkCategory, create_timeline_event: createTimelineEvent }),
+        body: JSON.stringify({ url: linkUrl.trim(), title: linkTitle.trim() || undefined, category: linkCategory, subcategory: linkSubcategory || undefined, create_timeline_event: createTimelineEvent }),
       });
       if (res.ok) {
         setShowLinkForm(false);
@@ -460,7 +501,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url: importUrl.trim(), category: importCategory }),
+        body: JSON.stringify({ url: importUrl.trim(), category: importCategory, subcategory: importSubcategory || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -501,7 +542,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ items, category: importCategory }),
+        body: JSON.stringify({ items, category: importCategory, subcategory: importSubcategory || undefined }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -971,7 +1012,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Categoria</label>
                     <select
                       value={editingDoc.category}
-                      onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value } : p)}
+                      onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value, subcategory: '' } : p)}
                       style={{
                         width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7',
                         borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111',
@@ -983,6 +1024,27 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                       ))}
                     </select>
                   </div>
+
+                  {/* Subcategoria */}
+                  {(SUBCATEGORY_OPTIONS[editingDoc.category] ?? []).length > 0 && (
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>Subcategoria</label>
+                      <select
+                        value={editingDoc.subcategory ?? ''}
+                        onChange={(e) => setEditingDoc((p) => p ? { ...p, subcategory: e.target.value } : p)}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', border: '1.5px solid #e4e4e7',
+                          borderRadius: 12, padding: '11px 14px', fontSize: 15, color: '#111',
+                          outline: 'none', background: '#fafafa', appearance: 'none',
+                        }}
+                      >
+                        <option value="">— opcional —</option>
+                        {SUBCATEGORY_OPTIONS[editingDoc.category].map((s) => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Data */}
                   <div>
@@ -1557,13 +1619,25 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           />
           <select
             value={linkCategory}
-            onChange={(e) => setLinkCategory(e.target.value)}
+            onChange={(e) => { setLinkCategory(e.target.value); setLinkSubcategory(''); }}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           >
             {CATEGORY_OPTIONS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>
+          {(SUBCATEGORY_OPTIONS[linkCategory] ?? []).length > 0 && (
+            <select
+              value={linkSubcategory}
+              onChange={(e) => setLinkSubcategory(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">Subcategoria — opcional</option>
+              {SUBCATEGORY_OPTIONS[linkCategory].map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          )}
           <label className="flex items-center gap-2 text-xs text-indigo-700 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -1607,13 +1681,25 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           />
           <select
             value={importCategory}
-            onChange={(e) => setImportCategory(e.target.value)}
+            onChange={(e) => { setImportCategory(e.target.value); setImportSubcategory(''); }}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
           >
             {CATEGORY_OPTIONS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>
+          {(SUBCATEGORY_OPTIONS[importCategory] ?? []).length > 0 && (
+            <select
+              value={importSubcategory}
+              onChange={(e) => setImportSubcategory(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <option value="">Subcategoria — opcional</option>
+              {SUBCATEGORY_OPTIONS[importCategory].map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          )}
 
           <div className="flex gap-2">
             <button
@@ -1740,7 +1826,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                       <label className="text-xs text-gray-500 mb-1 block">Categoria</label>
                       <select
                         value={editingDoc.category}
-                        onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value } : p)}
+                        onChange={(e) => setEditingDoc((p) => p ? { ...p, category: e.target.value, subcategory: '' } : p)}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                       >
                         {CATEGORY_OPTIONS.map((c) => (
@@ -1748,6 +1834,21 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                         ))}
                       </select>
                     </div>
+                    {(SUBCATEGORY_OPTIONS[editingDoc.category] ?? []).length > 0 && (
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Subcategoria</label>
+                        <select
+                          value={editingDoc.subcategory ?? ''}
+                          onChange={(e) => setEditingDoc((p) => p ? { ...p, subcategory: e.target.value } : p)}
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        >
+                          <option value="">— opcional —</option>
+                          {SUBCATEGORY_OPTIONS[editingDoc.category].map((s) => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">📅 Data</label>
                       <input

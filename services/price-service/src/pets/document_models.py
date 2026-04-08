@@ -21,6 +21,7 @@ class PetDocument(Base):
 
     kind: Mapped[str] = mapped_column(String(10), nullable=False, default="file")  # 'file' | 'link'
     category: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)     # 'exam','vaccine','prescription','report','photo','other'
+    subcategory: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # see SUBCATEGORY_OPTIONS (frontend)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     document_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
