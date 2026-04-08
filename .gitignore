@@ -1,137 +1,41 @@
-# Dependencies
-node_modules/
-.pnp
-.pnp.js
+# Node
+node_modules
+.next
+dist
+build
 
-# Testing
-coverage/
-.nyc_output/
-
-# Next.js
-.next/
-out/
-build/
-dist/
-
-# Production
-*.tsbuildinfo
-next-env.d.ts
-
-# Misc
-.DS_Store
-*.pem
-*.log
-*.sqlite
-
-# Databases (local data — never commit)
-*.db
-*.db-shm
-*.db-wal
-*.db-wal2
-*.db.bak
-*.db.corrupted.bak
-*.db.corrupted.bak-shm
-*.db.corrupted.bak-wal
-*.db.local.bak
-*.db.producao
-prod_petmol_bh.*
-
-# Dados pessoais / fotos / lixo — nunca commitar
-Vacinas/
-_trash/
-uploads/
-**/uploads/
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local env files
+# Env
 .env
-.env*.local
-.env.development
-.env.test
-.env.production
-**/.secrets/
-**/*service-account*.json
-
-# Allow .env.example templates
+.env.*
 !.env.example
-!.env*.example
-!**/.env.example
 
-# Vercel
-.vercel
+# Logs
+*.log
+
+# Mac
+.DS_Store
+
+# IDE
+.vscode
+.idea
+
+# Coverage
+coverage
 
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-.venv/
-venv/
-ENV/
-env/
-.pytest_cache/
-.coverage
-htmlcov/
-*.egg-info/
+*.pyc
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-Thumbs.db
-
-# Expo
-.expo/
-.expo-shared/
-
-# Turbo
-.turbo/
-
-# Export Script
-_export_tmp/
-_exports/
-
-# Backups
-backup_*/
-backups/
-*.tar.gz
-*.zip
-services/price-service/backups/*.sql
-services/price-service/backups/*.dump
-
-# Logs
-logs/
-*.log
-backend.log
-frontend.log
-
-# Certs
-*.pem
-*.key
-*.crt
-*.cer
-*.pfx
-*.p12
-
-# Uploads (user files — never commit)
+# 🔴 CRÍTICO — dados e análises
+analysis/
 uploads/
-**/uploads/
+*.csv
+*.json
+*.sql
+*.sqlite
+*.db
 
-# Temp/personal files
-temp_files_moved/
-_backup_local_before_sync_*/
-services/price-service/src/vision/service_broken.py
-services/price-service/push_subscriptions.json
-services/price-service/*.backup-*-wal
-services/price-service/*.backup-*-shm
-
-apps/web/.env.local
+# 🔴 uploads de documentos
+**/uploads_pet_documents_*
+**/pet_documents/
+**/prod_docs_snapshot*
