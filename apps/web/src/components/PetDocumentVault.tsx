@@ -183,6 +183,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [isIOS, setIsIOS] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);  // dedicated open flag — prevents white flash
   const [viewerZoom, setViewerZoom] = useState(1);
   const [viewerDocIndex, setViewerDocIndex] = useState<number>(-1);
   const [viewerEditOpen, setViewerEditOpen] = useState(false);
@@ -192,6 +193,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const viewerBlobCache = useRef<Map<string, string>>(new Map());
 
   const closeViewer = () => {
+    setViewerOpen(false);  // set first — removes overlay immediately, no white flash
     viewerBlobCache.current.forEach(blobUrl => URL.revokeObjectURL(blobUrl));
     viewerBlobCache.current.clear();
     setViewerUrl(null);
@@ -621,6 +623,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
 
     const popup = isIOS ? window.open('', '_blank', 'noopener,noreferrer') : null;
 
+    setViewerOpen(true);  // show black overlay before any async work
     setViewerLoading(true);
     try {
       const blob = await fetchDocumentBlob(petId, doc.id, { download: mime === 'other' });
@@ -742,7 +745,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
     <div className="space-y-4">
 
       {/* ── FULL-SCREEN DOCUMENT VIEWER ─────────────────────────────── */}
-      {(viewerLoading || viewerUrl || viewerError) && (
+      {viewerOpen && (
         <div
           style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -750,7 +753,8 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
             display: 'flex', flexDirection: 'column',
             width: '100dvw', height: '100dvh',
             overflow: 'hidden',
-          }}
+            WebkitOverflowScrolling: 'touch',
+          } as React.CSSProperties}
           onTouchStart={(e) => {
             viewerSwipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
           }}
@@ -794,25 +798,24 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
               ✕
             </button>
 
-            {/* Title */}
-            <div style={{ flex: 1, minWidth: 0, paddingLeft: 2 }}>
+            {/* Title + position indicator — centered within flex-1 */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingLeft: 4, paddingRight: 4 }}>
               <p style={{
                 color: '#fff', fontSize: 14, fontWeight: 600, margin: 0,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                lineHeight: 1.3, maxWidth: '100%', textAlign: 'center',
               }}>
                 {viewerTitle || (viewerLoading ? 'Carregando…' : 'Documento')}
               </p>
+              {navigableDocs.length > 1 && viewerDocIndex >= 0 && (
+                <span style={{
+                  color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2,
+                  fontFeatureSettings: '"tnum"', userSelect: 'none',
+                } as React.CSSProperties}>
+                  {viewerDocIndex + 1} / {navigableDocs.length}
+                </span>
+              )}
             </div>
-
-            {/* Position indicator */}
-            {navigableDocs.length > 1 && viewerDocIndex >= 0 && (
-              <span style={{
-                color: 'rgba(255,255,255,0.35)', fontSize: 11, flexShrink: 0,
-                fontFeatureSettings: '"tnum"', userSelect: 'none',
-              } as React.CSSProperties}>
-                {viewerDocIndex + 1}<span style={{ opacity: 0.5, margin: '0 1px' }}>/</span>{navigableDocs.length}
-              </span>
-            )}
 
             {/* Actions — only when blob ready */}
             {viewerUrl && (
@@ -874,24 +877,6 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                   title="Baixar"
                 >
                   ↓
-                </a>
-
-                {/* Open in new tab */}
-                <a
-                  href={viewerUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                    background: 'rgba(255,255,255,0.13)', color: '#fff', fontSize: 16,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    textDecoration: 'none', WebkitTapHighlightColor: 'transparent',
-                  } as React.CSSProperties}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label="Abrir em nova aba"
-                  title="Abrir"
-                >
-                  ↗
                 </a>
 
                 {/* Edit */}
@@ -1202,7 +1187,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           })()}
 
           {/* ── Content area ── */}
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', backgroundColor: '#111' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', backgroundColor: '#000' }}>
 
             {/* Navigation arrows */}
             {navigableDocs.length > 1 && viewerZoom <= 1 && (
@@ -1248,7 +1233,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
 
             {/* Loading */}
             {viewerLoading && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, backgroundColor: '#000' }}>
                 <div style={{
                   width: 52, height: 52,
                   border: '3px solid rgba(255,255,255,0.08)',
@@ -1332,11 +1317,13 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
             {!viewerLoading && !viewerError && viewerMime === 'pdf' && viewerUrl && (
               isIOS ? (
                 // iOS: <embed> com URL direta — o WebKit renderiza inline sem abrir nova aba
-                <embed
-                  src={viewerUrl}
-                  type="application/pdf"
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', display: 'block' }}
-                />
+                <div style={{ position: 'absolute', inset: 0, backgroundColor: '#000', display: 'flex' }}>
+                  <embed
+                    src={viewerUrl}
+                    type="application/pdf"
+                    style={{ flex: 1, width: '100%', height: '100%', border: 'none', display: 'block' }}
+                  />
+                </div>
               ) : (
                 // Android / Desktop — iframe com blob funciona bem
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
