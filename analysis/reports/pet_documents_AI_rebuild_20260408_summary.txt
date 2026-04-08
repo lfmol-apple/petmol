@@ -1,0 +1,15 @@
+Generated: 2026-04-07T22:46:13
+Total rows (DB file docs): 48
+Missing files in snapshot: 0
+By classification_path:
+  gemini: 45
+  local_after_gemini_null: 3
+By classified_category (present files only):
+  exam: 34
+  vaccine: 6
+  report: 4
+  other: 3
+  photo: 1
+
+DOCUMENT_AI_CLASSIFY_ENABLED='true'
+GEMINI_API_KEY set=True

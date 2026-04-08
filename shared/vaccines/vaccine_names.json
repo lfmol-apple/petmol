@@ -1,0 +1,269 @@
+[
+  {
+    "canonical": "rabies",
+    "translations": {
+      "en": "Rabies",
+      "pt-BR": "Raiva",
+      "pt": "Raiva",
+      "es": "Rabia",
+      "fr": "Rage",
+      "de": "Tollwut",
+      "is": "Hundaæði",
+      "it": "Rabbia",
+      "zh": "狂犬病"
+    },
+    "species": ["dog", "cat"],
+    "aliases": ["rabisin", "defensor", "antirrábica", "antirabica", "raiva", "rabies"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against rabies virus",
+      "pt-BR": "Protege contra o vírus da raiva"
+    }
+  },
+  {
+    "canonical": "dhpp_multiple",
+    "translations": {
+      "en": "DHPP (Multiple)",
+      "pt-BR": "Múltipla (DHPP)",
+      "pt": "Múltipla (DHPP)",
+      "es": "Múltiple (DHPP)",
+      "fr": "Polyvalente (DHPP)",
+      "de": "Mehrfach (DHPP)",
+      "is": "Margfaldar (DHPP)",
+      "it": "Polivalente (DHPP)"
+    },
+    "species": ["dog"],
+    "aliases": ["dhpp", "dhppi", "dapp", "da2pp", "v8", "v10", "v12", "multipla", "múltipla", "polivalente", "cinomose", "parvovirose", "adenovirus", "adenovírus", "hepatite", "parainfluenza"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against distemper, hepatitis, parvovirus, parainfluenza",
+      "pt-BR": "Protege contra cinomose, hepatite, parvovirose, parainfluenza"
+    }
+  },
+  {
+    "canonical": "leptospirosis",
+    "translations": {
+      "en": "Leptospirosis",
+      "pt-BR": "Leptospirose",
+      "pt": "Leptospirose",
+      "es": "Leptospirosis",
+      "fr": "Leptospirose",
+      "de": "Leptospirose",
+      "is": "Leptóspirósa",
+      "it": "Leptospirosi"
+    },
+    "species": ["dog"],
+    "aliases": ["lepto", "leptospira", "leptospirose", "leptospir"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against leptospira bacteria",
+      "pt-BR": "Protege contra a bactéria leptospira"
+    }
+  },
+  {
+    "canonical": "bordetella",
+    "translations": {
+      "en": "Bordetella (Kennel Cough)",
+      "pt-BR": "Bordetella (Tosse dos Canis)",
+      "pt": "Bordetella (Tosse dos Canis)",
+      "es": "Bordetella (Tos de las perreras)",
+      "fr": "Bordetella (Toux de chenil)",
+      "de": "Bordetella (Zwingerhusten)",
+      "is": "Bordetella (Hundahósti)",
+      "it": "Bordetella (Tosse dei canili)"
+    },
+    "species": ["dog"],
+    "aliases": ["bordetella", "kennel cough", "tosse dos canis", "bronchicine", "bronchi"],
+    "common_interval_days": 180,
+    "description": {
+      "en": "Protects against kennel cough",
+      "pt-BR": "Protege contra a tosse dos canis"
+    }
+  },
+  {
+    "canonical": "giardia",
+    "translations": {
+      "en": "Giardia",
+      "pt-BR": "Giárdia",
+      "pt": "Giárdia",
+      "es": "Giardia",
+      "fr": "Giardia",
+      "de": "Giardia",
+      "is": "Gíardía",
+      "it": "Giardia"
+    },
+    "species": ["dog"],
+    "aliases": ["giardia", "giárdia"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against giardia parasite",
+      "pt-BR": "Protege contra o parasita giárdia"
+    }
+  },
+  {
+    "canonical": "leishmaniasis",
+    "translations": {
+      "en": "Leishmaniasis",
+      "pt-BR": "Leishmaniose",
+      "pt": "Leishmaniose",
+      "es": "Leishmaniasis",
+      "fr": "Leishmaniose",
+      "de": "Leishmaniose",
+      "is": "Leishmanía",
+      "it": "Leishmaniosi"
+    },
+    "species": ["dog"],
+    "aliases": ["leish", "leishmania", "leishmaniose"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against leishmaniasis (regional)",
+      "pt-BR": "Protege contra leishmaniose (regional)"
+    },
+    "regional": true,
+    "regions": ["BR", "ES", "IT", "PT", "GR"]
+  },
+  {
+    "canonical": "coronavirus",
+    "translations": {
+      "en": "Canine Coronavirus",
+      "pt-BR": "Coronavírus Canino",
+      "pt": "Coronavírus Canino",
+      "es": "Coronavirus Canino",
+      "fr": "Coronavirus Canin",
+      "de": "Hundecoronavirus",
+      "is": "Kórónaveiru fyrir hunda",
+      "it": "Coronavirus Canino"
+    },
+    "species": ["dog"],
+    "aliases": ["coronavirus", "coronavírus", "ccov", "canine coronavirus"],
+    "common_interval_days": 365
+  },
+  {
+    "canonical": "canine_influenza",
+    "translations": {
+      "en": "Canine Influenza",
+      "pt-BR": "Influenza Canina",
+      "pt": "Influenza Canina",
+      "es": "Influenza Canina",
+      "fr": "Grippe Canine",
+      "de": "Hundegrippe",
+      "is": "Inflúensa fyrir hunda",
+      "it": "Influenza Canina"
+    },
+    "species": ["dog"],
+    "aliases": ["influenza", "flu", "h3n2", "h3n8"],
+    "common_interval_days": 365
+  },
+  {
+    "canonical": "lyme",
+    "translations": {
+      "en": "Lyme Disease",
+      "pt-BR": "Doença de Lyme",
+      "pt": "Doença de Lyme",
+      "es": "Enfermedad de Lyme",
+      "fr": "Maladie de Lyme",
+      "de": "Lyme-Borreliose",
+      "is": "Lyme-sjúkdómur",
+      "it": "Malattia di Lyme"
+    },
+    "species": ["dog"],
+    "aliases": ["lyme", "borrelia", "borreliose"],
+    "common_interval_days": 365,
+    "regional": true,
+    "regions": ["US", "CA", "DE", "AT", "CH"]
+  },
+  {
+    "canonical": "fvrcp",
+    "translations": {
+      "en": "FVRCP (Feline Triple)",
+      "pt-BR": "Tríplice Felina (FVRCP)",
+      "pt": "Tríplice Felina (FVRCP)",
+      "es": "Triple Felina (FVRCP)",
+      "fr": "Trivalent Félin (FVRCP)",
+      "de": "Katzenseuche-Impfung (FVRCP)",
+      "is": "Þríþætt kattabólusetning (FVRCP)",
+      "it": "Trivalente Felina (FVRCP)"
+    },
+    "species": ["cat"],
+    "aliases": ["fvrcp", "tríplice felina", "triplice felina", "panleucopenia", "rinotraqueite", "rinotraqueíte", "calicivirose", "calicivirus"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against panleukopenia, rhinotracheitis, calicivirus",
+      "pt-BR": "Protege contra panleucopenia, rinotraqueíte, calicivirose"
+    }
+  },
+  {
+    "canonical": "felv",
+    "translations": {
+      "en": "FeLV (Feline Leukemia)",
+      "pt-BR": "Leucemia Felina (FeLV)",
+      "pt": "Leucemia Felina (FeLV)",
+      "es": "Leucemia Felina (FeLV)",
+      "fr": "Leucémie Féline (FeLV)",
+      "de": "Katzenleukämie (FeLV)",
+      "is": "Kattahvítblæði (FeLV)",
+      "it": "Leucemia Felina (FeLV)"
+    },
+    "species": ["cat"],
+    "aliases": ["felv", "leucemia felina", "leukemia"],
+    "common_interval_days": 365,
+    "description": {
+      "en": "Protects against feline leukemia virus",
+      "pt-BR": "Protege contra o vírus da leucemia felina"
+    }
+  },
+  {
+    "canonical": "nobivac",
+    "species": ["dog", "cat"],
+    "aliases": ["nobivac", "msd", "merck", "intervet", "nobivac dhpp", "nobivac dhppi", "nobivac lepto", "nobivac rabies"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "duramune",
+    "species": ["dog"],
+    "aliases": ["duramune", "duramune max", "duramune max 5", "duramune max 5-cvk", "duramune lyme", "duramune lepto"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "vanguard",
+    "species": ["dog"],
+    "aliases": ["vanguard", "vanguard plus", "vanguard ht", "vanguard cr", "zoetis vanguard", "vanguard 5", "vanguard 5/cv-l"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "eurican",
+    "species": ["dog"],
+    "aliases": ["eurican", "eurican dhppi", "eurican lr", "eurican l"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "canigen",
+    "species": ["dog"],
+    "aliases": ["canigen", "canigen dhpp", "canigen lepto", "canigen rabies"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "purevax",
+    "species": ["cat"],
+    "aliases": ["purevax", "purevax rcp", "purevax felv", "purevax rabies"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "recombitek",
+    "species": ["dog", "cat"],
+    "aliases": ["recombitek", "recombitek rabies", "recombitek c4", "recombitek lyme"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "felocell",
+    "species": ["cat"],
+    "aliases": ["felocell", "felocell 3", "felocell 4"],
+    "note": "Commercial brand - suggest using generic name instead"
+  },
+  {
+    "canonical": "versican",
+    "species": ["dog"],
+    "aliases": ["versican", "versican plus", "versican dhpp", "versican lepto"],
+    "note": "Commercial brand - suggest using generic name instead"
+  }
+]

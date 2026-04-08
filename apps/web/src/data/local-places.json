@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "lastUpdate": "2026-02-01",
+  "description": "Base local de estabelecimentos pet no Brasil (fallback quando OSM não tem dados)",
+  "places": [
+    {
+      "id": "local-cobasi-sp1",
+      "name": "Cobasi - Paulista",
+      "category": "petshop",
+      "lat": -23.5631,
+      "lon": -46.6625,
+      "tags": {
+        "name": "Cobasi",
+        "shop": "pet",
+        "addr:city": "São Paulo",
+        "addr:street": "Avenida Paulista"
+      }
+    },
+    {
+      "id": "local-petz-sp1",
+      "name": "Petz - Consolação",
+      "category": "petshop",
+      "lat": -23.5489,
+      "lon": -46.6546,
+      "tags": {
+        "name": "Petz",
+        "shop": "pet",
+        "addr:city": "São Paulo"
+      }
+    },
+    {
+      "id": "local-cobasi-bh1",
+      "name": "Cobasi - Savassi",
+      "category": "petshop",
+      "lat": -19.9191,
+      "lon": -43.9386,
+      "tags": {
+        "name": "Cobasi",
+        "shop": "pet",
+        "addr:city": "Belo Horizonte",
+        "addr:suburb": "Savassi"
+      }
+    },
+    {
+      "id": "local-petz-bh1",
+      "name": "Petz - BH Shopping",
+      "category": "petshop",
+      "lat": -19.9327,
+      "lon": -43.9383,
+      "tags": {
+        "name": "Petz",
+        "shop": "pet",
+        "addr:city": "Belo Horizonte"
+      }
+    },
+    {
+      "id": "local-vet-popular-bh",
+      "name": "Clínica Veterinária Popular",
+      "category": "clinic",
+      "lat": -19.9227,
+      "lon": -43.9451,
+      "tags": {
+        "name": "Clínica Veterinária Popular",
+        "amenity": "veterinary",
+        "addr:city": "Belo Horizonte"
+      }
+    },
+    {
+      "id": "local-hospital-vet-24h-sp",
+      "name": "Hospital Veterinário 24h - Pinheiros",
+      "category": "emergency",
+      "lat": -23.5644,
+      "lon": -46.6925,
+      "tags": {
+        "name": "Hospital Veterinário 24h",
+        "amenity": "veterinary",
+        "emergency": "yes",
+        "opening_hours": "24/7",
+        "addr:city": "São Paulo",
+        "addr:suburb": "Pinheiros"
+      }
+    },
+    {
+      "id": "local-vet-24h-bh",
+      "name": "Pronto Socorro Veterinário 24h",
+      "category": "emergency",
+      "lat": -19.9419,
+      "lon": -43.9389,
+      "tags": {
+        "name": "Pronto Socorro Veterinário 24h",
+        "amenity": "veterinary",
+        "emergency": "yes",
+        "opening_hours": "24/7",
+        "addr:city": "Belo Horizonte"
+      }
+    }
+  ]
+}

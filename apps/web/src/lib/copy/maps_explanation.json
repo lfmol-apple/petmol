@@ -1,0 +1,26 @@
+{
+  "en": {
+    "underButton": "We'll open Google Maps so you can choose fast with reviews, contact, and routes.",
+    "why": "Why?",
+    "modalTitle": "Best search coverage",
+    "modalBody": "For emergencies and services, we use Google Maps because it's the most up-to-date worldwide. PETMOL focuses on what Maps doesn't: your pet's health, hygiene, documents, and timeline.",
+    "cta": "Got it",
+    "changeLang": "Change language"
+  },
+  "pt": {
+    "underButton": "Abriremos o Google Maps para você escolher rápido com avaliações, contato e rotas.",
+    "why": "Por quê?",
+    "modalTitle": "A melhor cobertura de busca",
+    "modalBody": "Para emergência e serviços, usamos o Google Maps por ter a base mais atualizada do mundo. O PETMOL foca no que o Maps não faz: saúde, higiene, documentos e histórico do seu pet.",
+    "cta": "Entendi",
+    "changeLang": "Mudar idioma"
+  },
+  "es": {
+    "underButton": "Abriremos Google Maps para que elijas rápido con reseñas, contacto y rutas.",
+    "why": "¿Por qué?",
+    "modalTitle": "La mejor cobertura de búsqueda",
+    "modalBody": "Para emergencias y servicios, usamos Google Maps por tener datos más actualizados a nivel mundial. PETMOL se enfoca en lo que Maps no hace: salud, higiene, documentos y línea del tiempo de tu mascota.",
+    "cta": "Entendido",
+    "changeLang": "Cambiar idioma"
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "domain": "food",
+  "version": "1.0",
+  "items": [
+    {
+      "canonical": "Fórmula Natural",
+      "aliases": [
+        "formula natural", "formulanatural", "formula nat", "fn"
+      ]
+    },
+    {
+      "canonical": "Premier Pet",
+      "aliases": [
+        "premier", "premier pet", "premierpet", "premier nutri"
+      ]
+    },
+    {
+      "canonical": "Royal Canin",
+      "aliases": [
+        "royal canin", "royalcanin", "royal", "rc"
+      ]
+    },
+    {
+      "canonical": "Hills Science Diet",
+      "aliases": [
+        "hills", "hill's", "science diet", "hills science", "hill"
+      ]
+    },
+    {
+      "canonical": "Pedigree",
+      "aliases": [
+        "pedigree", "pedigri"
+      ]
+    },
+    {
+      "canonical": "Purina Pro Plan",
+      "aliases": [
+        "purina", "pro plan", "proplan", "purina pro plan"
+      ]
+    },
+    {
+      "canonical": "Eukanuba",
+      "aliases": [
+        "eukanuba", "eikanuba"
+      ]
+    },
+    {
+      "canonical": "Guabi Natural",
+      "aliases": [
+        "guabi", "guabi natural"
+      ]
+    },
+    {
+      "canonical": "Biofresh",
+      "aliases": [
+        "biofresh", "bio fresh"
+      ]
+    },
+    {
+      "canonical": "Nutrimento",
+      "aliases": [
+        "nutrimento"
+      ]
+    },
+    {
+      "canonical": "Golden Special",
+      "aliases": [
+        "golden", "golden special"
+      ]
+    },
+    {
+      "canonical": "Whiskas",
+      "aliases": [
+        "whiskas", "wiskas"
+      ]
+    },
+    {
+      "canonical": "Friskies",
+      "aliases": [
+        "friskies", "frisquies"
+      ]
+    },
+    {
+      "canonical": "Farmina N&D",
+      "aliases": [
+        "farmina", "n&d", "nd", "farmina nd"
+      ]
+    },
+    {
+      "canonical": "Acana",
+      "aliases": [
+        "acana"
+      ]
+    },
+    {
+      "canonical": "Orijen",
+      "aliases": [
+        "orijen"
+      ]
+    }
+  ]
+}

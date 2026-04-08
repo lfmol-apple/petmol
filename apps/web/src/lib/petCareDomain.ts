@@ -1,0 +1,512 @@
+/**
+ * petCareDomain.ts
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CAMADA CANÔNICA de cálculo de lembretes de cuidados do pet.
+ *
+ * REGRAS ABSOLUTAS:
+ *  - Função pura: nenhum side-effect, nenhuma leitura de localStorage
+ *  - Inputs chegam como parâmetros tipados (vindos de backend/state)
+ *  - Dedup por chave canônica robusta (pet_id|domain|entityType|recordId|dueDate)
+ *  - Inclui itens VENCIDOS (diff < 0) para consumidores de alerta máximo
+ *  - Status 'resolved' é EXCLUÍDO — lembrete só aparece se ainda é relevante
+ *
+ * CONSUMIDORES:
+ *  - RemindersSection (chips "Próximos Lembretes", filtrando apenas hoje/futuro)
+ *  - alertsEngine (badges multipet)
+ *  - saude/[petId] (resumo e detalhe)
+ *
+ * DOMÍNIOS COBERTOS:
+ *  vaccine | parasite (dewormer/flea_tick/collar) | grooming | food | medication | event
+ */
+
+import type { VaccineRecord } from '@/lib/petHealth';
+import type { ParasiteControl, GroomingRecord } from '@/lib/types/home';
+import type { FeedingPlanEntry } from '@/lib/types/homeForms';
+import type { PetEventRecord } from '@/lib/petEvents';
+import { parsePetEventExtraData } from '@/lib/petEvents';
+import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
+import { dateToLocalISO } from '@/lib/localDate';
+
+// ─── Public Types ─────────────────────────────────────────────────────────────
+
+export type CareReminderDomain =
+  | 'vaccine'
+  | 'parasite'
+  | 'grooming'
+  | 'food'
+  | 'medication'
+  | 'event';
+
+export type CareReminderStatus = 'overdue' | 'today' | 'upcoming';
+
+export type CareActionTarget =
+  | 'health/vaccines'
+  | 'health/parasites/dewormer'
+  | 'health/parasites/flea_tick'
+  | 'health/parasites/collar'
+  | 'health/parasites'
+  | 'health/grooming'
+  | 'health/food'
+  | 'health/medication'
+  | 'health/events';
+
+export interface PetCareReminder {
+  /**
+   * Chave canônica determinística para deduplicação.
+   * Formato: `{pet_id}|{domain}|{entityType}|{recordId}|{dueDate}`
+   */
+  key: string;
+
+  pet_id: string;
+  domain: CareReminderDomain;
+
+  /** Label principal (nome do produto, vacina, tipo de serviço) */
+  label: string;
+
+  /** Info secundária (marca, tipo clínico, etc.) */
+  sublabel?: string;
+
+  /** Emoji representativo */
+  icon: string;
+
+  /** Data relevante em YYYY-MM-DD */
+  due_date: string;
+
+  /**
+   * Dias a partir de hoje.
+   * Negativo = vencido, 0 = hoje, positivo = futuro.
+   */
+  diff: number;
+
+  status: CareReminderStatus;
+
+  /** Qual modal/sheet abrir ao acionar */
+  action_target: CareActionTarget;
+
+  /** ID do registro de origem (para operações como quick-mark) */
+  source_record_id?: string;
+
+  /**
+   * true  → data calculada/derivada (ex: lastDate + frequencyDays)
+   * false → data explicitamente salva no backend
+   */
+  is_derived: boolean;
+}
+
+export interface PetCareDomainParams {
+  pet_id: string;
+  pet_name: string;
+  vaccines: VaccineRecord[];
+  parasiteControls: ParasiteControl[];
+  groomingRecords: GroomingRecord[];
+  /** Plano alimentar do pet (null = não cadastrado) */
+  feedingPlan: FeedingPlanEntry | null | undefined;
+  /** Eventos do pet (medicações, consultas, etc.) */
+  petEvents: PetEventRecord[];
+}
+
+// ─── Date Helpers (privados) ──────────────────────────────────────────────────
+
+function parseLocalDate(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  // Força fuso local: "YYYY-MM-DD" → sem UTC shift
+  const d = s.includes('T') ? new Date(s) : new Date(s + 'T00:00:00');
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function todayMidnight(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function diffFromToday(date: Date): number {
+  return Math.round((date.getTime() - todayMidnight().getTime()) / 86_400_000);
+}
+
+function toStatus(diff: number): CareReminderStatus {
+  if (diff < 0) return 'overdue';
+  if (diff === 0) return 'today';
+  return 'upcoming';
+}
+
+// ─── Canonical Dedup Key ──────────────────────────────────────────────────────
+
+function makeKey(
+  petId: string,
+  domain: CareReminderDomain,
+  entityType: string,
+  recordId: string,
+  dueDate: string,
+): string {
+  return `${petId}|${domain}|${entityType}|${recordId}|${dueDate}`;
+}
+
+// ─── Domain Processors ────────────────────────────────────────────────────────
+
+function processVaccines(p: PetCareDomainParams): PetCareReminder[] {
+  if (!p.vaccines.length) return [];
+
+  const latestByGroup = latestVaccinePerGroup(p.vaccines);
+  const vTypeLabels: Record<string, string | undefined> = {
+    multiple: 'Polivalente',
+    annual: 'Anual',
+    rabies: 'Raiva',
+  };
+
+  const result: PetCareReminder[] = [];
+  for (const v of Array.from(latestByGroup.values())) {
+    const nextDate = parseLocalDate(v.next_dose_date);
+    if (!nextDate) continue;
+    const diff = diffFromToday(nextDate);
+    // Só exibe se ainda é relevante (vencido, hoje, ou futuro)
+    result.push({
+      key: makeKey(p.pet_id, 'vaccine', v.vaccine_type || 'other', v.id || v.vaccine_name, dateToLocalISO(nextDate)),
+      pet_id: p.pet_id,
+      domain: 'vaccine',
+      label: v.vaccine_name,
+      sublabel: vTypeLabels[v.vaccine_type ?? ''],
+      icon: '💉',
+      due_date: dateToLocalISO(nextDate),
+      diff,
+      status: toStatus(diff),
+      action_target: 'health/vaccines',
+      source_record_id: v.id,
+      is_derived: false,
+    });
+  }
+  return result;
+}
+
+function processParasites(p: PetCareDomainParams): PetCareReminder[] {
+  if (!p.parasiteControls.length) return [];
+
+  // Apenas o mais recente por tipo (por date_applied)
+  const latestByType = new Map<string, ParasiteControl>();
+  for (const c of p.parasiteControls) {
+    const key = (c.type || 'other').toLowerCase();
+    const prev = latestByType.get(key);
+    if (!prev) { latestByType.set(key, c); continue; }
+    const dt = parseLocalDate(c.date_applied)?.getTime() ?? 0;
+    const prevDt = parseLocalDate(prev.date_applied)?.getTime() ?? 0;
+    if (dt > prevDt) latestByType.set(key, c);
+  }
+
+  const typeIcons: Record<string, string> = {
+    collar: '📿',
+    dewormer: '🪱',
+    flea_tick: '🛡️',
+    heartworm: '💓',
+    leishmaniasis: '🛡️',
+  };
+  const typeLabels: Record<string, string> = {
+    collar: 'Coleira Repelente',
+    dewormer: 'Vermífugo',
+    flea_tick: 'Antipulgas/Carrapato',
+    heartworm: 'Anti-heartworm',
+    leishmaniasis: 'Anti-leishmaniose',
+  };
+  // heartworm e leishmaniasis mapeiam para o mesmo bucket visual de Vermífugo
+  const typeTargets: Record<string, CareActionTarget> = {
+    collar: 'health/parasites/collar',
+    flea_tick: 'health/parasites/flea_tick',
+    dewormer: 'health/parasites/dewormer',
+    heartworm: 'health/parasites/dewormer',
+    leishmaniasis: 'health/parasites/dewormer',
+  };
+
+  const result: PetCareReminder[] = [];
+  for (const c of Array.from(latestByType.values())) {
+    // normalizedType garante que capitalização inconsistente (ex: 'Flea_Tick') não quebre os lookups
+    const normalizedType = (c.type || 'other').toLowerCase();
+
+    // Coleira usa collar_expiry_date; outros usam next_due_date.
+    // Fallback: derivar a data a partir de date_applied + frequency_days quando next_due_date não
+    // foi salvo explicitamente (o backend não calcula automaticamente esse campo).
+    let nextDateStr = c.collar_expiry_date || c.next_due_date || '';
+    if (!nextDateStr && c.date_applied && c.frequency_days > 0) {
+      const applied = parseLocalDate(c.date_applied);
+      if (applied) {
+        const derived = new Date(applied);
+        derived.setDate(derived.getDate() + c.frequency_days);
+        nextDateStr = dateToLocalISO(derived);
+      }
+    }
+    const nextDate = parseLocalDate(nextDateStr);
+    if (!nextDate) continue;
+    const diff = diffFromToday(nextDate);
+    result.push({
+      key: makeKey(p.pet_id, 'parasite', normalizedType, c.id, dateToLocalISO(nextDate)),
+      pet_id: p.pet_id,
+      domain: 'parasite',
+      label: c.product_name || typeLabels[normalizedType] || normalizedType,
+      sublabel: typeLabels[normalizedType],
+      icon: typeIcons[normalizedType] || '🦟',
+      due_date: dateToLocalISO(nextDate),
+      diff,
+      status: toStatus(diff),
+      action_target: (typeTargets[normalizedType] ?? 'health/parasites') as CareActionTarget,
+      source_record_id: c.id,
+      is_derived: c.frequency_days != null,
+    });
+  }
+  return result;
+}
+
+function processGrooming(p: PetCareDomainParams): PetCareReminder[] {
+  if (!p.groomingRecords.length) return [];
+
+  // Apenas o mais recente por tipo COM reminder_enabled E next_recommended_date
+  const latestByType = new Map<string, GroomingRecord>();
+  for (const r of p.groomingRecords) {
+    if (!r.reminder_enabled || !r.next_recommended_date) continue;
+    const key = r.type;
+    const prev = latestByType.get(key);
+    if (!prev) { latestByType.set(key, r); continue; }
+    const dt = parseLocalDate(r.date)?.getTime() ?? 0;
+    const prevDt = parseLocalDate(prev.date)?.getTime() ?? 0;
+    if (dt > prevDt) latestByType.set(key, r);
+  }
+
+  const typeLabels: Record<string, string> = {
+    bath: 'Banho',
+    grooming: 'Tosa',
+    bath_grooming: 'Banho + Tosa',
+  };
+
+  const result: PetCareReminder[] = [];
+  for (const r of Array.from(latestByType.values())) {
+    const nextDate = parseLocalDate(r.next_recommended_date!);
+    if (!nextDate) continue;
+    const diff = diffFromToday(nextDate);
+    result.push({
+      key: makeKey(p.pet_id, 'grooming', r.type, r.id, dateToLocalISO(nextDate)),
+      pet_id: p.pet_id,
+      domain: 'grooming',
+      label: typeLabels[r.type] || r.type,
+      icon: '🛁',
+      due_date: dateToLocalISO(nextDate),
+      diff,
+      status: toStatus(diff),
+      action_target: 'health/grooming',
+      source_record_id: r.id,
+      is_derived: r.frequency_days != null,
+    });
+  }
+  return result;
+}
+
+function processFood(p: PetCareDomainParams): PetCareReminder[] {
+  const plan = p.feedingPlan;
+  if (!plan) return [];
+
+  const manualPurchaseDate = parseLocalDate(plan.next_purchase_date);
+  const manualReminderOffsetRaw = Number(
+    plan.manual_reminder_days_before ?? plan.manualDaysBefore ?? Number.NaN
+  );
+  const hasManualReminderOffset = Number.isFinite(manualReminderOffsetRaw) && manualReminderOffsetRaw >= 0;
+
+  let derivedManualReminderDate: string | null = null;
+  if (manualPurchaseDate && hasManualReminderOffset) {
+    const alertDate = new Date(manualPurchaseDate);
+    alertDate.setDate(alertDate.getDate() - manualReminderOffsetRaw);
+    derivedManualReminderDate = dateToLocalISO(alertDate);
+  }
+
+  // Prioridade canônica para lembretes:
+  // 1. next_reminder_date    → data de alerta calculada/recomendada (backend)
+  // 2. derivedManualReminder → data derivada de next_purchase_date - manual_reminder_days_before
+  // 3. next_purchase_date    → data manual explícita de compra
+  // 4. estimated_end_date    → fallback bruto de término do estoque
+  const reminderDateStr =
+    (plan.next_reminder_date ?? '') ||
+    (derivedManualReminderDate ?? '') ||
+    (plan.next_purchase_date ?? '') ||
+    (plan.estimated_end_date ?? '');
+
+  if (!reminderDateStr) return [];
+
+  const nextDate = parseLocalDate(reminderDateStr);
+  if (!nextDate) return [];
+
+  const diff = diffFromToday(nextDate);
+  const brand = (plan.food_brand || plan.brand || '').trim() || undefined;
+
+  return [{
+    key: makeKey(p.pet_id, 'food', 'purchase', 'active-plan', dateToLocalISO(nextDate)),
+    pet_id: p.pet_id,
+    domain: 'food',
+    label: 'Compra de ração',
+    sublabel: brand,
+    icon: '🥣',
+    due_date: dateToLocalISO(nextDate),
+    diff,
+    status: toStatus(diff),
+    action_target: 'health/food',
+    is_derived: reminderDateStr !== (plan.next_purchase_date ?? ''),
+  }];
+}
+
+function processEvents(p: PetCareDomainParams): PetCareReminder[] {
+  const eventIcons: Record<string, string> = {
+    medicacao: '💊',
+    consulta: '🩺',
+    retorno: '🔁',
+    exame_lab: '🔬',
+    exame_imagem: '📷',
+    cirurgia: '✂️',
+    odonto: '🦷',
+    emergencia: '🚨',
+  };
+  const eventLabels: Record<string, string> = {
+    medicacao: 'Medicação',
+    consulta: 'Consulta',
+    retorno: 'Retorno',
+    exame_lab: 'Exame Lab',
+    exame_imagem: 'Exame Imagem',
+    cirurgia: 'Cirurgia',
+    odonto: 'Odontológico',
+    emergencia: 'Emergência',
+  };
+
+  const result: PetCareReminder[] = [];
+
+  for (const ev of p.petEvents) {
+    if (
+      !ev.next_due_date ||
+      ev.source === 'document' ||
+      ev.status === 'completed' ||
+      ev.status === 'cancelled'
+    ) continue;
+
+    const extra = parsePetEventExtraData(ev.extra_data);
+
+    // Medicações com treatment_days são tratadas pelo tracker de tratamento da RemindersSection
+    // Não as duplicamos nos chips simples
+    if (ev.type === 'medicacao' && extra.treatment_days) continue;
+
+    const nextDate = parseLocalDate(ev.next_due_date);
+    if (!nextDate) continue;
+
+    const diff = diffFromToday(nextDate);
+    const dueStr = dateToLocalISO(nextDate);
+
+    const sublabel: string | undefined =
+      extra.dosage
+        ? String(extra.dosage)
+        : (extra.veterinarian || extra.clinic_name)
+          ? [extra.veterinarian, extra.clinic_name].filter(Boolean).join(' · ')
+          : eventLabels[ev.type];
+
+    result.push({
+      key: makeKey(
+        p.pet_id,
+        ev.type === 'medicacao' ? 'medication' : 'event',
+        ev.type,
+        ev.id,
+        dueStr,
+      ),
+      pet_id: p.pet_id,
+      domain: ev.type === 'medicacao' ? 'medication' : 'event',
+      label: ev.title,
+      sublabel,
+      icon: eventIcons[ev.type] || '📅',
+      due_date: dueStr,
+      diff,
+      status: toStatus(diff),
+      action_target: ev.type === 'medicacao' ? 'health/medication' : 'health/events',
+      source_record_id: ev.id,
+      is_derived: false,
+    });
+  }
+  return result;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Constrói a lista canônica de lembretes de cuidado para um pet.
+ *
+ * Função pura — sem side effects, sem localStorage, sem fetch.
+ * Todos os dados chegam como parâmetros.
+ *
+ * Inclui vencidos (diff < 0), hoje (diff = 0) e futuros.
+ * Exclui apenas itens sem data relevante.
+ *
+ * Deduplicação robusta por chave canônica.
+ * Ordenação: vencidos primeiro (por urgência desc), depois por data ascendente.
+ */
+export function buildPetCareReminders(
+  params: PetCareDomainParams,
+  options: {
+    /** Janela máxima em dias (ex: 30 = só mostra até 30 dias no futuro) */
+    maxDays?: number;
+  } = {},
+): PetCareReminder[] {
+  try {
+    const all: PetCareReminder[] = [
+      ...processVaccines(params),
+      ...processParasites(params),
+      ...processGrooming(params),
+      ...processFood(params),
+      ...processEvents(params),
+    ];
+
+    // Deduplicação canônica
+    const seen = new Set<string>();
+    const deduped = all.filter(r => {
+      if (seen.has(r.key)) return false;
+      seen.add(r.key);
+      return true;
+    });
+
+    // Filtragem por janela temporal
+    const filtered =
+      options.maxDays != null
+        ? deduped.filter(r => r.diff <= options.maxDays!)
+        : deduped;
+
+    // Ordenação: vencidos primeiro (mais urgente = mais negativo), depois futuros por data
+    return filtered.sort((a, b) => {
+      if (a.status === 'overdue' && b.status !== 'overdue') return -1;
+      if (b.status === 'overdue' && a.status !== 'overdue') return 1;
+      if (a.status === 'overdue' && b.status === 'overdue') {
+        return a.diff - b.diff; // mais negativo = mais urgente = primeiro
+      }
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Helper: resolve qual função de abertura de modal chamar
+ * a partir do action_target canônico.
+ */
+export function resolveCareCTA(
+  target: CareActionTarget,
+  handlers: {
+    onOpenVaccines: () => void;
+    onOpenVermifugo: () => void;
+    onOpenAntipulgas: () => void;
+    onOpenColeira: () => void;
+    onOpenGrooming: () => void;
+    onOpenFood: () => void;
+    onOpenMedication: () => void;
+    onOpenEvents: () => void;
+  },
+): () => void {
+  switch (target) {
+    case 'health/vaccines':             return handlers.onOpenVaccines;
+    case 'health/parasites/dewormer':   return handlers.onOpenVermifugo;
+    case 'health/parasites/flea_tick':  return handlers.onOpenAntipulgas;
+    case 'health/parasites/collar':     return handlers.onOpenColeira;
+    case 'health/parasites':            return handlers.onOpenVermifugo;
+    case 'health/grooming':             return handlers.onOpenGrooming;
+    case 'health/food':                 return handlers.onOpenFood;
+    case 'health/medication':           return handlers.onOpenMedication;
+    case 'health/events':               return handlers.onOpenEvents;
+    default:                            return () => {};
+  }
+}

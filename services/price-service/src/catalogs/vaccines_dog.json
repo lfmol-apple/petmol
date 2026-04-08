@@ -1,0 +1,59 @@
+{
+  "domain": "vaccine",
+  "species": "dog",
+  "version": "1.0",
+  "items": [
+    {
+      "canonical": "Polivalente V10",
+      "code": "CORE_DOG_V10",
+      "aliases": [
+        "v10", "v8", "v 10", "v 8", "polivalente", "multipla", "multipla canina",
+        "dhppi", "hexavalente", "hexadog", "8 em 1", "10 em 1",
+        "nobivac dhppi", "nobivac", "vanguard", "vanguard plus", "vanguard plus5",
+        "duramune", "recombitek", "eurican", "biocan", "primodog",
+        "cinomose", "parvo", "parvovirus", "parvovírus", "distemper",
+        "adenovirus", "hepatite canina", "parainfluenza", "dhpp", "da2pp"
+      ]
+    },
+    {
+      "canonical": "Antirrábica Canina",
+      "code": "CORE_DOG_RABIES",
+      "aliases": [
+        "antirrabica", "antirrábica", "raiva", "rabies", "rábica",
+        "imrab", "defensor", "nobivac rabies", "rabisin",
+        "anti-rabica", "anti rabica"
+      ]
+    },
+    {
+      "canonical": "Leptospirose",
+      "code": "DOG_LEPTO",
+      "aliases": [
+        "leptospirose", "lepto", "leptospira", "l4", "l2",
+        "nobivac l4", "biocan l", "leptospirosis"
+      ]
+    },
+    {
+      "canonical": "Tosse dos Canis (Bordetella)",
+      "code": "DOG_BORDETELLA",
+      "aliases": [
+        "bordetella", "tosse dos canis", "tosse do canil", "kennel cough",
+        "bronquiseptica", "bronchiseptica", "tosse canina", "gripe do canil"
+      ]
+    },
+    {
+      "canonical": "Gripe Canina (Influenza)",
+      "code": "DOG_INFLUENZA",
+      "aliases": [
+        "gripe canina", "influenza canina", "influenza", "h3n8", "h3n2",
+        "canine influenza", "dog flu"
+      ]
+    },
+    {
+      "canonical": "Giárdia",
+      "code": "DOG_GIARDIA",
+      "aliases": [
+        "giardia", "giárdia", "giardiose", "giardíase"
+      ]
+    }
+  ]
+}

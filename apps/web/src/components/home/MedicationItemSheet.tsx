@@ -1,0 +1,825 @@
+'use client';
+
+import { useState } from 'react';
+import { API_BASE_URL } from '@/lib/api';
+import { parsePetEventExtraData, type PetEventRecord } from '@/lib/petEvents';
+import { ModalPortal } from '@/components/ModalPortal';
+import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDate(s?: string | null): string {
+  if (!s) return '—';
+  const clean = s.split('T')[0];
+  const [y, m, d] = clean.split('-').map(Number);
+  const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+}
+
+function createLocalDate(str: string) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function parseMedNotes(notes: string) {
+  const lines = notes.split('\n');
+  const firstLine = lines[0] || '';
+  const rest = lines.slice(1).join('\n').trim();
+  const doseMatch = firstLine.match(/Dose:\s*([^|]+)/);
+  const routeMatch = firstLine.match(/Via:\s*([^|]+)/);
+  const freqMatch = firstLine.match(/Frequência:\s*([^|]+)/);
+  if (doseMatch || routeMatch || freqMatch) {
+    return {
+      dose: doseMatch?.[1].trim() ?? '',
+      route: routeMatch?.[1].trim().toLowerCase() ?? 'oral',
+      frequency: freqMatch?.[1].trim().replace(' ', '_') ?? '2x_dia',
+      cleanNotes: rest,
+    };
+  }
+  return { dose: '', route: 'oral', frequency: '2x_dia', cleanNotes: notes };
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface MedForm {
+  title: string;
+  scheduled_date: string;
+  professional_name: string;
+  dose: string;
+  route: string;
+  frequency: string;
+  reminder_enabled: boolean;
+  reminder_date: string;
+  reminder_times: string[];
+  treatment_days: string;
+  cost: string;
+  notes: string;
+}
+
+const EMPTY_FORM: MedForm = {
+  title: '',
+  scheduled_date: localTodayISO(),
+  professional_name: '',
+  dose: '',
+  route: 'oral',
+  frequency: '2x_dia',
+  reminder_enabled: false,
+  reminder_date: '',
+  reminder_times: ['08:00'],
+  treatment_days: '',
+  cost: '',
+  notes: '',
+};
+
+export interface MedicationItemSheetProps {
+  petId: string;
+  petName?: string;
+  petEvents: PetEventRecord[];
+  onClose: () => void;
+  onRefresh: () => Promise<void>;
+}
+
+type Mode = 'view' | 'add' | 'edit';
+
+const labelCls = 'block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5';
+const inputCls =
+  'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-300';
+
+// ── Component ────────────────────────────────────────────────────────────────
+export function MedicationItemSheet({
+  petId,
+  petName,
+  petEvents,
+  onClose,
+  onRefresh,
+}: MedicationItemSheetProps) {
+  const [mode, setMode] = useState<Mode>('view');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<MedForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [medHistoryExpanded, setMedHistoryExpanded] = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [expandedTreatmentId, setExpandedTreatmentId] = useState<string | null>(null);
+  const [actionDate, setActionDate] = useState(localTodayISO());
+  const [actionNotes, setActionNotes] = useState('');
+
+  const medications = petEvents.filter(
+    ev => ev.type === 'medicacao' || ev.type === 'medication',
+  );
+
+  const active = medications.filter(ev => {
+    try {
+      const ex = parsePetEventExtraData(ev.extra_data);
+      if (ex.treatment_days) {
+        const applied = (ex.applied_dates as string[] || []).length;
+        return applied < parseInt(String(ex.treatment_days), 10);
+      }
+    } catch {}
+    return false;
+  });
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2800);
+  }
+
+  function openAdd() {
+    setForm({ ...EMPTY_FORM, scheduled_date: localTodayISO() });
+    setEditingId(null);
+    setMode('add');
+  }
+
+  function openEdit(ev: PetEventRecord) {
+    const { dose, route, frequency, cleanNotes } = parseMedNotes(ev.notes || '');
+    let treatmentDays = '';
+    let reminderTimes = ['08:00'];
+    let reminderDate = '';
+    const nextDue = ev.next_due_date ? ev.next_due_date.split('T')[0] : '';
+    try {
+      const ex = parsePetEventExtraData(ev.extra_data);
+      if (ex.treatment_days) treatmentDays = String(ex.treatment_days);
+      if (Array.isArray(ex.reminder_times) && (ex.reminder_times as string[]).length > 0)
+        reminderTimes = ex.reminder_times as string[];
+    } catch {}
+    if (nextDue) reminderDate = nextDue;
+
+    setForm({
+      title: ev.title || '',
+      scheduled_date: (ev.scheduled_at || '').slice(0, 10) || localTodayISO(),
+      professional_name: ev.professional_name || '',
+      dose,
+      route,
+      frequency,
+      reminder_enabled: !!nextDue,
+      reminder_date: reminderDate,
+      reminder_times: reminderTimes,
+      treatment_days: treatmentDays,
+      cost: ev.cost != null ? String(ev.cost) : '',
+      notes: cleanNotes,
+    });
+    setEditingId(ev.id);
+    setMode('edit');
+  }
+
+  async function handleSave() {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('petmol_token');
+      if (!token) { alert('Sessão expirada.'); return; }
+
+      const medMeta = [
+        form.dose ? `Dose: ${form.dose}` : '',
+        form.route ? `Via: ${form.route}` : '',
+        form.frequency ? `Frequência: ${form.frequency.replace('_', ' ')}` : '',
+      ].filter(Boolean).join(' | ');
+      const finalNotes = medMeta + (form.notes.trim() ? '\n' + form.notes.trim() : '');
+
+      const payload: Record<string, unknown> = {
+        pet_id: petId,
+        type: 'medicacao',
+        scheduled_at: new Date(form.scheduled_date + 'T00:00:00').toISOString(),
+        title: form.title.trim(),
+        source: 'manual',
+        status: 'completed',
+      };
+      if (form.professional_name.trim()) payload.professional_name = form.professional_name.trim();
+      if (form.cost) payload.cost = parseFloat(form.cost);
+      if (finalNotes) payload.notes = finalNotes;
+
+      if (form.reminder_enabled) {
+        const extra: Record<string, unknown> = {
+          frequency: form.frequency,
+        };
+        if (form.reminder_times.length > 0) {
+          extra.reminder_times = form.reminder_times;
+          extra.reminder_time = form.reminder_times[0];
+        }
+        if (form.treatment_days) extra.treatment_days = parseInt(form.treatment_days);
+        payload.extra_data = JSON.stringify(extra);
+        if (form.reminder_date) payload.next_due_date = new Date(form.reminder_date + 'T00:00:00').toISOString();
+      }
+
+      const url = editingId
+        ? `${API_BASE_URL}/events/${editingId}`
+        : `${API_BASE_URL}/events`;
+      const res = await fetch(url, {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        showToast(editingId ? '✅ Medicação atualizada' : '✅ Medicação registrada');
+        setMode('view');
+        setEditingId(null);
+        await onRefresh();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('Erro ao salvar: ' + (err.detail || res.status));
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleApplyDose(evId: string, action: 'apply' | 'skip' | 'unskip' | 'remove', date: string) {
+    const token = localStorage.getItem('petmol_token');
+    if (!token) return;
+    setSaving(true);
+    setApplyingId(evId);
+    try {
+      const endpoint =
+        action === 'apply'
+          ? `/events/${evId}/apply-dose`
+          : action === 'skip'
+            ? `/events/${evId}/skip-dose`
+            : action === 'unskip'
+              ? `/events/${evId}/unskip-dose`
+              : `/events/${evId}/remove-dose`;
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date }),
+      });
+      if (res.ok) {
+        showToast(
+          action === 'apply' ? '✅ Dose registrada'
+          : action === 'skip' ? '↷ Dose marcada como pulada'
+          : action === 'unskip' ? '↷ Pulo removido'
+          : '🗑 Dose removida',
+        );
+        await onRefresh();
+      } else {
+        alert('Erro ao registrar dose');
+      }
+    } finally {
+      setSaving(false);
+      setApplyingId(null);
+    }
+  }
+
+  async function handleDelete(evId: string) {
+    if (!confirm('Excluir este registro? Esta ação não pode ser desfeita.')) return;
+    const token = localStorage.getItem('petmol_token');
+    try {
+      await fetch(`${API_BASE_URL}/events/${evId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      showToast('🗑️ Registro removido');
+      await onRefresh();
+    } catch {
+      alert('Erro ao excluir registro.');
+    }
+  }
+
+  // ── Status badge ──────────────────────────────────────────────────────────
+  const statusLabel = active.length > 0
+    ? `${active.length} em tratamento`
+    : medications.length > 0
+      ? 'Sem tratamentos ativos'
+      : 'Nenhuma medicação';
+  const statusCls = active.length > 0
+    ? 'bg-purple-100 text-purple-700 border-purple-200'
+    : 'bg-gray-100 text-gray-600 border-gray-200';
+  const dotCls = active.length > 0 ? 'bg-purple-500 animate-pulse' : 'bg-gray-400';
+
+  return (
+    <ModalPortal>
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Sheet */}
+      <div
+        className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col"
+        style={{ maxHeight: '92dvh' }}
+        onClick={e => e.stopPropagation()}
+      >
+
+
+        {/* Header */}
+        <div className="px-5 pt-4 pb-3 bg-purple-50 border-b border-gray-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl flex-shrink-0">
+              💊
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h2 className="text-[16px] font-bold text-gray-900 leading-tight whitespace-nowrap">Medicação</h2>
+                {petName && <span className="text-sm text-gray-400 truncate">· {petName}</span>}
+              </div>
+              {mode === 'view' && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls}`} />
+                  <span className={`text-[13px] font-semibold truncate ${active.length > 0 ? 'text-purple-700' : 'text-gray-500'}`}>{statusLabel}</span>
+                </div>
+              )}
+              {mode !== 'view' && (
+                <span className="text-[13px] font-semibold text-purple-600 mt-0.5">
+                  {mode === 'add' ? 'Novo registro' : 'Editar medicação'}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={mode !== 'view' ? () => setMode('view') : onClose}
+              className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+              aria-label="Fechar"
+            >
+              {mode !== 'view' ? '‹' : '✕'}
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 overscroll-contain">
+
+          {/* ── VIEW MODE ─────────────────────────────────────────────────── */}
+          {mode === 'view' && (
+            <div className="p-5 space-y-4 pb-8">
+              {/* Toast */}
+              {toast && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-green-50 border border-green-200 text-sm font-semibold text-green-700">
+                  {toast}
+                </div>
+              )}
+
+              {/* CTA */}
+              <button
+                onClick={openAdd}
+                className="w-full py-4 rounded-2xl bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-[15px] font-bold shadow-md transition-colors"
+              >
+                💊 Registrar nova medicação
+              </button>
+
+              {/* Empty state */}
+              {medications.length === 0 && (
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center">
+                  <p className="text-4xl mb-3">💊</p>
+                  <p className="text-sm font-semibold text-gray-600">Nenhuma medicação registrada</p>
+                  <p className="text-xs text-gray-400 mt-1">Registre uma prescrição acima</p>
+                </div>
+              )}
+
+              {/* Daily application section */}
+              {active.length > 0 && (
+                <div className="rounded-2xl border border-purple-300 bg-purple-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-purple-100">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-purple-700">
+                      💊 Aplicação diária · {active.length} em tratamento
+                    </p>
+                  </div>
+                  {active.map(ev => {
+                    let totalDays = 0;
+                    let appliedDates: string[] = [];
+                    let skippedDates: string[] = [];
+                    try {
+                      const ex = parsePetEventExtraData(ev.extra_data);
+                      totalDays = parseInt(String(ex.treatment_days), 10) || 0;
+                      appliedDates = Array.isArray(ex.applied_dates) ? ex.applied_dates as string[] : [];
+                      skippedDates = Array.isArray(ex.skipped_dates) ? ex.skipped_dates as string[] : [];
+                    } catch {}
+                    const todayStr = localTodayISO();
+                    const pct = totalDays > 0 ? Math.min(100, Math.round(appliedDates.length / totalDays * 100)) : 0;
+                    const isOpen = expandedTreatmentId === ev.id;
+                    const isBusy = saving && applyingId === ev.id;
+                    const startDate = createLocalDate((ev.scheduled_at || todayStr).split('T')[0]);
+                    const nowDay = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+                    const daysSinceStart = Math.max(0, Math.floor((nowDay.getTime() - startDate.getTime()) / 86400000));
+                    const recentDays: string[] = [];
+                    for (let i = daysSinceStart; i >= 0; i--) {
+                      const d = new Date(nowDay);
+                      d.setDate(d.getDate() - i);
+                      recentDays.push(dateToLocalISO(d));
+                    }
+                    const selectedDate = isOpen ? actionDate : todayStr;
+                    const alreadyDone = appliedDates.includes(selectedDate);
+                    const alreadySkipped = skippedDates.includes(selectedDate);
+
+                    return (
+                      <div key={ev.id} className="border-b border-purple-100 last:border-b-0">
+                        {/* Clickable header */}
+                        <button
+                          onClick={() => {
+                            setExpandedTreatmentId(isOpen ? null : ev.id);
+                            setActionDate(todayStr);
+                            setActionNotes('');
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-3 text-left active:scale-[0.99] transition-all"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-purple-900 truncate">{ev.title}</p>
+                          </div>
+                          {totalDays > 0 && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                              appliedDates.includes(todayStr) ? 'bg-green-100 text-green-700' : 'bg-purple-200 text-purple-700'
+                            }`}>
+                              {appliedDates.length}/{totalDays}
+                            </span>
+                          )}
+                          <span className="text-gray-300 text-xs ml-1">{isOpen ? '▲' : '▼'}</span>
+                        </button>
+
+                        {/* Progress bar */}
+                        {totalDays > 0 && (
+                          <div className="mx-4 mb-2">
+                            <div className="h-1.5 bg-purple-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-purple-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{pct}% concluído</p>
+                          </div>
+                        )}
+
+                        {/* Expanded: day calendar */}
+                        {isOpen && (
+                          <div className="px-4 pb-4 pt-1 bg-white/70 border-t border-purple-100">
+                            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Últimos dias</p>
+                            <div className="flex gap-1 flex-wrap mb-3">
+                              {recentDays.map(d => {
+                                const done = appliedDates.includes(d);
+                                const skipped = skippedDates.includes(d);
+                                const isSel = d === selectedDate;
+                                const dayNum = parseInt(d.split('-')[2]);
+                                return (
+                                  <button
+                                    key={d}
+                                    onClick={() => { setActionDate(d); setActionNotes(''); }}
+                                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all active:scale-90 flex flex-col items-center justify-center ${
+                                      isSel
+                                        ? done ? 'bg-green-500 text-white' : skipped ? 'bg-amber-500 text-white' : 'bg-purple-500 text-white'
+                                        : done ? 'bg-green-100 text-green-700 border border-green-200'
+                                        : skipped ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                        : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                    }`}
+                                  >
+                                    <span>{dayNum}</span>
+                                    {(done || skipped) && <span className="text-[8px]">{done ? '✓' : '↷'}</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {alreadyDone ? (
+                              <div className="rounded-lg border border-green-200 bg-green-50 overflow-hidden">
+                                <div className="flex items-center gap-1.5 px-2.5 py-2">
+                                  <span className="text-green-500">✓</span>
+                                  <p className="text-sm text-green-700 font-semibold flex-1">
+                                    Dose de {selectedDate.slice(8)}/{selectedDate.slice(5, 7)} registrada
+                                  </p>
+                                </div>
+                                <button
+                                  disabled={isBusy}
+                                  onClick={() => handleApplyDose(ev.id, 'remove', selectedDate)}
+                                  className="w-full text-sm font-semibold text-red-500 py-1.5 border-t border-green-200 bg-white/60 active:bg-red-50 transition-all disabled:opacity-40"
+                                >{isBusy ? '...' : '🗑 Desfazer'}</button>
+                              </div>
+                            ) : alreadySkipped ? (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+                                <div className="flex items-center gap-1.5 px-2.5 py-2">
+                                  <span className="text-amber-500">↷</span>
+                                  <p className="text-sm text-amber-700 font-semibold flex-1">
+                                    Dia {selectedDate.slice(8)}/{selectedDate.slice(5, 7)} marcado como pulado
+                                  </p>
+                                </div>
+                                <button
+                                  disabled={isBusy}
+                                  onClick={() => handleApplyDose(ev.id, 'unskip', selectedDate)}
+                                  className="w-full text-sm font-semibold text-amber-700 py-1.5 border-t border-amber-200 bg-white/70 active:bg-amber-100 transition-all disabled:opacity-40"
+                                >{isBusy ? '...' : 'Desfazer pulado'}</button>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <button
+                                  disabled={isBusy}
+                                  onClick={() => handleApplyDose(ev.id, 'apply', selectedDate)}
+                                  className="w-full text-[15px] font-bold py-3.5 rounded-2xl bg-purple-500 text-white shadow-md active:scale-95 transition-all disabled:opacity-40"
+                                >{isBusy ? '...' : '✓ Administrado hoje'}</button>
+                                <div className="flex gap-2">
+                                  <button
+                                    disabled={isBusy || selectedDate > todayStr}
+                                    onClick={() => handleApplyDose(ev.id, 'skip', selectedDate)}
+                                    className="flex-1 text-sm font-semibold py-2.5 rounded-xl bg-amber-100 text-amber-700 border border-amber-200 active:scale-95 transition-all disabled:opacity-40"
+                                  >{isBusy ? '...' : '↷ Pular'}</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* All history — collapsed accordion */}
+              {medications.length > 0 && (
+                <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-3 text-left"
+                    onClick={() => setMedHistoryExpanded(e => !e)}
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                      🗂️ Todas as medicações ({medications.length})
+                    </p>
+                    <span className="text-gray-400 text-sm">{medHistoryExpanded ? '▲' : '▼'}</span>
+                  </button>
+                  {medHistoryExpanded && (
+                    <div className="divide-y divide-gray-100 border-t border-gray-100">
+                      {medications.map(ev => (
+                        <MedRow
+                          key={ev.id}
+                          ev={ev}
+                          deletingId={deletingId}
+                          setDeletingId={setDeletingId}
+                          onEdit={openEdit}
+                          onDelete={handleDelete}
+                          accentText="text-gray-700"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ADD / EDIT FORM ───────────────────────────────────────────── */}
+          {(mode === 'add' || mode === 'edit') && (
+            <div className="p-5 pb-8 space-y-4">
+              <div>
+                <label className={labelCls}>Nome do medicamento *</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Ex: Amoxicilina, Prednisolona..."
+                  value={form.title}
+                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Data de início *</label>
+                <input
+                  type="date"
+                  className={inputCls}
+                  value={form.scheduled_date}
+                  onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Veterinário prescritor (opcional)</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Dr. Nome"
+                  value={form.professional_name}
+                  onChange={e => setForm(f => ({ ...f, professional_name: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Dose</label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Ex: 1 comprimido"
+                    value={form.dose}
+                    onChange={e => setForm(f => ({ ...f, dose: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Via</label>
+                  <select
+                    className={inputCls}
+                    value={form.route}
+                    onChange={e => setForm(f => ({ ...f, route: e.target.value }))}
+                  >
+                    <option value="oral">💊 Oral</option>
+                    <option value="injetavel">💉 Injetável</option>
+                    <option value="topico">🖐 Tópico</option>
+                    <option value="oftalmico">👁️ Oftálmico</option>
+                    <option value="auricular">👂 Auricular</option>
+                    <option value="inalatorio">💨 Inalatório</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Frequência</label>
+                <select
+                  className={inputCls}
+                  value={form.frequency}
+                  onChange={e => setForm(f => ({ ...f, frequency: e.target.value }))}
+                >
+                  <option value="dose_unica">💊 Dose única</option>
+                  <option value="1x_dia">1× ao dia</option>
+                  <option value="2x_dia">2× ao dia</option>
+                  <option value="3x_dia">3× ao dia</option>
+                  <option value="8h">A cada 8 horas</option>
+                  <option value="12h">A cada 12 horas</option>
+                  <option value="48h">A cada 48 horas</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="conforme_necessidade">Conforme necessidade (SOS)</option>
+                </select>
+              </div>
+
+              {/* Lembretes toggle */}
+              <label className="flex items-center gap-3 p-3 bg-amber-50 rounded-2xl border border-amber-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.reminder_enabled}
+                  onChange={e => setForm(f => ({
+                    ...f,
+                    reminder_enabled: e.target.checked,
+                    reminder_date: e.target.checked ? (f.reminder_date || f.scheduled_date) : '',
+                  }))}
+                  className="w-4 h-4 accent-amber-500"
+                />
+                <span className="text-sm font-semibold text-amber-800">🔔 Quero lembretes desta medicação</span>
+              </label>
+
+              {form.reminder_enabled && (
+                <div className="space-y-3 px-4 py-3 bg-amber-50 rounded-2xl border border-amber-200">
+                  <div>
+                    <label className={labelCls}>📅 Data do 1º lembrete</label>
+                    <input
+                      type="date"
+                      className="w-full border border-amber-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                      value={form.reminder_date}
+                      onChange={e => setForm(f => ({ ...f, reminder_date: e.target.value }))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>⏰ Horários dos lembretes</label>
+                    <div className="space-y-2">
+                      {form.reminder_times.map((time, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={time}
+                            onChange={e => {
+                              const updated = [...form.reminder_times];
+                              updated[idx] = e.target.value;
+                              setForm(f => ({ ...f, reminder_times: updated }));
+                            }}
+                            className="flex-1 border border-amber-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          />
+                          {form.reminder_times.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setForm(f => ({ ...f, reminder_times: f.reminder_times.filter((_, i) => i !== idx) }))}
+                              className="w-9 h-9 rounded-full bg-red-100 text-red-500 flex items-center justify-center text-sm hover:bg-red-200 flex-shrink-0"
+                            >✕</button>
+                          )}
+                        </div>
+                      ))}
+                      {form.reminder_times.length < 6 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const last = form.reminder_times[form.reminder_times.length - 1] || '08:00';
+                            const [h, m] = last.split(':').map(Number);
+                            const nextH = (h + 8) % 24;
+                            setForm(f => ({ ...f, reminder_times: [...f.reminder_times, `${String(nextH).padStart(2, '0')}:${String(m).padStart(2, '0')}`] }));
+                          }}
+                          className="w-full py-2.5 border border-dashed border-amber-300 rounded-xl text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                        >
+                          + Adicionar horário
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>📆 Duração do tratamento (dias)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      placeholder="Ex: 7"
+                      className="w-full border border-amber-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
+                      value={form.treatment_days}
+                      onChange={e => setForm(f => ({ ...f, treatment_days: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className={labelCls}>Custo R$ (opcional)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0,00"
+                  className={inputCls}
+                  value={form.cost}
+                  onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}
+                />
+              </div>
+
+              <button
+                onClick={handleSave}
+                disabled={saving || !form.title.trim()}
+                className="w-full py-4 rounded-2xl bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-[15px] font-bold shadow-md disabled:opacity-50 transition-colors"
+              >
+                {saving ? 'Salvando...' : '✅ Confirmar registro'}
+              </button>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+    </ModalPortal>
+  );
+}
+
+// ── Row sub-component ────────────────────────────────────────────────────────
+function MedRow({
+  ev,
+  deletingId,
+  setDeletingId,
+  onEdit,
+  onDelete,
+  accentText,
+}: {
+  ev: PetEventRecord;
+  deletingId: string | null;
+  setDeletingId: (id: string | null) => void;
+  onEdit: (ev: PetEventRecord) => void;
+  onDelete: (id: string) => void;
+  accentText: string;
+}) {
+  let badgeCls = 'bg-yellow-100 text-yellow-700';
+  let badgeTxt = 'Pendente';
+  let notesCaption = '';
+
+  try {
+    const ex = parsePetEventExtraData(ev.extra_data);
+    if (ex.treatment_days) {
+      const applied = (ex.applied_dates as string[] || []).length;
+      const total = parseInt(String(ex.treatment_days), 10);
+      if (applied >= total) {
+        badgeCls = 'bg-green-100 text-green-700'; badgeTxt = 'Concluído';
+      } else {
+        badgeCls = 'bg-purple-100 text-purple-700'; badgeTxt = `Em tratamento (${applied}/${total})`;
+      }
+    } else if (ev.status === 'completed') {
+      badgeCls = 'bg-green-100 text-green-700'; badgeTxt = 'Concluído';
+    }
+  } catch {
+    if (ev.status === 'completed') { badgeCls = 'bg-green-100 text-green-700'; badgeTxt = 'Concluído'; }
+  }
+
+  // Extract dose/via/freq from notes first line
+  const notes = ev.notes || '';
+  const firstLine = notes.split('\n')[0] || '';
+  if (firstLine.includes('Dose:') || firstLine.includes('Via:') || firstLine.includes('Frequência:')) {
+    notesCaption = firstLine;
+  }
+
+  const isConfirming = deletingId === ev.id;
+  const dateStr = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(
+    new Date((ev.scheduled_at || '').replace(' ', 'T')),
+  );
+
+  return (
+    <div className="px-4 py-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className={`text-sm font-semibold ${accentText} truncate`}>{ev.title}</p>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${badgeCls}`}>{badgeTxt}</span>
+        </div>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+          <span className="text-xs text-gray-500">{dateStr}{ev.professional_name ? ` · ${ev.professional_name}` : ''}</span>
+          {ev.cost != null && <span className="text-xs text-green-700 font-medium">R$ {Number(ev.cost).toFixed(2)}</span>}
+          {notesCaption && <span className="text-xs text-gray-400 truncate max-w-full">{notesCaption}</span>}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={() => onEdit(ev)}
+          className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xs hover:bg-purple-100 transition-colors"
+          title="Editar"
+        >✏️</button>
+        <button
+          onClick={() => {
+            if (isConfirming) { onDelete(ev.id); setDeletingId(null); }
+            else setDeletingId(ev.id);
+          }}
+          className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs transition-colors ${
+            isConfirming ? 'bg-red-600 text-white' : 'bg-red-50 text-red-500 hover:bg-red-100'
+          }`}
+          title={isConfirming ? 'Confirmar exclusão' : 'Excluir'}
+        >{isConfirming ? '✓' : '🗑️'}</button>
+      </div>
+    </div>
+  );
+}

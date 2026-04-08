@@ -1,0 +1,57 @@
+{
+  "domain": "provider",
+  "version": "1.0",
+  "items": [
+    {
+      "canonical": "Petlove",
+      "aliases": [
+        "petlove", "pet love", "pet-love"
+      ]
+    },
+    {
+      "canonical": "Cobasi",
+      "aliases": [
+        "cobasi", "kobasi"
+      ]
+    },
+    {
+      "canonical": "PetShop",
+      "aliases": [
+        "petshop", "pet shop", "pet-shop"
+      ]
+    },
+    {
+      "canonical": "Clínica Veterinária",
+      "aliases": [
+        "clinica veterinaria", "clinica vet", "clinica", "vet", "veterinaria",
+        "veterinário", "veterinario", "animal hospital", "hospital animal",
+        "hospital vet", "hospital veterinario"
+      ]
+    },
+    {
+      "canonical": "Banho e Tosa",
+      "aliases": [
+        "banho e tosa", "banho tosa", "pet grooming", "grooming", "tosa",
+        "banho", "toalete"
+      ]
+    },
+    {
+      "canonical": "Petco",
+      "aliases": [
+        "petco"
+      ]
+    },
+    {
+      "canonical": "Petz",
+      "aliases": [
+        "petz", "pet z"
+      ]
+    },
+    {
+      "canonical": "Agrishow",
+      "aliases": [
+        "agrishow", "agropecuaria", "agro"
+      ]
+    }
+  ]
+}

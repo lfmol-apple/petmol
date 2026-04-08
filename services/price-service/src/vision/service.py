@@ -1,0 +1,405 @@
+"""
+Vision AI Service - Gemini Integration
+Handles communication with Google Gemini AI for image analysis
+"""
+
+import google.generativeai as genai
+from typing import List, Dict, Any
+import json
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+
+class VisionService:
+    """Serviço de visão AI usando Gemini"""
+    
+    def __init__(self, api_key: str):
+        """
+        Inicializa o serviço com a chave API do Google
+        
+        Args:
+            api_key: Chave da Google AI (GOOGLE_API_KEY)
+        """
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    async def extract_vaccine_data(self, image_bytes: bytes, pet_id: str) -> Dict[str, Any]:
+        """
+        Extrai dados de vacinas de uma imagem de carteirinha com precisão global.
+        
+        Args:
+            image_bytes: Imagem em bytes
+            pet_id: ID do pet (para contexto)
+        
+        Returns:
+            Dict com: vaccines (lista), confidence (float), raw_text (str)
+        """
+        
+        # Prompt refatorado com lógica de ancoragem e PRIORIDADE NOBIVAC
+        prompt = """
+Você é um Especialista Veterinário Global em OCR de Carteirinhas de Vacinação.
+
+🎯 MISSÃO: Extrair TODAS as vacinas desta imagem com precisão de 100%.
+
+🌟 PRIORIDADE MÁXIMA NOBIVAC:
+- Se encontrar texto "NOBIVAC" em QUALQUER adesivo, marca = "NOBIVAC"
+- NUNCA substituir "Nobivac" por "Vanguard", "Duramune" ou outras marcas
+- Variações Nobivac: "Nobivac Raiva", "Nobivac 1-Cv", "Nobivac DAPPv+L4", "Nobivac Canine"
+- Se há adesivo com "NOBIVAC" e texto ilegível, ainda reportar com confiança 0.7
+
+⚓ ETAPA 1 - LÓGICA DE ANCORAGEM (Conte Primeiro):
+Antes de extrair qualquer dado, faça uma VARREDURA COMPLETA da imagem e conte:
+- Quantos adesivos/etiquetas de vacina você vê? (conte visualmente)
+- Quantos números de série/lote você detecta?
+- Quantas marcas comerciais diferentes identifica?
+- Liste as coordenadas aproximadas (topo-esquerda, topo-centro, topo-direita, meio-esquerda, etc.)
+
+Se você contar 8 adesivos, deve retornar EXATAMENTE 8 registros no JSON.
+
+📋 ETAPA 2 - CLASSIFICAÇÃO SEMÂNTICA GLOBAL:
+Em vez de apenas buscar marcas fixas, CLASSIFIQUE a vacina pelos COMPONENTES visíveis:
+
+CÓDIGOS DE COMPONENTES:
+- "D" ou "Distemper" ou "Cinomose" → Distemper (Cinomose)
+- "H" ou "Hepatitis" ou "Hepatite" → Hepatite/Adenovírus
+- "P" ou "Parvo" → Parvovirose  
+- "Pi" ou "Parainfluenza" → Parainfluenza
+- "L" ou "Lepto" → Leptospirose
+- "R" ou "Rabies" ou "Raiva" ou "Antirrábica" → Raiva (Antirrábica)
+- "C" ou "Corona" → Coronavírus
+- "B" ou "Bordetella" → Bordetelose (Tosse dos Canis)
+- "G" ou "Giardia" → Giárdia
+- "Leish" → Leishmaniose
+
+EXEMPLOS DE CLASSIFICAÇÃO:
+- Se ler "DHPPI + L" → "Vacina Múltipla (V8) - Cinomose, Hepatite, Parvo, Parainfluenza, Leptospirose"
+- Se ler "Nobivac Lepto" → "Leptospirose (Nobivac)"
+- Se ler "Nobivac DAPPv+L4" → "Vacina Múltipla (V10) - Nobivac DAPPv+L4"
+- Se ler "Nobivac Canine 1-DAPPv+L4" → "Vacina Múltipla (V10) - Nobivac Canine"
+- Se ler "Nobivac 1-Cv" → "Coronavírus (Nobivac 1-Cv)"
+- Se ler "Nobivac Raiva" → "Raiva (Nobivac Raiva)"
+- Se ler "Duramune Max" → "Vacina Múltipla (V10) - Duramune"
+- Se ler apenas "R" no selo → "Raiva (Antirrábica)"
+
+⚠️ REGRA CRÍTICA NOBIVAC: Se encontrar QUALQUER texto com "NOBIVAC", preserve na marca comercial EXATA, mesmo se difícil de ler.
+
+📅 ETAPA 3 - LEITURA DE DATAS MANUSCRITAS:
+
+FORMATOS ACEITOS:
+- dd/mm/aa ou dd/mm/aaaa (Brasil: 15/03/24)
+- dd.mm.aa ou dd-mm-aa (Europa: 15.03.24)
+- ddmmaa ou ddmmaaaa SEM separadores (150324)
+- dd Mon aa (15 Mar 24, 15 Marzo 24, 15 March 24)
+- Mon dd aa (Mar 15 24, Marzo 15 24)
+
+CORREÇÃO DE ANOS AMBÍGUOS:
+⚠️ REGRA CRÍTICA: Se você ler um ano MAIOR que 2027 em uma data de aplicação:
+  - Verifique se o segundo dígito pode ser um "1" mal escrito
+  - Exemplo: "2026" → pode ser "2016" (dígito "2" confundido com "1")
+  - Exemplo: "2029" → pode ser "2019" 
+  - Exemplo: "2030" → pode ser "2010"
+  - Use o contexto: vacinas antigas (5+ anos) provavelmente têm ano mal lido
+
+CORREÇÃO DE CARACTERES MANUSCRITOS:
+- "l" ou "I" ou "|" → número "1"
+- "O" ou "o" → número "0" (zero)
+- "S" → número "5" (quando em contexto de data)
+- "G" → número "6"
+- "g" minúsculo → número "9"
+- "Z" → número "2"
+- "B" → número "8"
+
+🌍 MESES MULTILÍNGUE:
+Português: Janeiro, Fevereiro, Março, Abril, Maio, Junho, Julho, Agosto, Setembro, Outubro, Novembro, Dezembro
+Espanhol: Enero, Febrero, Marzo, Abril, Mayo, Junio, Julio, Agosto, Septiembre, Octubre, Noviembre, Diciembre  
+Inglês: January, February, March, April, May, June, July, August, September, October, November, December
+Abreviações: Jan, Feb/Fev, Mar, Apr/Abr, May/Mai, Jun, Jul, Aug/Ago, Sep/Set, Oct/Out, Nov, Dec/Dez
+
+✅ ETAPA 4 - FORMATO DE SAÍDA (JSON Estrito):
+
+{
+  "total_encontrado": 8,  // DEVE bater com número de adesivos contados
+  "vaccines": [
+    {
+      "name": "Leptospirose (Nobivac Lepto)",  // Nome classificado semanticamente
+      "commercial_brand": "Nobivac Lepto",  // Marca exata do adesivo
+      "components": ["Leptospirose"],  // Componentes identificados
+      "date": "2024-03-15",  // YYYY-MM-DD (null se ilegível)
+      "next_date": "2025-03-15",  // YYYY-MM-DD (null se não houver)
+      "veterinarian": "Dr. João Silva",  // Nome do carimbo (null se ilegível)
+      "notes": "Lote ABC123",  // Opcional
+      "field_confidence": {  // NOVO: Confiança por campo
+        "name": 0.95,
+        "date": 0.80,  // Baixa se manuscrito ilegível
+        "next_date": 0.90,
+        "veterinarian": 0.70
+      }
+    }
+  ],
+  "overall_confidence": 0.85,
+  "raw_text": "Texto OCR bruto detectado"
+}
+
+🚫 REGRAS DE SANIDADE:
+1. Se total_encontrado != len(vaccines), REVISE a imagem
+2. NUNCA invente datas - use null se ilegível
+3. NUNCA pule colunas - varra linha por linha, esquerda→direita
+4. Se data_aplicacao > data_revacina, INVERTA (erro de leitura)
+5. Datas de aplicação não podem ser futuro (>hoje + 7 dias)
+6. field_confidence < 0.7 em qualquer campo = marcar para revisão humana
+
+Retorne APENAS o JSON, sem texto adicional.
+"""
+        
+        try:
+            # Enviar para Gemini
+            logger.info(f"Enviando imagem para Gemini AI (pet_id={pet_id})")
+            
+            # Detectar MIME type baseado nos bytes da imagem
+            if image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+                mime_type = "image/png"
+            elif image_bytes.startswith(b'\xff\xd8\xff'):
+                mime_type = "image/jpeg"
+            else:
+                mime_type = "image/jpeg"  # Default
+                
+            # Preparar imagem
+            image_part = {
+                "mime_type": mime_type,
+                "data": image_bytes
+            }
+            
+            # Gerar resposta
+            response = self.model.generate_content([prompt, image_part])
+            
+            # Parse da resposta
+            response_text = response.text.strip()
+            
+            # Remover markdown se existir
+            if response_text.startswith("```json"):
+                response_text = response_text.replace("```json", "").replace("```", "").strip()
+            elif response_text.startswith("```"):
+                response_text = response_text.replace("```", "").strip()
+            
+            # Parse JSON
+            result = json.loads(response_text)
+            
+            # Validar estrutura
+            if "vaccines" not in result:
+                result["vaccines"] = []
+            if "confidence" not in result:
+                result["confidence"] = 0.5
+            
+            # Normalizar datas
+            for vaccine in result["vaccines"]:
+                # Garantir que datas estejam no formato correto
+                if vaccine.get("date"):
+                    vaccine["date"] = self._normalize_date(vaccine["date"])
+                if vaccine.get("next_date"):
+                    vaccine["next_date"] = self._normalize_date(vaccine["next_date"])
+            
+            logger.info(f"Gemini retornou {len(result['vaccines'])} vacinas com confiança {result['confidence']}")
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Erro ao fazer parse da resposta do Gemini: {response_text[:200]}")
+            # Retornar resposta vazia mas válida
+            return {
+                "vaccines": [],
+                "confidence": 0.0,
+                "raw_text": f"Erro ao processar resposta da IA: {str(e)}"
+            }
+        except Exception as e:
+            logger.error(f"Erro ao chamar Gemini AI: {str(e)}", exc_info=True)
+            raise
+    
+    def _normalize_date(self, date_str: str, kind: str = "unknown") -> str:
+        """
+        Normaliza diferentes formatos de data para YYYY-MM-DD (suporte global).
+        
+        Args:
+            date_str: Data em string (vários formatos possíveis)
+            kind: "aplicacao" ou "revacina" (para validação de ano ambíguo)
+        
+        Returns:
+            Data no formato YYYY-MM-DD ou None se inválida
+        """
+        import re
+        from datetime import date, timedelta
+        
+        if not date_str:
+            return None
+        
+        s = str(date_str).strip()
+        if not s:
+            return None
+        
+        # Correção de caracteres manuscritos mal lidos
+        char_fixes = {
+            'l': '1', 'I': '1', '|': '1',  # l, I, pipe → 1
+            'O': '0', 'o': '0',             # O → 0
+            'S': '5', 's': '5',             # S → 5
+            'G': '6', 'g': '9',             # G→6, g→9
+            'Z': '2', 'z': '2',             # Z → 2
+            'B': '8',                       # B → 8
+        }
+        
+        # Aplicar correções se houver separadores ou números
+        if any(sep in s for sep in ['/', '.', '-']) or any(c.isdigit() for c in s):
+            for old_char, new_char in char_fixes.items():
+                s = s.replace(old_char, new_char)
+        
+        today = date.today()
+        current_year = today.year
+        
+        # Já está no formato ISO
+        if len(s) == 10 and s[4] == '-' and s[7] == '-':
+            try:
+                y, m, d = int(s[0:4]), int(s[5:7]), int(s[8:10])
+                y = self._adjust_ambiguous_year(y, kind, current_year)
+                return date(y, m, d).strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+        
+        # Meses por extenso (português, espanhol, inglês)
+        months = {
+            # Português
+            "jan": 1, "janeiro": 1,
+            "fev": 2, "fevereiro": 2,
+            "mar": 3, "março": 3, "marco": 3,
+            "abr": 4, "abril": 4,
+            "mai": 5, "maio": 5,
+            "jun": 6, "junho": 6,
+            "jul": 7, "julho": 7,
+            "ago": 8, "agosto": 8,
+            "set": 9, "setembro": 9,
+            "out": 10, "outubro": 10,
+            "nov": 11, "novembro": 11,
+            "dez": 12, "dezembro": 12,
+            # Espanhol
+            "ene": 1, "enero": 1,
+            "feb": 2, "febrero": 2,
+            "marzo": 3,
+            "mayo": 5,
+            "junio": 6,
+            "julio": 7,
+            "septiembre": 9,
+            "octubre": 10,
+            "noviembre": 11,
+            "diciembre": 12,
+            # Inglês
+            "january": 1,
+            "february": 2,
+            "march": 3,
+            "april": 4,
+            "may": 5,
+            "june": 6,
+            "july": 7,
+            "august": 8,
+            "september": 9,
+            "october": 10,
+            "november": 11,
+            "december": 12,
+        }
+        
+        s_lower = s.lower().replace('.', ' ').replace(',', ' ')
+        
+        # Formato: dd Mon aa (15 Mar 24)
+        m_dmy = re.search(r'\b(\d{1,2})\s+(\w{3,})\s+(\d{2,4})\b', s_lower)
+        if m_dmy:
+            d = int(m_dmy.group(1))
+            mon = m_dmy.group(2).strip()
+            y_raw = int(m_dmy.group(3))
+            if mon in months:
+                y = self._adjust_year(y_raw, kind, current_year)
+                try:
+                    return date(y, months[mon], d).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+        
+        # Formato: Mon dd aa (Mar 15 24)
+        m_mdy = re.search(r'\b(\w{3,})\s+(\d{1,2})\s+(\d{2,4})\b', s_lower)
+        if m_mdy:
+            mon = m_mdy.group(1).strip()
+            d = int(m_mdy.group(2))
+            y_raw = int(m_mdy.group(3))
+            if mon in months:
+                y = self._adjust_year(y_raw, kind, current_year)
+                try:
+                    return date(y, months[mon], d).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+        
+        # Formato: dd/mm/aa ou dd.mm.aa ou dd-mm-aa
+        m = re.search(r'\b(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})\b', s)
+        if m:
+            a = int(m.group(1))
+            b = int(m.group(2))
+            y_raw = int(m.group(3))
+            y = self._adjust_year(y_raw, kind, current_year)
+            
+            # Tentar dd/mm (brasileiro) primeiro
+            try:
+                return date(y, b, a).strftime("%Y-%m-%d")
+            except ValueError:
+                # Tentar mm/dd (americano)
+                try:
+                    return date(y, a, b).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+        
+        # Formato compacto SEM separadores: ddmmaa ou ddmmaaaa
+        m_compact = re.search(r'\b(\d{6}|\d{8})\b', s)
+        if m_compact:
+            compact = m_compact.group(1)
+            if len(compact) == 6:  # ddmmaa
+                try:
+                    d = int(compact[0:2])
+                    m = int(compact[2:4])
+                    y_raw = int(compact[4:6])
+                    y = self._adjust_year(y_raw, kind, current_year)
+                    return date(y, m, d).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+            elif len(compact) == 8:  # ddmmaaaa
+                try:
+                    d = int(compact[0:2])
+                    m = int(compact[2:4])
+                    y_raw = int(compact[4:8])
+                    y = self._adjust_ambiguous_year(y_raw, kind, current_year)
+                    return date(y, m, d).strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+        
+        logger.warning(f"Não foi possível normalizar data: {date_str}")
+        return None
+    
+    def _adjust_year(self, y: int, kind: str, current_year: int) -> int:
+        """Ajusta ano de 2 dígitos para 4 dígitos."""
+        if y < 100:
+            y = 2000 + y
+        return self._adjust_ambiguous_year(y, kind, current_year)
+    
+    def _adjust_ambiguous_year(self, y: int, kind: str, current_year: int) -> int:
+        """Corrige anos ambíguos (ex: 2026→2016, 2029→2019)."""
+        # Regra de sanidade: se ano for muito futuro e for data de aplicação, corrigir
+        if kind == "aplicacao" and y > current_year + 1:
+            # Tenta subtrair 10, 20, 30 anos para ver se faz sentido
+            for delta in [10, 20, 30]:
+                candidate = y - delta
+                if 2000 <= candidate <= current_year:
+                    logger.info(f"Ano ambíguo corrigido: {y} → {candidate} (contexto: {kind})")
+                    return candidate
+        
+        # Para revacina, permitir até +5 anos no futuro
+        if kind == "revacina" and y > current_year + 5:
+            for delta in [10, 20]:
+                candidate = y - delta
+                if 2000 <= candidate <= current_year + 5:
+                    logger.info(f"Ano ambíguo corrigido: {y} → {candidate} (contexto: {kind})")
+                    return candidate
+        
+        return y

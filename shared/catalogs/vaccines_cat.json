@@ -1,0 +1,50 @@
+{
+  "domain": "vaccine",
+  "species": "cat",
+  "version": "1.0",
+  "items": [
+    {
+      "canonical": "Tríplice Felina",
+      "code": "CORE_CAT_V3",
+      "aliases": [
+        "triplice felina", "tríplice", "triplice", "v3", "v4", "v5",
+        "quadrupla felina", "quádrupla", "pentavalente felina",
+        "fhv", "fcv", "fpv", "herpesvirus", "calicivirus", "panleucopenia",
+        "rinotraqueite", "rinotraqueíte", "panleucop", "fvrcp",
+        "felocell", "nobivac tricat", "purevax rcpch", "leucofeligen",
+        "herpes felino", "calcivirus"
+      ]
+    },
+    {
+      "canonical": "Antirrábica Felina",
+      "code": "CORE_CAT_RABIES",
+      "aliases": [
+        "antirrabica felina", "antirrábica felina", "raiva felina",
+        "rabies gato", "imrab", "purevax rabies", "rabisin"
+      ]
+    },
+    {
+      "canonical": "Leucemia Felina (FeLV)",
+      "code": "CAT_FELV",
+      "aliases": [
+        "felv", "leucemia felina", "leucemia", "feline leukemia",
+        "purevax felv", "leucofeligen", "evofelis", "leukemia"
+      ]
+    },
+    {
+      "canonical": "Imunodeficiência Felina (FIV)",
+      "code": "CAT_FIV",
+      "aliases": [
+        "fiv", "aids felina", "imunodeficiencia felina", "imunodeficiência",
+        "feline immunodeficiency"
+      ]
+    },
+    {
+      "canonical": "Clamidiose Felina",
+      "code": "CAT_CHLAMYDIA",
+      "aliases": [
+        "clamidiose", "chlamydia", "clamídia", "clamydia"
+      ]
+    }
+  ]
+}

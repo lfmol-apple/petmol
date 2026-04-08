@@ -1,0 +1,58 @@
+# ========================================
+# SISTEMA ROBUSTO - DEPENDÊNCIAS ADICIONAIS
+# ========================================
+# Adicionar ao requirements.txt existente ou instalar separadamente
+
+# Visão Computacional e Processamento de Imagem
+opencv-python>=4.8.0          # Pré-processamento avançado de imagem
+opencv-python-headless>=4.8.0 # Alternativa sem GUI para produção
+Pillow>=10.0.0                # Manipulação de imagem PIL/Pillow
+numpy>=1.24.0                 # Arrays numéricos (provavelmente já instalado)
+
+# APIs de IA
+google-generativeai>=0.3.0    # Google Gemini (provavelmente já instalado)
+openai>=1.0.0                 # OpenAI GPT-4 Vision (OPCIONAL - para validação cruzada)
+
+# Utilitários
+python-dotenv>=1.0.0          # Gerenciamento de variáveis de ambiente (provavelmente já instalado)
+
+# ========================================
+# COMANDOS DE INSTALAÇÃO
+# ========================================
+
+# Opção 1: Instalar tudo
+# pip install opencv-python Pillow openai
+
+# Opção 2: Sem validação cruzada (apenas Gemini)
+# pip install opencv-python Pillow
+
+# Opção 3: Produção (sem GUI do OpenCV)
+# pip install opencv-python-headless Pillow openai
+
+# ========================================
+# VERIFICAR INSTALAÇÃO
+# ========================================
+# python -c "import cv2; print('OpenCV:', cv2.__version__)"
+# python -c "import PIL; print('Pillow:', PIL.__version__)"
+# python -c "import openai; print('OpenAI:', openai.__version__)"
+
+# ========================================
+# CONFIGURAÇÃO DE API KEYS (OBRIGATÓRIAS)
+# ========================================
+# export GOOGLE_API_KEY="AIza..."          # Obrigatória
+# export OPENAI_API_KEY="sk-proj-..."     # Opcional (para validação cruzada)
+
+# ========================================
+# NOTAS
+# ========================================
+# - opencv-python vs opencv-python-headless:
+#   * opencv-python: Inclui GUI (uso local/desenvolvimento)
+#   * opencv-python-headless: Sem GUI (recomendado para servidores)
+#
+# - OpenAI API Key é opcional:
+#   * Sem ela: Sistema usa apenas Gemini
+#   * Com ela: Validação cruzada ativada (maior confiabilidade)
+#
+# - Custo estimado por imagem:
+#   * Gemini apenas: ~$0.001
+#   * Gemini + GPT-4 Vision: ~$0.01

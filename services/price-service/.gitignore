@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+.backend.pid
+
+# Env/secrets (keep local)
+.env
+.env.*
+.secrets/
+.db-location
+
+# SQLite – não rastrear o banco (binário que muda a cada operação)
+# mas NUNCA deletar — use `git clean -fdx` com cuidado
+petmol.db
+petmol.db-wal
+petmol.db-shm
+
+# Backups locais (opcionais; não commitar)
+backups/
