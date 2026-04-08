@@ -101,7 +101,7 @@ function EstablishmentInput({
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export function PetDocumentVault({ petId, onDocsChanged }: PetDocumentVaultProps) {
+export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentVaultProps) {
   const { t } = useI18n();
 
   const CATEGORY_TABS = [
@@ -221,15 +221,15 @@ export function PetDocumentVault({ petId, onDocsChanged }: PetDocumentVaultProps
 
   // ── Filtered docs ─────────────────────────────────────────────────────
 
-  const filtered = docs;
+  const filtered = eventId != null ? docs.filter((d) => d.event_id === eventId) : docs;
   const groupedDocs = useMemo(
     () => groupVaultDocumentsByMonth(filtered as VaultPetDocument[]),
     [filtered]
   );
 
   const navigableDocs = useMemo(
-    () => docs.filter((d) => !((d.kind === 'link') && !!d.url_masked) && !!d.storage_key),
-    [docs]
+    () => filtered.filter((d) => !((d.kind === 'link') && !!d.url_masked) && !!d.storage_key),
+    [filtered]
   );
 
   // ── Upload ────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 'use client';
 
-import { AuthenticatedDocumentImage } from '@/components/AuthenticatedDocumentImage';
+import { PetDocumentVault } from '@/components/PetDocumentVault';
 import type { DocFolderModalState, VetHistoryDocument } from '@/lib/types/homeForms';
 import { ModalPortal } from '@/components/ModalPortal';
 
@@ -11,6 +11,7 @@ interface HistoryDocumentFolderModalProps {
   onDeleteAll: () => void;
   onOpenViewer: (doc: VetHistoryDocument) => void;
   onDeleteDocument: (docId: string, docTitle: string) => void;
+  onDocsChanged?: () => void;
 }
 
 export function HistoryDocumentFolderModal({
@@ -20,6 +21,7 @@ export function HistoryDocumentFolderModal({
   onDeleteAll,
   onOpenViewer,
   onDeleteDocument,
+  onDocsChanged,
 }: HistoryDocumentFolderModalProps) {
   const folderColors: Record<string, { bg: string; header: string }> = {
     blue: { bg: 'bg-blue-100', header: 'from-[#0056D2] to-[#0047ad]' },
@@ -63,64 +65,15 @@ export function HistoryDocumentFolderModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
-          {docFolderModal.docs.length === 0 ? (
-            <div className="py-12 text-center text-gray-400 text-sm">Nenhum arquivo</div>
+        <div className="flex-1 overflow-y-auto">
+          {petId ? (
+            <PetDocumentVault
+              petId={petId}
+              eventId={docFolderModal.docs[0]?.event_id ?? null}
+              onDocsChanged={onDocsChanged}
+            />
           ) : (
-            docFolderModal.docs.map((doc, index) => {
-              const docDate = doc.document_date || doc.created_at?.split('T')[0];
-              const isImg = doc.mime_type?.startsWith('image/');
-              const isPdf = doc.mime_type === 'application/pdf';
-
-              return (
-                <div key={doc.id ?? index} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors">
-                  <div className={`w-14 h-14 rounded-lg ${palette.bg} flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200`}>
-                    {isImg && doc.storage_key && doc.id && petId ? (
-                      <AuthenticatedDocumentImage
-                        petId={petId}
-                        docId={doc.id}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-2xl">{isPdf ? '📵' : docFolderModal.icon}</span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 text-sm truncate">{doc.title || 'Documento'}</p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {docDate && (
-                        <span className="text-xs text-gray-500">📅 {new Date(docDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                      )}
-                      {doc.establishment_name && (
-                        <span className="text-xs text-indigo-600 truncate max-w-[140px]">🏥 {doc.establishment_name}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {doc.storage_key && doc.id && doc.mime_type && (
-                      <button
-                        onClick={() => onOpenViewer(doc)}
-                        className="flex items-center gap-1 px-3 py-2 bg-[#0056D2] hover:bg-[#0047ad] text-white rounded-xl text-xs font-semibold transition-colors shadow-sm"
-                      >
-                        👁️ Ver
-                      </button>
-                    )}
-                    {doc.id && (
-                      <button
-                        onClick={() => onDeleteDocument(doc.id!, doc.title || 'Documento')}
-                        className="w-9 h-9 flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-500 rounded-xl transition-colors border border-red-100"
-                        title="Excluir documento"
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+            <div className="py-12 text-center text-gray-400 text-sm">Pet não identificado</div>
           )}
         </div>
       </div>

@@ -14,6 +14,7 @@ export interface PetDocument {
   size_bytes: number | null;
   created_at: string;
   icon: string;
+  event_id?: string | null;
 }
 
 export interface BatchDocItem {
@@ -53,4 +54,6 @@ export interface EditingDoc {
 export interface PetDocumentVaultProps {
   petId: string;
   onDocsChanged?: () => void;
+  /** When set, only documents with a matching event_id are shown. */
+  eventId?: string | null;
 }
