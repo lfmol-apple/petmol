@@ -97,7 +97,7 @@ export function AppleControlButtons({
     {
       id: 'vaccines' as const,
       title: 'Vacinas',
-      description: isEmptyCard(colorVacinas) ? 'Sem registros — toque para iniciar' : 'Carteirinha Pet',
+      description: isEmptyCard(colorVacinas) ? 'Sem registro' : 'Carteirinha Pet',
       isEmpty: isEmptyCard(colorVacinas),
       icon: '💉',
       onClick: onVacinasClick,
@@ -107,7 +107,7 @@ export function AppleControlButtons({
     {
       id: 'dewormer' as const,
       title: 'Vermífugo',
-      description: isEmptyCard(colorVermifugo) ? 'Sem controle — registrar agora' : 'Controle de vermes',
+      description: isEmptyCard(colorVermifugo) ? 'Sem controle' : 'Vermes e Parasit.',
       isEmpty: isEmptyCard(colorVermifugo),
       icon: '🪱',
       onClick: onVermifugoClick,
@@ -117,7 +117,7 @@ export function AppleControlButtons({
     {
       id: 'flea_tick' as const,
       title: 'Antipulgas',
-      description: isEmptyCard(colorAntipulgas) ? 'Sem controle — registrar agora' : 'Pulgas e carrapatos',
+      description: isEmptyCard(colorAntipulgas) ? 'Sem controle' : 'Pulgas e Carr.',
       isEmpty: isEmptyCard(colorAntipulgas),
       icon: '🛡️',
       onClick: onAntipulgasClick,
@@ -137,7 +137,7 @@ export function AppleControlButtons({
     {
       id: 'food' as const,
       title: 'Alimentação',
-      description: isEmptyCard(colorFood) ? 'Sem plano — configurar agora' : 'Ração e recompra',
+      description: isEmptyCard(colorFood) ? 'Sem registro' : 'Ração e Compras',
       isEmpty: isEmptyCard(colorFood),
       icon: '🥣',
       onClick: onAlimentacaoClick ?? (() => {}),
@@ -192,7 +192,7 @@ export function AppleControlButtons({
           <div className={`flex flex-col justify-center h-full pr-11 text-left ${alertColeira ? 'pt-3' : ''}`}>
             <h3 className={titleClass}>Coleira</h3>
             <p className={`${descBaseClass} ${alertColeira ? 'text-red-700' : isEmptyCard(colorColeira) ? 'text-slate-400' : 'text-slate-500'}`}>
-              Leish e Parasitas
+              {isEmptyCard(colorColeira) ? 'Sem controle' : 'Leish e Parasit.'}
             </p>
           </div>
         </button>
@@ -222,7 +222,7 @@ export function AppleControlButtons({
             <div className={`flex flex-col justify-center h-full pr-11 text-left ${alertMedicacao ? 'pt-3' : ''}`}>
               <h3 className={titleClass}>Medicação</h3>
               <p className={`${descBaseClass} ${alertMedicacao ? 'text-red-700' : isEmptyCard(colorMedicacao) ? 'text-slate-400' : 'text-slate-500'}`}>
-                {isEmptyCard(colorMedicacao) ? 'Sem tratamentos' : colorMedicacao === 'ok' ? 'Em dia' : 'Pendente'}
+                {isEmptyCard(colorMedicacao) ? 'Sem tratamento' : colorMedicacao === 'ok' ? 'Em dia' : 'Pendente'}
               </p>
             </div>
           </button>
