@@ -177,7 +177,7 @@ export function AppleControlButtons({
   return (
     <>
       {/* Grade 2 colunas */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
+      <div className="grid grid-cols-2 gap-2 mb-3">
         {activeDockableCards.map(renderDockableCard)}
 
         {/* COLEIRA (LEISHMANIOSE) — Nova posição fixa sugerida pelo usuário */}
