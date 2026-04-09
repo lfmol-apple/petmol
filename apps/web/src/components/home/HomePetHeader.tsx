@@ -78,8 +78,8 @@ export function HomePetHeader({
 
   return (
     <>
-      <div className="px-0 pt-0">
-        <div className="relative w-full h-[190px] sm:h-[240px] bg-gradient-to-br from-brand-DEFAULT to-blue-800 group rounded-b-[48px] overflow-hidden shadow-premium border-b border-white/20 transition-all duration-500">
+      <div className="px-4 pt-4">
+        <div className="relative w-full h-[180px] sm:h-[220px] bg-gradient-to-br from-brand-DEFAULT to-blue-800 group rounded-[32px] overflow-hidden shadow-premium border border-white/20 transition-all duration-500">
         <div className="w-full h-full flex items-center justify-center">
           <span className="text-white text-6xl sm:text-7xl transition-transform duration-500 group-hover:scale-110 opacity-50">
             {currentPet.species === 'dog' ? '🐕' : currentPet.species === 'cat' ? '🐱' : '🐾'}
@@ -149,7 +149,7 @@ export function HomePetHeader({
     </div>
 
     {/* Overlay de informações integrado na base da foto */}
-      <div className="relative mx-2 -mt-14 z-30">
+      <div className="relative mx-4 -mt-14 z-30">
         <div className="relative rounded-[32px] bg-white/95 shadow-premium p-3.5 backdrop-blur-3xl border border-white/80 overflow-hidden">
           {/* Status Pill Suspenso no Canto */}
           <button

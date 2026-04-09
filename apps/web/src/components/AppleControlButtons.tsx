@@ -190,7 +190,7 @@ export function AppleControlButtons({
           {renderAlertBadge(alertColeira)}
           <span className={iconWrapClass}><span className={emojiIconClass}>📿</span></span>
           <div className={`flex flex-col justify-center h-full pr-11 text-left ${alertColeira ? 'pt-3' : ''}`}>
-            <h3 className={titleClass}>Coleira (Leish)</h3>
+            <h3 className={titleClass}>Coleira</h3>
             <p className={`${descBaseClass} ${alertColeira ? 'text-red-700' : isEmptyCard(colorColeira) ? 'text-slate-400' : 'text-slate-500'}`}>
               Leish e Parasitas
             </p>
@@ -222,7 +222,7 @@ export function AppleControlButtons({
             <div className={`flex flex-col justify-center h-full pr-11 text-left ${alertMedicacao ? 'pt-3' : ''}`}>
               <h3 className={titleClass}>Medicação</h3>
               <p className={`${descBaseClass} ${alertMedicacao ? 'text-red-700' : isEmptyCard(colorMedicacao) ? 'text-slate-400' : 'text-slate-500'}`}>
-                {isEmptyCard(colorMedicacao) ? 'Sem tratamentos ativos' : colorMedicacao === 'ok' ? 'Em dia hoje ✓' : 'Doses pendentes hoje'}
+                {isEmptyCard(colorMedicacao) ? 'Sem tratamentos' : colorMedicacao === 'ok' ? 'Em dia' : 'Pendente'}
               </p>
             </div>
           </button>
