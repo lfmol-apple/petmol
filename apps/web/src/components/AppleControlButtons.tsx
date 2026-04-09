@@ -127,12 +127,12 @@ export function AppleControlButtons({
     {
       id: 'shopping' as const,
       title: 'Shopping',
-      description: 'Cobasi · Petz · Petlove',
+      description: 'Petlove · Petz · Cobasi',
       isEmpty: false,
       icon: '🛒',
       onClick: () => setShowShoppingSheet(true),
       alert: false,
-      toneClass: 'bg-blue-50 border-blue-200 border-l-4 border-l-[#0056D2] shadow-sm hover:shadow-md hover:bg-blue-100/60 hover:border-blue-300',
+      toneClass: 'bg-blue-600/10 border-blue-400/30 border-l-4 border-l-[#0056D2] shadow-sm hover:shadow-md hover:bg-blue-600/15 hover:border-blue-400/50',
     },
     {
       id: 'food' as const,
@@ -192,7 +192,7 @@ export function AppleControlButtons({
           <div className={`flex flex-col justify-center h-full pr-9 text-left ${alertColeira ? 'pt-3' : ''}`}>
             <h3 className={titleClass}>Coleira (Leish)</h3>
             <p className={`${descBaseClass} ${alertColeira ? 'text-red-700' : isEmptyCard(colorColeira) ? 'text-slate-400' : 'text-slate-500'}`}>
-              Leishmaniose e parasitas
+              Leish e Parasitas
             </p>
           </div>
         </button>
