@@ -5,6 +5,7 @@ import { API_BASE_URL } from '@/lib/api';
 import { parsePetEventExtraData, type PetEventRecord } from '@/lib/petEvents';
 import { ModalPortal } from '@/components/ModalPortal';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
+import { trackPartnerClicked } from '@/lib/v1Metrics';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ export interface MedicationItemSheetProps {
   onRefresh: () => Promise<void>;
 }
 
-type Mode = 'view' | 'add' | 'edit';
+type Mode = 'view' | 'add' | 'edit' | 'buy';
 
 const labelCls = 'block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5';
 const inputCls =
@@ -542,6 +543,68 @@ export function MedicationItemSheet({
                   )}
                 </div>
               )}
+
+              {/* Buy button at the end */}
+              <button
+                onClick={() => setMode('buy')}
+                className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] mt-1 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                    🛒
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
+                    <p className="text-[12px] text-blue-700/70">Ver onde encontrar medicamentos</p>
+                  </div>
+                </div>
+                <span className="text-blue-400 text-lg font-bold">›</span>
+              </button>
+            </div>
+          )}
+
+          {/* ── BUY MODE ─────────────────────────────────────────────────── */}
+          {mode === 'buy' && (
+            <div className="p-5 pb-8 space-y-4">
+              <h3 className="text-[16px] font-bold text-gray-900">Onde comprar</h3>
+              <p className="text-sm text-gray-500">Escolha onde encontrar medicamentos e itens de saúde:</p>
+
+              <div className="space-y-3">
+                {[
+                  { name: 'Cobasi', url: 'https://www.cobasi.com.br/capsulas-e-saude/medicamentos', emoji: '🐾' },
+                  { name: 'Petz', url: 'https://www.petz.com.br/cachorro/farmacia', emoji: '🐕' },
+                  { name: 'Petlove', url: 'https://www.petlove.com.br/cachorro/medicina-e-saude', emoji: '❤️' },
+                  { name: 'Amazon Pet', url: 'https://www.amazon.com.br/s?k=medicamento+pet', emoji: '📦' },
+                ].map(store => (
+                  <button
+                    key={store.name}
+                    onClick={() => {
+                      trackPartnerClicked({
+                        source: 'medication_sheet',
+                        partner: store.name.toLowerCase(),
+                        pet_id: petId,
+                        control_type: 'medication',
+                      });
+                      window.open(store.url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all text-left"
+                  >
+                    <span className="text-2xl">{store.emoji}</span>
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-900 text-sm">{store.name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Comprar medicamentos</p>
+                    </div>
+                    <span className="text-gray-400 text-lg">›</span>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setMode('view')}
+                className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200"
+              >
+                Voltar para tratamentos
+              </button>
             </div>
           )}
 

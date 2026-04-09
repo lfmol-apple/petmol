@@ -293,18 +293,34 @@ def init_db():
 @app.on_event("startup")
 def start_push_scheduler():
     """Start APScheduler to send monthly checkin push notifications."""
+    from .config import get_settings
+    settings = get_settings()
+    
+    if not settings.feature_reminders_push:
+        logger = __import__("logging").getLogger(__name__)
+        logger.info("[PETMOL] Push scheduler desativado via FEATURE_REMINDERS_PUSH")
+        return
+
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
-        from .notifications import send_checkin_pushes, send_medication_pushes, send_care_pushes
+        from .notifications import (
+            send_checkin_pushes,
+            send_medication_pushes,
+            send_care_pushes,
+        )
 
         scheduler = BackgroundScheduler()
+        # Verificações frequentes para check-ins e remédios (cada minuto)
         scheduler.add_job(send_checkin_pushes, "interval", minutes=1, id="checkin_pushes")
         scheduler.add_job(send_medication_pushes, "interval", minutes=1, id="medication_pushes")
+        # Cuidados diários (vacinas, vermífugos, etc) - rotina às 9h é tratada dentro da função
         scheduler.add_job(send_care_pushes, "interval", minutes=1, id="care_pushes")
         scheduler.start()
-        print("[PETMOL] Push scheduler iniciado (verifica a cada minuto)")
+        logger = __import__("logging").getLogger(__name__)
+        logger.info("[PETMOL] Push scheduler iniciado (verifica a cada minuto)")
     except Exception as e:
-        print(f"[PETMOL] Push scheduler nao iniciado: {e}")
+        logger = __import__("logging").getLogger(__name__)
+        logger.error(f"[PETMOL] Push scheduler nao iniciado: {e}")
 
 
 # Include autocomplete router

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppleControlButtons } from '@/components/AppleControlButtons';
 import { RemindersSection } from '@/components/home/RemindersSection';
+import { OverdueAlertBanner } from '@/components/home/OverdueAlertBanner';
+import { buildPetCareReminders } from '@/lib/petCareDomain';
 import {
   HOME_CONTROL_LABELS,
   loadInactiveHomeControls,
@@ -141,8 +143,34 @@ export function HomePetDashboard({
     [inactiveControls]
   );
 
+  const overdueReminders = useMemo(() => {
+    const all = buildPetCareReminders({
+      pet_id: currentPet.pet_id,
+      pet_name: currentPet.pet_name || '',
+      petEvents,
+      vaccines,
+      parasiteControls,
+      groomingRecords,
+      feedingPlan: feedingPlan[currentPet.pet_id],
+    });
+
+    return all.filter((r) => r.diff < 0);
+  }, [petEvents, vaccines, parasiteControls, groomingRecords, feedingPlan, currentPet]);
+
   return (
     <div className="relative px-2 pt-0 space-y-3 -mt-6">
+      <OverdueAlertBanner
+        overdueReminders={overdueReminders}
+        onOpenVaccines={onOpenVaccines}
+        onOpenVermifugo={onOpenVermifugo}
+        onOpenAntipulgas={onOpenAntipulgas}
+        onOpenColeira={onOpenColeira}
+        onOpenGrooming={onOpenGrooming}
+        onOpenMedication={onOpenMedication}
+        onOpenFood={onOpenFood}
+        onOpenEvents={onOpenEvents}
+      />
+
       <AppleControlButtons
         onVacinasClick={onOpenVaccines}
         onVermifugoClick={onOpenVermifugo}

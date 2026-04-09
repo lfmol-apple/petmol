@@ -6,6 +6,7 @@ import type { VaccineFormData } from '@/lib/types/homeForms';
 import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
 import { ModalPortal } from '@/components/ModalPortal';
 import { localTodayISO } from '@/lib/localDate';
+import { trackPartnerClicked } from '@/lib/v1Metrics';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export function VaccineItemSheet({
   handleFilesSelectedAppend,
   handleProcessCards,
 }: VaccineItemSheetProps) {
+  const [mode, setMode] = useState<'view' | 'buy'>('view');
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [historyShowAll, setHistoryShowAll] = useState(false);
@@ -202,18 +204,19 @@ export function VaccineItemSheet({
               </div>
             </div>
             <button
-              onClick={onClose}
+              onClick={mode === 'buy' ? () => setMode('view') : onClose}
               className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
               aria-label="Fechar"
             >
-              ✕
+              {mode === 'buy' ? '‹' : '✕'}
             </button>
           </div>
         </div>
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 overscroll-contain">
-          <div className="p-5 space-y-3 pb-8">
+          {mode === 'view' && (
+            <div className="p-5 space-y-3 pb-8">
 
             {/* ── PRIMARY CTA ───────────────────────────────────────────── */}
             <button
@@ -469,13 +472,77 @@ export function VaccineItemSheet({
                         {confirmDeleteAll ? '⚠️ Confirmar exclusão de todas as vacinas' : '🗑️ Limpar todas as vacinas'}
                       </button>
                     </div>
-
                   </div>
                 )}
               </div>
             )}
 
+            {/* Buy button at the end */}
+            {mode === 'view' && vaccines.length > 0 && (
+              <button
+                onClick={() => setMode('buy')}
+                className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] mt-1 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                    🛒
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
+                    <p className="text-[12px] text-blue-700/70">Ver onde encontrar vacinas</p>
+                  </div>
+                </div>
+                <span className="text-blue-400 text-lg font-bold">›</span>
+              </button>
+            )}
+
           </div>
+        )}
+
+        {/* ── BUY MODE ──────────────────────────────────────────────────── */}
+        {mode === 'buy' && (
+          <div className="p-5 space-y-4 pb-8">
+            <h3 className="text-[16px] font-bold text-gray-900">Onde comprar</h3>
+            <p className="text-sm text-gray-500">Escolha onde encontrar vacinas e serviços:</p>
+
+            <div className="space-y-3">
+              {[
+                { name: 'Cobasi', url: 'https://www.cobasi.com.br/capsulas-e-saude/vacinas', emoji: '🐾' },
+                { name: 'Petz', url: 'https://www.petz.com.br/servicos/vacinas', emoji: '🐕' },
+                { name: 'Petlove', url: 'https://www.petlove.com.br/saude', emoji: '❤️' },
+                { name: 'Amazon Pet', url: 'https://www.amazon.com.br/s?k=pet+saude', emoji: '📦' },
+              ].map(store => (
+                <button
+                  key={store.name}
+                  onClick={() => {
+                    trackPartnerClicked({
+                      source: 'vaccine_sheet',
+                      partner: store.name.toLowerCase(),
+                      pet_id: '', // handle generic if needed
+                      control_type: 'vaccines',
+                    });
+                    window.open(store.url, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all text-left"
+                >
+                  <span className="text-2xl">{store.emoji}</span>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900 text-sm">{store.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Comprar / Agendar Vacinas</p>
+                  </div>
+                  <span className="text-gray-400 text-lg">›</span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setMode('view')}
+              className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200"
+            >
+              Voltar para detalhes
+            </button>
+            </div>
+          )}
         </div>
       </div>
 

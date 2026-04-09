@@ -407,16 +407,6 @@ export function ParasiteItemSheet({
                 );
               })()}
 
-              {/* Main CTA — always dominant */}
-              <button
-                onClick={() => setMode('buy')}
-                className="w-full py-4 rounded-2xl text-[15px] font-bold text-white shadow-[0_14px_30px_rgba(29,78,216,0.34)] transition-all bg-gradient-to-br from-blue-800 via-blue-600 to-sky-500 border border-blue-400/70 border-l-4 border-l-sky-100 hover:shadow-[0_18px_34px_rgba(29,78,216,0.42)] hover:brightness-105"
-              >
-                <span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white ring-1 ring-blue-200/80 shadow-sm align-middle">
-                  <span className="text-[18px] leading-none">🛒</span>
-                </span>
-                Preciso comprar
-              </button>
 
               {/* Secondary actions — compact and wrap-friendly */}
               <div className="flex flex-wrap gap-2">
@@ -506,6 +496,23 @@ export function ParasiteItemSheet({
                   )}
                 </div>
               )}
+
+              {/* Botão de compra suavizado ao final */}
+              <button
+                onClick={() => setMode('buy')}
+                className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] mt-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                    🛒
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
+                    <p className="text-[12px] text-blue-700/70">Ver onde encontrar {cfg.title.toLowerCase()}</p>
+                  </div>
+                </div>
+                <span className="text-blue-400 text-lg font-bold">›</span>
+              </button>
             </div>
           )}
 

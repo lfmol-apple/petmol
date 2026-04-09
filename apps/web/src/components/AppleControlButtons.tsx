@@ -69,11 +69,13 @@ export function AppleControlButtons({
   const iconWrapClass = 'absolute top-2.5 right-2.5 w-8.5 h-8.5 rounded-xl bg-white/95 ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center pointer-events-none';
   const emojiIconClass = 'text-[22px] leading-none';
   const titleClass = 'text-[15px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
-  const descBaseClass = 'text-[12.5px] mt-1 leading-[1.2] font-medium';
+  const descBaseClass = 'text-[11.5px] sm:text-[12.5px] mt-1 leading-[1.2] font-medium';
   const alertCardClass = 'bg-gradient-to-br from-rose-100 via-red-50 to-white border-red-300 border-l-4 border-l-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.15)]';
   const okCardClass = 'bg-emerald-50/50 border-emerald-200 border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md hover:border-emerald-300';
   const warningCardClass = 'bg-amber-50/60 border-amber-200 border-l-4 border-l-amber-500 shadow-sm hover:shadow-md hover:border-amber-300';
   const neutralCardClass = 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 hover:bg-slate-50/40';
+  const bluePremiumClass = 'bg-blue-100/70 border-blue-200 border-l-4 border-l-blue-600 shadow-sm hover:shadow-md hover:border-blue-300';
+  const pardaPremiumClass = 'bg-amber-100/40 border-amber-200 border-l-4 border-l-amber-600/60 shadow-sm hover:shadow-md hover:border-amber-300';
   const inactiveSet = new Set<HomeInactiveEligibleControlId>(inactiveControls);
   const isEmptyCard = (color: typeof colorVacinas) => !color || color === 'neutral';
 
@@ -93,7 +95,7 @@ export function AppleControlButtons({
     </span>
   ) : null;
 
-  const dockableCards = [
+  const healthCards = [
     {
       id: 'vaccines' as const,
       title: 'Vacinas',
@@ -125,14 +127,24 @@ export function AppleControlButtons({
       toneClass: toneByStatus(colorAntipulgas),
     },
     {
-      id: 'shopping' as const,
-      title: 'Shopping',
-      description: 'Petlove · Petz · Cobasi',
-      isEmpty: false,
-      icon: '🛒',
-      onClick: () => setShowShoppingSheet(true),
-      alert: false,
-      toneClass: 'bg-blue-600/10 border-blue-400/30 border-l-4 border-l-[#0056D2] shadow-sm hover:shadow-md hover:bg-blue-600/15 hover:border-blue-400/50',
+      id: 'collar' as const,
+      title: 'Coleira',
+      description: isEmptyCard(colorColeira) ? 'Sem controle' : 'Leish e Parasit.',
+      isEmpty: isEmptyCard(colorColeira),
+      icon: '📿',
+      onClick: onColeiraClick,
+      alert: alertColeira,
+      toneClass: toneByStatus(colorColeira),
+    },
+    {
+      id: 'medication' as const,
+      title: 'Medicação',
+      description: isEmptyCard(colorMedicacao) ? 'Sem tratamento' : colorMedicacao === 'ok' ? 'Em dia' : 'Pendente',
+      isEmpty: isEmptyCard(colorMedicacao),
+      icon: '💊',
+      onClick: onMedicacaoClick ?? (() => {}),
+      alert: alertMedicacao,
+      toneClass: toneByStatus(colorMedicacao),
     },
     {
       id: 'food' as const,
@@ -144,25 +156,38 @@ export function AppleControlButtons({
       alert: alertFood,
       toneClass: toneByStatus(colorFood),
     },
-    // V-L: Banho/Tosa removido da superfície de lançamento (V1)
-    // V-L: Medicação movida para posição estática (abaixo de Documentos), Shopping assume posição V-line
   ];
 
-  const activeDockableCards = dockableCards.filter((card) => !inactiveSet.has(card.id as any));
+  const utilityCards = [
+    {
+      id: 'documents' as const,
+      title: 'Documentos',
+      description: 'Guardar arquivos',
+      isEmpty: false,
+      icon: '📄',
+      onClick: onDocumentosClick,
+      toneClass: pardaPremiumClass,
+    },
+    {
+      id: 'shopping' as const,
+      title: 'Shopping',
+      description: 'Petlove · Petz · Amazon',
+      isEmpty: false,
+      icon: '🛒',
+      onClick: () => setShowShoppingSheet(true),
+      toneClass: bluePremiumClass,
+    },
+  ];
 
-  const renderDockableCard = (card: typeof dockableCards[number]) => (
+  const activeHealthCards = healthCards.filter((card) => !inactiveSet.has(card.id as any));
+  const activeUtilityCards = utilityCards.filter((card) => !inactiveSet.has(card.id as any));
+
+  const renderHealthCard = (card: typeof healthCards[number]) => (
     <button
       key={card.id}
-      onClick={() => {
-        card.onClick?.();
-      }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onDeactivateControl?.(card.id as any);
-      }}
-      onDoubleClick={() => {
-        onDeactivateControl?.(card.id as any);
-      }}
+      onClick={card.onClick}
+      onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.(card.id as any); }}
+      onDoubleClick={() => onDeactivateControl?.(card.id as any)}
       className={`${cardBaseClass} ${card.toneClass}`}
     >
       {renderAlertBadge(card.alert)}
@@ -174,59 +199,45 @@ export function AppleControlButtons({
     </button>
   );
 
+  const renderUtilityCard = (card: any) => (
+    <button
+      key={card.id}
+      onClick={card.onClick}
+      onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.(card.id as any); }}
+      onDoubleClick={() => onDeactivateControl?.(card.id as any)}
+      className={`${cardBaseClass} ${card.toneClass || neutralCardClass}`}
+    >
+      {renderAlertBadge(card.alert)}
+      <span className={iconWrapClass}>
+        <span className={emojiIconClass}>{card.icon}</span>
+      </span>
+      <div className={`flex flex-col justify-center h-full pr-11 text-left ${card.alert ? 'pt-3' : ''}`}>
+        <h3 className={titleClass}>{card.title}</h3>
+        <p className={`${descBaseClass} ${card.alert ? 'text-red-700' : card.isEmpty ? 'text-slate-400' : 'text-slate-500'} font-medium truncate`}>{card.description}</p>
+      </div>
+    </button>
+  );
+
   return (
     <>
-      {/* Grade 2 colunas */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {activeDockableCards.map(renderDockableCard)}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 px-1 mb-3.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+          <h4 className="text-[13px] font-black text-slate-900 uppercase tracking-wider">Saúde e Prevenção</h4>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {activeHealthCards.map(renderHealthCard)}
+        </div>
+      </div>
 
-        {/* COLEIRA (LEISHMANIOSE) — Nova posição fixa sugerida pelo usuário */}
-        <button
-          onClick={onColeiraClick}
-          onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.('collar'); }}
-          onDoubleClick={() => onDeactivateControl?.('collar')}
-          className={`${cardBaseClass} ${toneByStatus(colorColeira)}`}
-        >
-          {renderAlertBadge(alertColeira)}
-          <span className={iconWrapClass}><span className={emojiIconClass}>📿</span></span>
-          <div className={`flex flex-col justify-center h-full pr-11 text-left ${alertColeira ? 'pt-3' : ''}`}>
-            <h3 className={titleClass}>Coleira</h3>
-            <p className={`${descBaseClass} ${alertColeira ? 'text-red-700' : isEmptyCard(colorColeira) ? 'text-slate-400' : 'text-slate-500'}`}>
-              {isEmptyCard(colorColeira) ? 'Sem controle' : 'Leish e Parasit.'}
-            </p>
-          </div>
-        </button>
-
-        {/* DOCUMENTOS */}
-        <button
-          onClick={onDocumentosClick}
-          className={`${cardBaseClass} ${neutralCardClass}`}
-        >
-          <span className={iconWrapClass}><span className={emojiIconClass}>📄</span></span>
-          <div className="flex flex-col justify-center h-full pr-11 text-left">
-            <h3 className={titleClass}>Documentos</h3>
-            <p className={`${descBaseClass} text-slate-500`}>Guardar arquivos</p>
-          </div>
-        </button>
-
-        {/* MEDICAÇÃO — posição anterior de Shopping, com alerta e desativação */}
-        {!inactiveSet.has('medication') && (
-          <button
-            onClick={onMedicacaoClick ?? (() => {})}
-            onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.('medication'); }}
-            onDoubleClick={() => onDeactivateControl?.('medication')}
-            className={`${cardBaseClass} ${toneByStatus(colorMedicacao)}`}
-          >
-            {renderAlertBadge(alertMedicacao)}
-            <span className={iconWrapClass}><span className={emojiIconClass}>💊</span></span>
-            <div className={`flex flex-col justify-center h-full pr-11 text-left ${alertMedicacao ? 'pt-3' : ''}`}>
-              <h3 className={titleClass}>Medicação</h3>
-              <p className={`${descBaseClass} ${alertMedicacao ? 'text-red-700' : isEmptyCard(colorMedicacao) ? 'text-slate-400' : 'text-slate-500'}`}>
-                {isEmptyCard(colorMedicacao) ? 'Sem tratamento' : colorMedicacao === 'ok' ? 'Em dia' : 'Pendente'}
-              </p>
-            </div>
-          </button>
-        )}
+      <div className="mb-4">
+        <div className="flex items-center gap-2 px-1 mb-3.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
+          <h4 className="text-[13px] font-black text-slate-900 uppercase tracking-wider">Mais Recursos</h4>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {activeUtilityCards.map(renderUtilityCard)}
+        </div>
       </div>
 
       {/* ── Emergência Vet ── */}

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from pywebpush import webpush, WebPushException
 
 from ..db import SessionLocal
+from urllib.parse import quote
 from ..user_auth.deps import get_current_user
 from ..user_auth.models import User
 from ..events.models import Event
@@ -130,8 +131,8 @@ def send_checkin_pushes() -> None:
                     "badge": "/icons/icon-96x96.png",
                     "tag": "petmol-monthly-checkin",
                     "data": {"url": "/home?checkin=1"},
-                    "requireInteraction": False,
-                    "autoCloseMs": 4000,
+                    "requireInteraction": True,
+                    "autoCloseMs": 0,
                 }
                 ok = _send_push(sub, payload)
                 if not ok:
@@ -294,8 +295,8 @@ def send_medication_pushes() -> None:
                         "badge": "/icons/icon-96x96.png",
                         "tag": f"petmol-med-{event.id}-{today.isoformat()}-{slot}",
                         "data": {"url": f"/home?modal=medication&petId={event.pet_id}&eventId={event.id}&itemName={item_name_encoded}"},
-                        "requireInteraction": False,
-                        "autoCloseMs": 4000,
+                        "requireInteraction": True,
+                        "autoCloseMs": 0,
                     }
 
                     ok = _send_push(sub, payload)
@@ -326,7 +327,7 @@ def send_care_pushes() -> None:
 
     brt = timezone(timedelta(hours=-3))
     now = datetime.now(brt)
-    if now.hour != 8 or now.minute != 0:
+    if now.hour != 9 or now.minute != 0:
         return
 
     today = now.date()
@@ -403,9 +404,9 @@ def send_care_pushes() -> None:
                         "icon": "/icons/icon-192x192.png",
                         "badge": "/icons/icon-96x96.png",
                         "tag": f"petmol-care-vaccine-{pet.id}-{key}-{today_str}",
-                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}&itemName={_vname}"},
-                        "requireInteraction": False,
-                        "autoCloseMs": 4000,
+                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}&itemName={_vname}&buy=1"},
+                        "requireInteraction": True,
+                        "autoCloseMs": 0,
                     })
 
                 # ── Antiparasitários: latest por type ─────────────────────────────────
@@ -451,9 +452,9 @@ def send_care_pushes() -> None:
                         "icon": "/icons/icon-192x192.png",
                         "badge": "/icons/icon-96x96.png",
                         "tag": f"petmol-care-parasite-{pet.id}-{key}-{today_str}",
-                        "data": {"url": f"/home?modal=parasites&petId={pet.id}&itemName={_plabel}"},
-                        "requireInteraction": False,
-                        "autoCloseMs": 4000,
+                        "data": {"url": f"/home?modal=parasites&petId={pet.id}&itemName={_plabel}&buy=1"},
+                        "requireInteraction": True,
+                        "autoCloseMs": 0,
                     })
 
                 # ── Banho/Tosa: latest por type ───────────────────────────────────────
@@ -596,8 +597,8 @@ async def send_notification(
         "badge": "/icons/icon-96x96.png",
         "tag": request.tag or "petmol",
         "data": {"url": request.url or "/home"},
-        "requireInteraction": False,
-        "autoCloseMs": 4000,
+        "requireInteraction": True,
+        "autoCloseMs": 0,
     }
     ok = _send_push(sub, payload)
     if not ok:
