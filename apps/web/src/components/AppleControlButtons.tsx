@@ -97,7 +97,7 @@ export function AppleControlButtons({
     {
       id: 'vaccines' as const,
       title: 'Vacinas',
-      description: isEmptyCard(colorVacinas) ? 'Sem registros — toque para iniciar' : 'Carteira e lembretes',
+      description: isEmptyCard(colorVacinas) ? 'Sem registros — toque para iniciar' : 'Carteirinha Pet',
       isEmpty: isEmptyCard(colorVacinas),
       icon: '💉',
       onClick: onVacinasClick,
