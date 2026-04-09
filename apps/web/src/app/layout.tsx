@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Outfit } from 'next/font/google';
 import './globals.css';
 import { I18nProvider } from '@/lib/I18nContext';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -17,7 +17,8 @@ import {
 } from '@/lib/featureFlags';
 import Script from 'next/script';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 
 // Site URL from environment (no hardcoded domain)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
@@ -73,7 +74,7 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${outfit.variable} antialiased bg-slate-50`}>
         <I18nProvider>
           <AuthProvider>
             <LocationProvider>

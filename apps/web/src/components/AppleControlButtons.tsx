@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { HomeShoppingSheet } from '@/features/commerce/HomeShoppingSheet';
+import { HomeEmergencySheet } from '@/components/home/HomeEmergencySheet';
 import { type HomeInactiveEligibleControlId } from '@/lib/homeControlPreferences';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -62,11 +63,12 @@ export function AppleControlButtons({
 }: AppleControlButtonsProps) {
 
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
+  const [showEmergencySheet, setShowEmergencySheet] = useState(false);
 
   const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-3 h-[84px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
   const iconWrapClass = 'absolute top-2.5 right-2.5 w-9 h-9 rounded-xl bg-white/95 ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center pointer-events-none';
   const emojiIconClass = 'text-[20px] leading-none';
-  const titleClass = 'text-[15px] font-semibold text-slate-900 leading-tight tracking-[-0.01em] truncate';
+  const titleClass = 'text-[15px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
   const descBaseClass = 'text-[13px] truncate mt-1 leading-tight font-medium';
   const alertCardClass = 'bg-gradient-to-br from-rose-100 via-red-50 to-white border-red-300 border-l-4 border-l-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.15)]';
   const okCardClass = 'bg-emerald-50/50 border-emerald-200 border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md hover:border-emerald-300';
@@ -216,7 +218,25 @@ export function AppleControlButtons({
         </button>
       </div>
 
+      {/* ── Emergência Vet ── */}
+      <button
+        onClick={() => setShowEmergencySheet(true)}
+        className="w-full flex items-center gap-3.5 px-3.5 py-3 h-[62px] rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-50 to-rose-50/60 hover:from-red-100/70 hover:to-rose-100/60 active:scale-[0.99] transition-all duration-200 shadow-sm hover:shadow-md text-left mb-3"
+      >
+        <div className="w-9 h-9 rounded-xl bg-white/95 ring-1 ring-red-200 shadow-sm flex items-center justify-center flex-shrink-0">
+          <span className="text-[20px] leading-none">🚨</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[15px] font-semibold text-red-900 leading-tight tracking-[-0.01em]">Emergência Vet</p>
+          <p className="text-[13px] text-red-500 font-medium mt-0.5 leading-tight">Clínicas/Hosp 24h</p>
+        </div>
+        <svg className="w-4 h-4 text-red-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
       <HomeShoppingSheet open={showShoppingSheet} onClose={() => setShowShoppingSheet(false)} />
+      <HomeEmergencySheet open={showEmergencySheet} onClose={() => setShowEmergencySheet(false)} />
     </>
   );
 }

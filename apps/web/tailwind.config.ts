@@ -56,7 +56,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Nunito', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        outfit: ['var(--font-outfit)', 'Inter', 'sans-serif'],
       },
     },
   },

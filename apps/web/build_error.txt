@@ -1,0 +1,104 @@
+
+> petmol-web@1.0.0 build
+> next build
+
+ ⚠ Disabling SWC Minifer will not be an option in the next major version. Please report any issues you may be experiencing to https://github.com/vercel/next.js/issues
+  ▲ Next.js 14.2.35
+  - Environments: .env.local, .env.production
+  - Experiments (use with caution):
+    · externalDir
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/58) ...
+   Generating static pages (14/58) 
+   Generating static pages (28/58) 
+   Generating static pages (43/58) 
+ ✓ Generating static pages (58/58)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    244 B          88.1 kB
+├ ○ /_not-found                          908 B          88.8 kB
+├ ○ /admin/accounts                      2.6 kB          103 kB
+├ ○ /admin/dashboard                     1.97 kB         103 kB
+├ ○ /admin/establishments                2.5 kB          103 kB
+├ ○ /admin/login                         1.89 kB         103 kB
+├ ○ /admin/notifications                 48.9 kB         153 kB
+├ ○ /admin/pets                          3.34 kB         104 kB
+├ ○ /admin/users                         2.69 kB         103 kB
+├ ƒ /api/autocomplete                    0 B                0 B
+├ ○ /api/geocode                         0 B                0 B
+├ ƒ /api/handoff/doglife                 0 B                0 B
+├ ƒ /api/handoff/shopping                0 B                0 B
+├ ƒ /api/log-click                       0 B                0 B
+├ ƒ /api/photo-proxy                     0 B                0 B
+├ ƒ /api/place-contact                   0 B                0 B
+├ ƒ /api/places/autocomplete             0 B                0 B
+├ ƒ /api/places/details                  0 B                0 B
+├ ○ /api/places/nearby                   0 B                0 B
+├ ƒ /api/places/search                   0 B                0 B
+├ ○ /auth/callback                       409 B           174 kB
+├ ○ /auth/forgot                         806 B           187 kB
+├ ○ /auth/login                          598 B          88.5 kB
+├ ○ /auth/signup                         245 B          88.1 kB
+├ ○ /buy                                 245 B          88.1 kB
+├ ○ /check-up                            3.15 kB        99.6 kB
+├ ○ /coverage                            245 B          88.1 kB
+├ ○ /debug                               244 B          88.1 kB
+├ ƒ /e/[code]                            244 B          88.1 kB
+├ ○ /emergency                           190 B          96.8 kB
+├ ○ /emergency-new                       245 B          88.1 kB
+├ ○ /family                              244 B          88.1 kB
+├ ○ /favorites                           245 B          88.1 kB
+├ ○ /go/error                            1.6 kB          188 kB
+├ ○ /go/shopping                         1.61 kB         188 kB
+├ ○ /grooming                            245 B          88.1 kB
+├ ○ /handoff/error                       4.39 kB         191 kB
+├ ○ /home                                121 kB          340 kB
+├ ○ /home/admin                          244 B          88.1 kB
+├ ○ /home/admin/establishments           245 B          88.1 kB
+├ ○ /home/admin/establishments/new       244 B          88.1 kB
+├ ○ /home/events                         244 B          88.1 kB
+├ ƒ /home/events/[id]                    244 B          88.1 kB
+├ ƒ /home/events/[id]/edit               244 B          88.1 kB
+├ ○ /home/events/new                     244 B          88.1 kB
+├ ƒ /invite/[token]                      244 B          88.1 kB
+├ ○ /legal/privacy                       371 B           101 kB
+├ ○ /legal/terms                         371 B           101 kB
+├ ○ /login                               3.54 kB         100 kB
+├ ○ /manifest.webmanifest                0 B                0 B
+├ ƒ /p/[id]                              1.58 kB        89.5 kB
+├ ○ /petshop                             243 B          88.1 kB
+├ ○ /portal/cadastro                     244 B          88.1 kB
+├ ○ /portal/dashboard                    244 B          88.1 kB
+├ ○ /portal/termos                       244 B          88.1 kB
+├ ○ /privacy                             822 B           187 kB
+├ ○ /profile                             5.15 kB         102 kB
+├ ○ /register                            3.42 kB         100 kB
+├ ○ /register-pet                        6.04 kB         115 kB
+├ ○ /reorder                             244 B          88.1 kB
+├ ○ /rg                                  244 B          88.1 kB
+├ ○ /robots.txt                          0 B                0 B
+├ ƒ /saude/[petId]                       372 B          88.3 kB
+├ ○ /services                            244 B          88.1 kB
+├ ○ /sitemap.xml                         0 B                0 B
+├ ○ /sync-data                           245 B          88.1 kB
+├ ○ /terms                               796 B           187 kB
+├ ○ /tips                                245 B          88.1 kB
+├ ƒ /v/[token]                           245 B          88.1 kB
+└ ○ /version                             244 B          88.1 kB
++ First Load JS shared by all            87.9 kB
+  ├ chunks/1528-6f14e5bc5e8bfa4e.js      31.9 kB
+  ├ chunks/1dd3208c-8a2efbf468c73623.js  54 kB
+  └ other shared chunks (total)          2 kB
+
+
+ƒ Middleware                             26.7 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

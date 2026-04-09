@@ -18,7 +18,6 @@ import { MedicalVaultModal } from '@/components/home/MedicalVaultModal';
 import { HomeNavigationModals } from '@/components/home/HomeNavigationModals';
 import { HomePetHeader } from '@/components/home/HomePetHeader';
 import { HomePetDashboard } from '@/components/home/HomePetDashboard';
-import { HomeEmergencySheet } from '@/components/home/HomeEmergencySheet';
 import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
 import { ParasiteItemSheet } from '@/components/home/ParasiteItemSheet';
 import { VaccineItemSheet } from '@/components/home/VaccineItemSheet';
@@ -628,7 +627,6 @@ export default function HomePage() {
   });
   
   const [showTopAttentionModal, setShowTopAttentionModal] = useState(false);
-  const [showEmergencySheet, setShowEmergencySheet] = useState(false);
   const [showCheckinPicker, setShowCheckinPicker] = useState(false);
   const [checkinDayDraft, setCheckinDayDraft] = useState<number>(5);
   const [checkinPickerSaving, setCheckinPickerSaving] = useState(false);
@@ -3381,22 +3379,6 @@ export default function HomePage() {
                     selectedPetNeedsAttention={_selectedPetNeedsAttention}
                     selectedPetCareScore={_selectedPetCareScore}
                   />
-
-                  {/* ── Emergência Vet ── */}
-                  <button
-                    onClick={() => setShowEmergencySheet(true)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-red-200 bg-red-50/80 hover:bg-red-100/70 active:scale-[0.98] transition-all shadow-sm"
-                  >
-                    <span className="text-2xl leading-none flex-shrink-0">🚨</span>
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-bold text-red-900 leading-tight">Emergência Vet</p>
-                      <p className="text-[11px] text-red-600 font-medium">Clínicas/Hosp 24h</p>
-                    </div>
-                    <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                  <HomeEmergencySheet open={showEmergencySheet} onClose={() => setShowEmergencySheet(false)} />
 
                   <HomePetDashboard
                     petEvents={petEvents}
