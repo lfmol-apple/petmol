@@ -21,7 +21,6 @@ class PetDocumentOut(BaseModel):
     pet_id: str
     kind: str
     category: Optional[str] = None
-    subcategory: Optional[str] = None
     title: Optional[str] = None
     document_date: Optional[date] = None
     notes: Optional[str] = None
@@ -49,7 +48,6 @@ class AddLinkRequest(BaseModel):
     url: str
     title: Optional[str] = None
     category: Optional[str] = None
-    subcategory: Optional[str] = None
     document_date: Optional[date] = None
     notes: Optional[str] = None
     create_timeline_event: bool = False
@@ -71,7 +69,6 @@ class ImportItemsRequest(BaseModel):
     import_id: Optional[str] = None   # from previous import-link response
     items: list[ImportItem]
     category: Optional[str] = None
-    subcategory: Optional[str] = None
     document_date: Optional[date] = None
 
 

@@ -3,7 +3,6 @@ export interface PetDocument {
   pet_id: string;
   kind: 'file' | 'link';
   category: string | null;
-  subcategory?: string | null;
   title: string | null;
   document_date: string | null;
   establishment_name: string | null;
@@ -22,12 +21,10 @@ export interface BatchDocItem {
   id: string;
   title: string;
   category: string;
-  subcategory?: string;
   icon: string;
   mime_type: string | null;
   customTitle: string;
   customCategory: string;
-  customSubcategory?: string;
 }
 
 export interface BatchConfirm {
@@ -49,7 +46,6 @@ export interface EditingDoc {
   id: string;
   title: string;
   category: string;
-  subcategory: string;
   date: string;
   establishment: string;
   saving: boolean;
