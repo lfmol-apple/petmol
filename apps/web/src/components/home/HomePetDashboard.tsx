@@ -142,7 +142,7 @@ export function HomePetDashboard({
   );
 
   return (
-    <div className="relative p-4 pt-0 space-y-4">
+    <div className="relative p-4 pt-0 space-y-4 -mt-3">
       <AppleControlButtons
         onVacinasClick={onOpenVaccines}
         onVermifugoClick={onOpenVermifugo}

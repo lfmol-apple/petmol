@@ -154,7 +154,7 @@ export function HomePetHeader({
           {/* Status Pill Suspenso no Canto */}
           <button
             onClick={topAttentionPetCount > 0 ? onOpenTopAttentionModal : undefined}
-            className={`absolute top-3.5 right-3.5 flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-all z-10 ${
+            className={`absolute top-3.5 right-3.5 flex items-center justify-center gap-1.5 rounded-full px-3 h-[26px] transition-all z-10 ${
               topAttentionPetCount > 0
                 ? 'bg-rose-500 text-white shadow-md active:scale-95'
                 : 'bg-slate-100/80 text-slate-500 cursor-default'
