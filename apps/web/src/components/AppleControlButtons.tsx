@@ -125,14 +125,14 @@ export function AppleControlButtons({
       toneClass: toneByStatus(colorAntipulgas),
     },
     {
-      id: 'collar' as const,
-      title: 'Coleira',
-      description: isEmptyCard(colorColeira) ? 'Sem registro — adicionar agora' : 'Antiparasitária',
-      isEmpty: isEmptyCard(colorColeira),
-      icon: '📿',
-      onClick: onColeiraClick,
-      alert: alertColeira,
-      toneClass: toneByStatus(colorColeira),
+      id: 'shopping' as const,
+      title: 'Shopping',
+      description: 'Cobasi · Petz · Petlove',
+      isEmpty: false,
+      icon: '🛒',
+      onClick: () => setShowShoppingSheet(true),
+      alert: false,
+      toneClass: 'bg-blue-50 border-blue-200 border-l-4 border-l-[#0056D2] shadow-sm hover:shadow-md hover:bg-blue-100/60 hover:border-blue-300',
     },
     {
       id: 'food' as const,
@@ -148,7 +148,7 @@ export function AppleControlButtons({
     // V-L: Medicação movida para posição estática (abaixo de Documentos), Shopping assume posição V-line
   ];
 
-  const activeDockableCards = dockableCards.filter((card) => !inactiveSet.has(card.id));
+  const activeDockableCards = dockableCards.filter((card) => !inactiveSet.has(card.id as any));
 
   const renderDockableCard = (card: typeof dockableCards[number]) => (
     <button
@@ -158,10 +158,10 @@ export function AppleControlButtons({
       }}
       onContextMenu={(event) => {
         event.preventDefault();
-        onDeactivateControl?.(card.id);
+        onDeactivateControl?.(card.id as any);
       }}
       onDoubleClick={() => {
-        onDeactivateControl?.(card.id);
+        onDeactivateControl?.(card.id as any);
       }}
       className={`${cardBaseClass} ${card.toneClass}`}
     >
@@ -180,15 +180,20 @@ export function AppleControlButtons({
       <div className="grid grid-cols-2 gap-3 mb-4">
         {activeDockableCards.map(renderDockableCard)}
 
-        {/* SHOPPING — posição anterior de Medicação, estilo neutro */}
+        {/* COLEIRA (LEISHMANIOSE) — Nova posição fixa sugerida pelo usuário */}
         <button
-          onClick={() => setShowShoppingSheet(true)}
-          className={`${cardBaseClass} bg-blue-50 border-blue-200 border-l-4 border-l-[#0056D2] shadow-sm hover:shadow-md hover:bg-blue-100/60 hover:border-blue-300`}
+          onClick={onColeiraClick}
+          onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.('collar'); }}
+          onDoubleClick={() => onDeactivateControl?.('collar')}
+          className={`${cardBaseClass} ${toneByStatus(colorColeira)}`}
         >
-          <span className={iconWrapClass}><span className={emojiIconClass}>🛒</span></span>
-          <div className="flex flex-col justify-center h-full pr-9 text-left">
-            <h3 className={titleClass}>Shopping</h3>
-            <p className={`${descBaseClass} text-slate-500`}>Cobasi · Petz · Petlove</p>
+          {renderAlertBadge(alertColeira)}
+          <span className={iconWrapClass}><span className={emojiIconClass}>📿</span></span>
+          <div className={`flex flex-col justify-center h-full pr-9 text-left ${alertColeira ? 'pt-3' : ''}`}>
+            <h3 className={titleClass}>Coleira (Leish)</h3>
+            <p className={`${descBaseClass} ${alertColeira ? 'text-red-700' : isEmptyCard(colorColeira) ? 'text-slate-400' : 'text-slate-500'}`}>
+              Leishmaniose e parasitas
+            </p>
           </div>
         </button>
 
