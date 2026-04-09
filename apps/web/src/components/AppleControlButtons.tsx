@@ -65,11 +65,11 @@ export function AppleControlButtons({
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
   const [showEmergencySheet, setShowEmergencySheet] = useState(false);
 
-  const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-2.5 h-[76px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
+  const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-2.5 h-[80px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
   const iconWrapClass = 'absolute top-2 right-2 w-8 h-8 rounded-xl bg-white/95 ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center pointer-events-none';
-  const emojiIconClass = 'text-[18px] leading-none';
-  const titleClass = 'text-[14px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
-  const descBaseClass = 'text-[12px] truncate mt-0.5 leading-tight font-medium';
+  const emojiIconClass = 'text-[20px] leading-none';
+  const titleClass = 'text-[15px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
+  const descBaseClass = 'text-[13px] truncate mt-0.5 leading-tight font-medium';
   const alertCardClass = 'bg-gradient-to-br from-rose-100 via-red-50 to-white border-red-300 border-l-4 border-l-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.15)]';
   const okCardClass = 'bg-emerald-50/50 border-emerald-200 border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md hover:border-emerald-300';
   const warningCardClass = 'bg-amber-50/60 border-amber-200 border-l-4 border-l-amber-500 shadow-sm hover:shadow-md hover:border-amber-300';
