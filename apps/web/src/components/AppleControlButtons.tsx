@@ -183,7 +183,7 @@ export function AppleControlButtons({
         {/* SHOPPING — posição anterior de Medicação, estilo neutro */}
         <button
           onClick={() => setShowShoppingSheet(true)}
-          className={`${cardBaseClass} ${neutralCardClass}`}
+          className={`${cardBaseClass} bg-blue-50 border-blue-200 border-l-4 border-l-[#0056D2] shadow-sm hover:shadow-md hover:bg-blue-100/60 hover:border-blue-300`}
         >
           <span className={iconWrapClass}><span className={emojiIconClass}>🛒</span></span>
           <div className="flex flex-col justify-center h-full pr-9 text-left">
