@@ -81,7 +81,7 @@ export function SmartSuggestionsWidget() {
 
       {/* Expanded widget */}
       {isExpanded && (
-        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-96 max-h-[600px] overflow-hidden flex flex-col">
+        <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 max-w-md w-96 max-h-[600px] overflow-hidden flex flex-col">
           {/* Header */}
           <div className="bg-gradient-to-r from-purple-600 to-[#0056D2] text-white p-4">
             <div className="flex items-center justify-between">

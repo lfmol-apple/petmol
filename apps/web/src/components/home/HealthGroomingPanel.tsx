@@ -190,7 +190,7 @@ export function HealthGroomingPanel({
               />
 
               {showPlaceSuggestions && placeSuggestions.length > 0 && (
-                <div className="absolute z-[200] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-[200] w-full mt-1 border border-gray-300 max-h-48 overflow-y-auto bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
                   {placeSuggestions.map((place) => (
                     <button
                       key={place.place_id}

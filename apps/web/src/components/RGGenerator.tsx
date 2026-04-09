@@ -416,31 +416,31 @@ export default function RGGenerator({ pet, onClose }: RGGeneratorProps) {
   }, [selectedTemplate, pet]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[200] p-4 sm:p-6">
+      <div className="bg-white/80 backdrop-blur-2xl rounded-[32px] shadow-premium border border-white/50 max-w-2xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
+        <div className="sticky top-0 bg-white/70 backdrop-blur-md border-b border-white/40 p-6 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">RG do {pet.pet_name}</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Crie e compartilhe no Instagram
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">RG do {pet.pet_name}</h2>
+            <p className="text-sm font-medium text-slate-500 mt-0.5">
+              Identidade Digital Premium
             </p>
           </div>
           {onClose && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="w-10 h-10 rounded-full bg-slate-200/50 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           )}
         </div>
 
         {/* Templates */}
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Escolha o formato:</h3>
+        <div className="p-6 border-b border-white/40">
+          <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider text-[11px]">Escolha o formato</h3>
           <div className="grid grid-cols-3 gap-3">
             {TEMPLATES.map((template) => (
               <button
@@ -468,11 +468,11 @@ export default function RGGenerator({ pet, onClose }: RGGeneratorProps) {
 
         {/* Preview */}
         <div className="p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Preview:</h3>
-          <div className="bg-gray-100 rounded-xl p-4 flex items-center justify-center">
+          <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider text-[11px]">Preview visual</h3>
+          <div className="bg-slate-100/50 rounded-2xl p-6 flex items-center justify-center border border-white/60 shadow-inner">
             <canvas
               ref={canvasRef}
-              className="max-w-full h-auto rounded-lg shadow-lg"
+              className="max-w-full h-auto rounded-[20px] shadow-premium overflow-hidden"
               style={{
                 maxHeight: '400px',
                 width: 'auto'
@@ -482,7 +482,7 @@ export default function RGGenerator({ pet, onClose }: RGGeneratorProps) {
         </div>
 
         {/* Actions */}
-        <div className="p-6 bg-gray-50 rounded-b-2xl">
+        <div className="p-6 bg-slate-50/50 rounded-b-[32px] pt-2">
           {!rgCreated ? (
             <button
               onClick={createRG}

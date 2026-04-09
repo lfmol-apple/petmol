@@ -67,7 +67,7 @@ export function HistoryDocumentUploadModal({
     return (
       <ModalPortal>
       <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[249]" onClick={(event) => { if (event.target === event.currentTarget) onClosePicker(); }}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
             <h3 className="font-bold text-gray-800 text-base">📎 {sendDocumentLabel}</h3>
             <button onClick={onClosePicker} className="text-gray-400 hover:text-gray-600 text-xl leading-none w-8 h-8 flex items-center justify-center" style={{ touchAction: 'manipulation' }}>✕</button>
@@ -99,7 +99,7 @@ export function HistoryDocumentUploadModal({
   return (
     <ModalPortal>
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[250]" onClick={(event) => { if (event.target === event.currentTarget) onCloseDetails(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[92dvh]">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm flex flex-col max-h-[92dvh] overflow-hidden">
         <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
           <h3 className="font-bold text-gray-800 text-base">📎 Detalhes do documento</h3>
           <button onClick={onCloseDetails} className="text-gray-400 hover:text-gray-600 text-xl leading-none w-8 h-8 flex items-center justify-center" style={{ touchAction: 'manipulation' }}>✕</button>

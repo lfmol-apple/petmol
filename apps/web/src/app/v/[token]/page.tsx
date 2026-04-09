@@ -59,7 +59,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
   if (!data) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl text-center border-2 border-red-200">
+        <div className="p-8 max-w-md w-full text-center border-2 border-red-200 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
           <div className="text-8xl mb-6">🔒</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             {tr('vet_share.invalid.title')}
@@ -98,7 +98,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
       </div>
       <div className="max-w-4xl mx-auto">
         {/* Header - Vet Info */}
-        <div className="bg-white rounded-3xl p-6 shadow-lg mb-6">
+        <div className="p-6 mb-6 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-gradient-to-br from-[#0066ff] to-cyan-500 rounded-full flex items-center justify-center">
@@ -144,7 +144,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
         </div>
 
         {/* Pet Info Card */}
-        <div className="bg-white rounded-3xl p-6 shadow-lg mb-6">
+        <div className="p-6 mb-6 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
           <div className="flex items-center gap-6 mb-6">
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center">
               <span className="text-5xl">
@@ -173,7 +173,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
 
         {/* Medical History */}
         {share.share_medical_history && healthProfile.medical_history.length > 0 && (
-          <div className="bg-white rounded-3xl p-6 shadow-lg mb-6">
+          <div className="p-6 mb-6 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <span className="text-2xl">📋</span>
               {tr('vet_share.sections.medical_history')}
@@ -211,7 +211,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
 
         {/* Vaccinations */}
         {share.share_vaccinations && healthProfile.vaccinations.length > 0 && (
-          <div className="bg-white rounded-3xl p-6 shadow-lg mb-6">
+          <div className="p-6 mb-6 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <span className="text-2xl">💉</span>
               {tr('vet_share.sections.vaccinations')}
@@ -242,7 +242,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
 
         {/* Medications */}
         {share.share_medications && healthProfile.medications.length > 0 && (
-          <div className="bg-white rounded-3xl p-6 shadow-lg mb-6">
+          <div className="p-6 mb-6 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <span className="text-2xl">💊</span>
               {tr('vet_share.sections.medications')}
@@ -277,7 +277,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
 
         {/* Weight History */}
         {share.share_weight_history && healthProfile.weight_history.length > 0 && (
-          <div className="bg-white rounded-3xl p-6 shadow-lg mb-6">
+          <div className="p-6 mb-6 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <span className="text-2xl">⚖️</span>
               {tr('vet_share.sections.weight_history')}
@@ -304,7 +304,7 @@ export default async function VetSharePage({ params }: VetSharePageProps) {
         )}
 
         {/* Footer */}
-        <div className="bg-white rounded-3xl p-6 shadow-lg text-center">
+        <div className="p-6 text-center bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
           <p className="text-gray-500 mb-3">
             🐾 {tr('vet_share.footer.powered_by')}
           </p>

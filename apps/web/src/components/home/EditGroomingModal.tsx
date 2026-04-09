@@ -49,8 +49,8 @@ export function EditGroomingModal({
   const { t, locale } = useI18n();
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[70] flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto overflow-hidden">
         <div className="sticky top-0 bg-gradient-to-r from-[#0066ff] to-cyan-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -177,7 +177,7 @@ export function EditGroomingModal({
             />
 
             {showPlaceSuggestions && placeSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+              <div className="absolute z-10 w-full mt-1 border border-gray-300 max-h-60 overflow-y-auto bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
                 {placeSuggestions.map((place) => (
                   <button
                     key={place.place_id}

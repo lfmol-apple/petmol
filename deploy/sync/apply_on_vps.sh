@@ -145,60 +145,60 @@ TESTS_FAILED=0
 # Test 1: API health
 if curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; then
     pass "API health: OK"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 else
     error "API health: FAILED"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 fi
 
 # Test 2: API version
 API_VERSION=$(curl -s "http://127.0.0.1:8000/version" 2>/dev/null)
 if echo "$API_VERSION" | grep -q "service"; then
     pass "API /version: OK — $API_VERSION"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 else
     error "API /version: failed"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 fi
 
 # Test 3: Suggest endpoint
 SUGGEST_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8000/suggest?q=racao&country=BR&limit=3")
 if [ "$SUGGEST_RESPONSE" = "200" ]; then
     pass "/suggest: 200 OK"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 else
     error "/suggest: HTTP $SUGGEST_RESPONSE (expected 200)"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 fi
 
 # Test 4: Frontend home
 FRONTEND_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000/")
 if [ "$FRONTEND_RESPONSE" = "200" ] || [ "$FRONTEND_RESPONSE" = "307" ] || [ "$FRONTEND_RESPONSE" = "308" ]; then
     pass "Frontend: HTTP $FRONTEND_RESPONSE OK"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 else
     error "Frontend: HTTP $FRONTEND_RESPONSE"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 fi
 
 # Test 5: sw.js (critical for push notifications)
 SW_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000/sw.js")
 if [ "$SW_RESPONSE" = "200" ]; then
     pass "sw.js: 200 OK"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 else
     error "sw.js: HTTP $SW_RESPONSE (push notifications will not work)"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 fi
 
 # Test 6: VAPID public key endpoint
 VAPID_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8000/notifications/vapid-public-key")
 if [ "$VAPID_RESPONSE" = "200" ]; then
     pass "VAPID key endpoint: 200 OK"
-    ((TESTS_PASSED++))
+    ((++TESTS_PASSED))
 else
     error "VAPID key endpoint: HTTP $VAPID_RESPONSE"
-    ((TESTS_FAILED++))
+    ((++TESTS_FAILED))
 fi
 
 # ============================================

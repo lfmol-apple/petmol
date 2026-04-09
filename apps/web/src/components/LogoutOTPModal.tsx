@@ -88,7 +88,7 @@ export function LogoutOTPModal({ maskedPhone, testCode, subtitle, confirmLabel, 
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[200]">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#0056D2] to-indigo-600 p-5 text-white text-center">
           <div className="text-4xl mb-2">🔐</div>

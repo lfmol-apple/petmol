@@ -84,7 +84,7 @@ export function VaccineWorkflowModals({
     <>
       {showVaccineForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[80]">
-          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold flex items-center gap-2">
                 💉 {editingVaccine ? t('health.vaccines.form.title.edit') : t('health.vaccines.form.title.new')}
@@ -297,7 +297,7 @@ export function VaccineWorkflowModals({
 
       {showAIUpload && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[85]">
-          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-4 sm:p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold flex items-center gap-2">
                 🤖 Carteirinha Mágica - Leitura Automática
@@ -364,7 +364,7 @@ export function VaccineWorkflowModals({
 
       {cardAnalysis && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[70]">
-          <div className="bg-white rounded-lg shadow-xl p-4 sm:p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="p-4 sm:p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold flex items-center gap-2">
                 🔍 Análise Completa do Prontuário

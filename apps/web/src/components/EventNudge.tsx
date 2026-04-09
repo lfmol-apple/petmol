@@ -218,8 +218,8 @@ export function EventNudge() {
   if (!isVisible || !candidate) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-3xl w-full max-w-md max-h-[90dvh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md backdrop-blur-sm p-4">
+      <div className="dark:bg-gray-800 w-full max-w-md max-h-[90dvh] overflow-y-auto bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
         {/* Header */}
         <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4 rounded-t-3xl">
           <div className="flex items-center justify-between">

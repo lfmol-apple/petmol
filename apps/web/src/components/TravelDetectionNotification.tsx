@@ -22,7 +22,7 @@ export function TravelDetectionNotification() {
 
   return (
     <div className="fixed bottom-4 right-4 z-[100] animate-slide-up">
-      <div className="bg-white rounded-2xl shadow-2xl border-2 border-primary-500 p-5 max-w-md">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 border-2 border-primary-500 p-5 max-w-md overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
           <div className="text-4xl">✈️</div>

@@ -254,17 +254,15 @@ export function DocumentPreviewModal({
   return (
     <ModalPortal>
     <div
-      className="fixed inset-0 z-[200] flex flex-col"
-      style={{ background: '#000', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="fixed inset-0 z-[200] flex flex-col bg-slate-900/98 backdrop-blur-3xl"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {/* HEADER */}
       <div
-        className="flex items-center gap-2 px-3 flex-shrink-0"
+        className="flex items-center gap-2 px-3 flex-shrink-0 bg-slate-900/60 backdrop-blur-md border-b border-white/10"
         style={{
           paddingTop: 'calc(0.5rem + env(safe-area-inset-top))',
           paddingBottom: '0.5rem',
-          background: 'linear-gradient(to right, #0f172a, #1e293b)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
         <button onClick={onClose} style={{ ...tap, width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 18, flexShrink: 0, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -295,7 +293,7 @@ export function DocumentPreviewModal({
       </div>
 
       {/* CONTEUDO */}
-      <div className="flex-1 overflow-hidden" style={{ minHeight: 0, background: '#1a1a1a' }}>
+      <div className="flex-1 overflow-hidden relative w-full h-full" style={{ minHeight: 0 }}>
 
         {/* IMAGEM */}
         {isImg && (
@@ -391,18 +389,18 @@ export function DocumentPreviewModal({
 
       {/* FOOTER */}
       {total > 1 ? (
-        <div className="flex items-center flex-shrink-0" style={{ height: 64, background: '#0f172a', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <button onClick={() => onNavigate(-1)} disabled={!canPrev} style={{ ...tap, width: 80, height: 64, fontSize: 32, color: canPrev ? '#fff' : 'rgba(255,255,255,0.18)', background: 'transparent', border: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>&#8249;</button>
+        <div className="flex items-center flex-shrink-0 bg-slate-900/60 backdrop-blur-md border-t border-white/10 h-16 sm:h-20">
+          <button onClick={() => onNavigate(-1)} disabled={!canPrev} className="w-20 h-full flex items-center justify-center text-4xl disabled:opacity-30 active:scale-95 transition-transform text-white border-none bg-transparent">&#8249;</button>
           <div className="flex-1 flex flex-col items-center justify-center min-w-0 px-2">
-            <p className="text-white text-xs font-semibold truncate max-w-full leading-tight">{doc.title}</p>
-            <p className="text-slate-500 text-xs tabular-nums">{siblingIdx + 1} / {total}</p>
+            <p className="text-white text-xs sm:text-sm font-semibold truncate max-w-full leading-tight drop-shadow-sm">{doc.title}</p>
+            <p className="text-slate-400 text-xs sm:text-[13px] tabular-nums mt-0.5">{siblingIdx + 1} de {total}</p>
           </div>
-          <button onClick={() => onNavigate(1)} disabled={!canNext} style={{ ...tap, width: 80, height: 64, fontSize: 32, color: canNext ? '#fff' : 'rgba(255,255,255,0.18)', background: 'transparent', border: 'none', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>&#8250;</button>
+          <button onClick={() => onNavigate(1)} disabled={!canNext} className="w-20 h-full flex items-center justify-center text-4xl disabled:opacity-30 active:scale-95 transition-transform text-white border-none bg-transparent">&#8250;</button>
         </div>
       ) : (
-        <div className="flex items-center justify-center flex-shrink-0" style={{ height: 56, background: '#0f172a', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          <button onClick={handleDownload} disabled={!fileBlobUrl} style={{ ...tap, textDecoration: 'none', background: 'rgba(255,255,255,0.10)', border: 'none', opacity: fileBlobUrl ? 1 : 0.5 }} className="flex items-center gap-2 px-6 h-10 rounded-xl text-sm font-medium text-white active:opacity-80">
-            &#11015;&#65039; Baixar arquivo
+        <div className="flex items-center justify-center flex-shrink-0 bg-slate-900/60 backdrop-blur-md border-t border-white/10 h-[72px]">
+          <button onClick={handleDownload} disabled={!fileBlobUrl} className="flex items-center justify-center gap-2 px-8 py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-sm font-semibold text-white transition-all active:scale-95 border-none disabled:opacity-50">
+            &#11015;&#65039; Salvar Arquivo
           </button>
         </div>
       )}

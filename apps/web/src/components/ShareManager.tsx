@@ -286,7 +286,7 @@ export function ShareManager({ petId, petName, petSpecies, ownerPhone }: ShareMa
 
       {/* Create Emergency Modal (simplified) */}
       {showCreateEmergency && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">{t('share_manager.emergency.modal.title')}</h3>
             <p className="text-gray-600 mb-6">
@@ -312,7 +312,7 @@ export function ShareManager({ petId, petName, petSpecies, ownerPhone }: ShareMa
 
       {/* Create Vet Share Modal (simplified) */}
       {showCreateVet && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
             <h3 className="text-xl font-bold mb-4">{t('share_manager.vet.modal.title')}</h3>
             <p className="text-gray-600 mb-6">

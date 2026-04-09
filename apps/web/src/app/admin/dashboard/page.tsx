@@ -141,7 +141,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
+              <div className="p-6 border border-slate-200 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="text-2xl">💉</div>
                   <div className="text-2xl font-bold text-slate-900">{stats.total_vaccines.toLocaleString()}</div>
@@ -149,7 +149,7 @@ export default function AdminDashboardPage() {
                 <div className="text-sm text-slate-600">Vacinas Registradas</div>
               </div>
 
-              <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
+              <div className="p-6 border border-slate-200 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="text-2xl">📅</div>
                   <div className="text-2xl font-bold text-slate-900">{stats.total_appointments.toLocaleString()}</div>
@@ -157,7 +157,7 @@ export default function AdminDashboardPage() {
                 <div className="text-sm text-slate-600">Consultas Agendadas</div>
               </div>
 
-              <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
+              <div className="p-6 border border-slate-200 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="text-2xl">🏙️</div>
                   <div className="text-2xl font-bold text-slate-900">{stats.cities_count}</div>
@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
         )}
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-md border border-slate-200 p-6">
+        <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 border border-slate-200 p-6 overflow-hidden">
           <h2 className="text-xl font-bold text-slate-900 mb-4">Ações Rápidas</h2>
           <div className="grid md:grid-cols-4 gap-4">
             <a

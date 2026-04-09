@@ -60,7 +60,7 @@ export function PremiumPanelShell({
 
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-2xl shadow-md ${className}`}
+      className={`border border-slate-200 ${className} bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden`}
     >
       {/* ── Header do painel ── */}
       <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-r from-[#0056D2] to-indigo-600 rounded-t-2xl">

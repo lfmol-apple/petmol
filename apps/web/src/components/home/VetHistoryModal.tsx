@@ -52,7 +52,7 @@ export function VetHistoryModal({
   return (
     <ModalPortal>
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden overflow-x-hidden flex flex-col">
+      <div className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden overflow-x-hidden flex flex-col bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60">
         <div className="bg-gradient-to-r from-violet-500 to-purple-500 text-white p-3 sm:p-4 flex-shrink-0">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">

@@ -22,16 +22,19 @@ router = APIRouter(tags=["Pets"])
 
 def _get_accessible_owner_ids(user_id: str, db: Session) -> List[str]:
     """Return list of user_ids whose pets the current user can access.
-    Includes the user themselves + owners of family groups they belong to.
+    SILENCIADO: compartilhamento familiar desativado — retorna apenas o próprio usuário.
+    Para reativar acesso familiar, restaurar o bloco de FamilyMember abaixo.
     """
-    from ..family.models import FamilyGroup, FamilyMember
-    owner_ids = {user_id}
-    memberships = db.query(FamilyMember).filter(FamilyMember.user_id == user_id).all()
-    for m in memberships:
-        group = db.query(FamilyGroup).filter(FamilyGroup.id == m.group_id).first()
-        if group:
-            owner_ids.add(group.owner_id)
-    return list(owner_ids)
+    # SILENCIADO — family lookup removido temporariamente
+    # from ..family.models import FamilyGroup, FamilyMember
+    # owner_ids = {user_id}
+    # memberships = db.query(FamilyMember).filter(FamilyMember.user_id == user_id).all()
+    # for m in memberships:
+    #     group = db.query(FamilyGroup).filter(FamilyGroup.id == m.group_id).first()
+    #     if group:
+    #         owner_ids.add(group.owner_id)
+    # return list(owner_ids)
+    return [user_id]
 
 
 @router.get("/pets", response_model=list[PetOut])
@@ -226,17 +229,10 @@ def create_vaccine(
     db.add(vaccine)
     db.commit()
     db.refresh(vaccine)
-    # Notificar família
-    from ..family.utils import send_family_push
-    actor_name = (user.name or user.email).split()[0]
-    send_family_push(pet_id, user.id, {
-        "title": f"💉 Vacina de {pet.name}",
-        "body": f"{actor_name} registrou vacina '{payload.vaccine_name}' para {pet.name}",
-        "icon": "/icons/icon-192x192.png",
-        "badge": "/icons/icon-96x96.png",
-        "tag": f"vaccine-{vaccine.id}",
-        "data": {"url": f"/home?modal=vaccines&petId={pet_id}"},
-    }, db)
+    # SILENCIADO: notificação para família desativada temporariamente
+    # from ..family.utils import send_family_push
+    # actor_name = (user.name or user.email).split()[0]
+    # send_family_push(pet_id, user.id, { ... }, db)
     return vaccine
 
 

@@ -636,22 +636,22 @@ export function PetFormFluido({ onComplete, onCancel, initialData }: PetFormFlui
         </div>
 
         {/* Botões */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
           {onCancel && (
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold text-sm sm:text-base"
+              className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-[15px] font-semibold text-slate-700 bg-white hover:bg-slate-50 active:scale-[0.98] transition-all"
             >
-              ← Voltar
+              Cancelar
             </button>
           )}
           <button
             type="submit"
             disabled={loading || !name.trim()}
-            className="flex-1 px-6 py-3 bg-blue-500 hover:bg-[#0056D2] text-white rounded-xl font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base transition"
+            className="flex-1 py-3.5 rounded-2xl bg-brand-DEFAULT text-white text-[15px] font-semibold active:scale-[0.98] transition-all disabled:opacity-50 disabled:bg-slate-400 shadow-md shadow-brand-DEFAULT/20 flex items-center justify-center gap-2"
           >
-            <Save className="w-4 h-4" />
+            <Save className="w-5 h-5" />
             {loading ? 'Salvando...' : 'Concluir cadastro'}
           </button>
         </div>
@@ -660,7 +660,7 @@ export function PetFormFluido({ onComplete, onCancel, initialData }: PetFormFlui
       {/* Modal de Crop de foto */}
       {showCropModal && imageToCrop && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-2 sm:p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+          <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 max-w-2xl w-full max-h-[95vh] overflow-y-auto overflow-hidden">
             <div className="bg-gradient-to-r from-[#0066ff] to-cyan-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
               <h3 className="text-lg sm:text-xl font-bold">✂️ Ajustar Foto do Pet</h3>
               <p className="text-xs sm:text-sm text-blue-100 mt-1">

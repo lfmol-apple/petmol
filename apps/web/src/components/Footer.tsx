@@ -7,7 +7,7 @@ export function Footer() {
   const { t } = useI18n();
   
   return (
-    <footer className="py-1.5 border-t border-slate-100 flex-shrink-0">
+    <footer className="py-2.5 bg-white/80 backdrop-blur-md border-t border-slate-200/50 flex-shrink-0 relative z-10">
       <div className="flex items-center justify-center gap-2 text-xs text-slate-400 whitespace-nowrap overflow-hidden px-4">
         <span>© 2026 PETMOL</span>
         <span className="text-slate-300">•</span>

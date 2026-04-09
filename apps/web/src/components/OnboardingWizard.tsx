@@ -899,9 +899,9 @@ export function OnboardingWizard({ onComplete, initialStep = 1 }: OnboardingWiza
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-primary-50 via-white to-blue-50 z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-3xl z-[200] overflow-y-auto w-full h-full">
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 md:p-12">
+        <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium max-w-2xl w-full p-8 md:p-10 border border-white/60 overflow-hidden">
           {/* Progress */}
           <div className="mb-8">
             <div className="flex justify-between mb-2">

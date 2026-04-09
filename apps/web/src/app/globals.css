@@ -9,14 +9,38 @@
 @import 'leaflet/dist/leaflet.css';
 
 :root {
-  --foreground-rgb: 23, 23, 23;
-  --background-rgb: 255, 255, 255;
+  --foreground-rgb: 15, 23, 42; /* slate-900 */
+  --background-rgb: 248, 250, 252; /* slate-50 - Fundo app-like suave */
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
-  font-family: 'Nunito', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Premium Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.glass-header {
+  background: rgba(248, 250, 252, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.native-bottom-sheet {
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.08);
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  background: white;
 }
 
 /* Custom scrollbar */

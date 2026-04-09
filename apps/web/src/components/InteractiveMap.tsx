@@ -263,7 +263,7 @@ export const InteractiveMap = memo(function InteractiveMap({
       )}
 
       {selectedPlace && (
-        <div className="absolute bottom-4 left-4 right-4 bg-white rounded-xl shadow-2xl p-4 border-2 border-slate-200">
+        <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 p-4 border-2 border-slate-200 overflow-hidden">
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
               <h3 className="font-bold text-lg text-slate-900">{selectedPlace.name}</h3>
@@ -304,7 +304,7 @@ export const InteractiveMap = memo(function InteractiveMap({
       )}
 
       {/* Legend */}
-      <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-3 border border-slate-200">
+      <div className="absolute top-4 right-4 p-3 border border-slate-200 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
         <div className="text-xs space-y-1">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-primary-600 border-2 border-white"></div>

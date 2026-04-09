@@ -81,7 +81,7 @@ export function MedicalShareQR({ petId, petName, shareToken }: MedicalShareQRPro
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
+    <div className="bg-white rounded-[24px] shadow-sm ring-1 ring-slate-100/50 p-6 overflow-hidden">
       <div className="text-center mb-6">
         <div className="text-4xl mb-2">📱</div>
         <h3 className="text-xl font-bold text-slate-900 mb-1">

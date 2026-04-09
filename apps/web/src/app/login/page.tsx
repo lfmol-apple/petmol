@@ -59,7 +59,7 @@ export default function LoginPage() {
     <>
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-400 via-blue-500 to-[#0056D2] p-4 relative overflow-hidden">
       {/* Card principal com split design */}
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex overflow-hidden relative z-10">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-4xl flex overflow-hidden relative z-10">
         {/* Lado esquerdo - Imagem da Marca */}
         <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-[#0066ff] to-[#0047ad] flex-col justify-center items-center text-white relative overflow-hidden">
           <div className="absolute inset-0">

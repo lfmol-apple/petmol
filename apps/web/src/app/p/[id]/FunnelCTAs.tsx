@@ -121,11 +121,11 @@ export default function FunnelCTAs({ petPublicId, petName }: FunnelCTAsProps) {
       {/* ─── Modal de Benefícios ────────────────────────────────────────── */}
       {showBenefitsModal && (
         <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
           onClick={() => setShowBenefitsModal(false)}
         >
           <div
-            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl"
+            className="max-w-sm w-full p-6 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-bold text-gray-800 mb-1">

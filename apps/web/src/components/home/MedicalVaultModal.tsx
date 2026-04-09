@@ -39,7 +39,7 @@ export function MedicalVaultModal({
   return (
     <ModalPortal>
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92dvh] overflow-hidden flex flex-col">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-2xl max-h-[92dvh] overflow-hidden flex flex-col">
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-3 sm:p-5 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -77,19 +77,17 @@ export function MedicalVaultModal({
           <PetDocumentVault petId={currentPet.pet_id} onDocsChanged={refreshDocuments} />
         </div>
 
-        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 flex items-center justify-between gap-3 flex-shrink-0">
-          <div className="text-xs text-gray-400">🔒 Dados seguros</div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                refreshDocuments();
-                setShowMedicalVault(false);
-              }}
-              className="px-4 py-2 bg-[#0056D2] text-white rounded-lg font-medium hover:bg-[#0047ad] transition-colors text-sm"
-            >
-              ✓ Fechar
-            </button>
-          </div>
+        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 flex items-center gap-3 flex-shrink-0">
+          <button
+            onClick={() => {
+              refreshDocuments();
+              setShowMedicalVault(false);
+            }}
+            className="px-4 py-2 bg-[#0056D2] text-white rounded-lg font-medium hover:bg-[#0047ad] transition-colors text-sm"
+          >
+            ✓ Fechar
+          </button>
+          <div className="text-xs text-gray-400 ml-auto">🔒 Dados seguros</div>
         </div>
       </div>
     </div>

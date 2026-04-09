@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { HomeShoppingSheet } from '@/features/commerce/HomeShoppingSheet';
-import { HomeEmergencySheet } from '@/components/home/HomeEmergencySheet';
 import { type HomeInactiveEligibleControlId } from '@/lib/homeControlPreferences';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -62,7 +61,6 @@ export function AppleControlButtons({
   onDeactivateControl,
 }: AppleControlButtonsProps) {
 
-  const [showEmergencySheet, setShowEmergencySheet] = useState(false);
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
 
   const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-3 h-[84px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
@@ -193,7 +191,7 @@ export function AppleControlButtons({
       <div className="grid grid-cols-2 gap-3 mb-4">
         {activeDockableCards.map(renderDockableCard)}
 
-        {/* DOCUMENTOS — fixo ao lado de Alimentação */}
+        {/* DOCUMENTOS */}
         <button
           onClick={onDocumentosClick}
           className={`${cardBaseClass} ${neutralCardClass}`}
@@ -204,36 +202,21 @@ export function AppleControlButtons({
             <p className={`${descBaseClass} text-slate-500`}>Guardar arquivos</p>
           </div>
         </button>
+
+        {/* SHOPPING */}
+        <button
+          onClick={() => setShowShoppingSheet(true)}
+          className={`${cardBaseClass} bg-blue-50 border-[#0056D2]/25 hover:bg-blue-100/60 hover:border-[#0056D2]/40 shadow-sm hover:shadow-md`}
+        >
+          <span className={iconWrapClass}><span className={emojiIconClass}>🛒</span></span>
+          <div className="flex flex-col justify-center h-full pr-9 text-left">
+            <h3 className="text-[15px] font-semibold text-[#0047ad] leading-tight tracking-[-0.01em] truncate">Shopping</h3>
+            <p className="text-[13px] truncate mt-1 leading-tight font-medium text-blue-400">Cobasi · Petz · Petlove</p>
+          </div>
+        </button>
       </div>
 
-      {/* SHOPPING */}
-      <button
-        onClick={() => setShowShoppingSheet(true)}
-        className="relative w-full overflow-hidden flex items-center gap-3 px-4 h-[62px] mb-2 rounded-2xl border border-[#0056D2]/25 bg-blue-50 text-left active:scale-[0.99] transition-all hover:bg-blue-100/60 shadow-sm"
-      >
-        <span className="text-xl">🛒</span>
-        <span className="text-[13px] font-semibold text-[#0047ad]">Shopping</span>
-        <span className="text-[11px] text-blue-400 ml-auto">Cobasi · Petz · Petlove</span>
-        <span className="text-[#0056D2]/40 text-sm ml-1">›</span>
-      </button>
-
-      {/* EMERGÊNCIA VETERINÁRIA */}
-      <button
-        onClick={() => setShowEmergencySheet(true)}
-        className="relative w-full overflow-hidden flex items-center gap-3 px-4 h-[62px] mt-0 rounded-2xl border border-red-400/30 bg-red-50 text-left active:scale-[0.99] transition-all hover:bg-red-100/60 shadow-sm"
-      >
-        <span className="text-xl">🚨</span>
-        <div className="flex flex-col text-left">
-          <span className="text-[13px] font-bold text-red-800 leading-tight">Emergência Veterinária</span>
-          <span className="text-[11px] text-red-500/80 leading-tight">Clínicas abertas <span className="font-bold">24h</span> perto de você</span>
-        </div>
-        <span className="text-red-400/50 text-sm ml-auto">›</span>
-      </button>
-
       <HomeShoppingSheet open={showShoppingSheet} onClose={() => setShowShoppingSheet(false)} />
-
-      <HomeEmergencySheet open={showEmergencySheet} onClose={() => setShowEmergencySheet(false)} />
-
     </>
   );
 }

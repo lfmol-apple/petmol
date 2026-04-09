@@ -255,7 +255,7 @@ export function PlaceActionButtons({ place, isPartner = false, service, onAction
           
           {/* Menu de contato (só aparece para celulares) */}
           {showContactMenu && isMobile && (
-            <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl overflow-hidden z-50 border border-gray-200">
+            <div className="absolute bottom-full mb-2 left-0 right-0 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden z-50 border border-gray-200">
               <button
                 onClick={handleWhatsAppClick}
                 className="w-full py-4 px-4 text-left hover:bg-[#25D366] hover:bg-opacity-10 transition-all flex items-center gap-3 border-b border-gray-100 active:scale-95"
@@ -291,7 +291,7 @@ export function PlaceActionButtons({ place, isPartner = false, service, onAction
         </button>
         
         {showNavMenu && (
-          <div className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-xl shadow-2xl overflow-hidden z-50 border border-gray-200">
+          <div className="absolute bottom-full mb-2 left-0 right-0 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden z-50 border border-gray-200">
             <button
               onClick={handleWaze}
               className="w-full py-4 px-4 text-left hover:bg-[#00d4ff] hover:bg-opacity-10 transition-all flex items-center gap-3 border-b border-gray-100 active:scale-95"

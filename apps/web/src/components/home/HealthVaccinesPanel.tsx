@@ -49,17 +49,17 @@ export function HealthVaccinesPanel({
         </PremiumCard>
 
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          <div className="bg-white p-3 rounded-lg text-center shadow-sm">
-            <div className="text-green-600 font-bold text-2xl">{vaccines.length}</div>
-            <div className="text-sm text-gray-600">{t('health.total_vaccines')}</div>
+          <div className="bg-white p-3 sm:p-4 rounded-2xl text-center shadow-premium border border-slate-100">
+            <div className="text-emerald-500 font-bold text-2xl sm:text-3xl drop-shadow-sm">{vaccines.length}</div>
+            <div className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">{t('health.total_vaccines')}</div>
           </div>
-          <div className="bg-white p-3 rounded-lg text-center shadow-sm">
-            <div className="text-[#0056D2] font-bold text-2xl">{upcomingCount}</div>
-            <div className="text-sm text-gray-600">{t('health.upcoming')}</div>
+          <div className="bg-white p-3 sm:p-4 rounded-2xl text-center shadow-premium border border-slate-100">
+            <div className="text-brand-DEFAULT font-bold text-2xl sm:text-3xl drop-shadow-sm">{upcomingCount}</div>
+            <div className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">{t('health.upcoming')}</div>
           </div>
-          <div className="bg-white p-3 rounded-lg text-center shadow-sm">
-            <div className="text-red-600 font-bold text-2xl">{overdueCount}</div>
-            <div className="text-sm text-gray-600">{t('health.overdue')}</div>
+          <div className="bg-white p-3 sm:p-4 rounded-2xl text-center shadow-premium border border-slate-100">
+            <div className="text-rose-500 font-bold text-2xl sm:text-3xl drop-shadow-sm">{overdueCount}</div>
+            <div className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">{t('health.overdue')}</div>
           </div>
         </div>
 
@@ -74,7 +74,7 @@ export function HealthVaccinesPanel({
             </div>
             <button
               onClick={onOpenVaccineCenter}
-              className="w-full py-4 rounded-2xl bg-[#0056D2] hover:bg-[#0047ad] text-white text-[15px] font-bold shadow-md transition-colors"
+              className="w-full py-4 rounded-2xl bg-brand-DEFAULT hover:bg-brand-dark text-white text-[15px] font-bold shadow-md shadow-brand-DEFAULT/20 transition-all active:scale-[0.98]"
             >
               💉 Abrir central de vacinas
             </button>

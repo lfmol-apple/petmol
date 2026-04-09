@@ -24,7 +24,7 @@ import type { ParasiteControl, GroomingRecord } from '@/lib/types/home';
 import type { FeedingPlanEntry } from '@/lib/types/homeForms';
 import type { PetEventRecord } from '@/lib/petEvents';
 import { parsePetEventExtraData } from '@/lib/petEvents';
-import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
+import { latestVaccinePerGroup, vaccineGroupKey } from '@/lib/vaccineUtils';
 import { dateToLocalISO } from '@/lib/localDate';
 
 // ─── Public Types ─────────────────────────────────────────────────────────────
@@ -154,14 +154,19 @@ function processVaccines(p: PetCareDomainParams): PetCareReminder[] {
     rabies: 'Raiva',
   };
 
-  const result: PetCareReminder[] = [];
+  // Secondary dedup by canonical group key — guards against latestByGroup having
+  // multiple entries that resolve to the same canonical vaccine (e.g. one record with
+  // vaccine_code="DOG_POLYVALENT_V8" and another with vaccine_code=null but
+  // vaccine_name="v10", both canonicalising to the same group via the alias table).
+  const byCanonicalGroup = new Map<string, PetCareReminder>();
   for (const v of Array.from(latestByGroup.values())) {
     const nextDate = parseLocalDate(v.next_dose_date);
     if (!nextDate) continue;
     const diff = diffFromToday(nextDate);
-    // Só exibe se ainda é relevante (vencido, hoje, ou futuro)
-    result.push({
-      key: makeKey(p.pet_id, 'vaccine', v.vaccine_type || 'other', v.id || v.vaccine_name, dateToLocalISO(nextDate)),
+    const gKey = vaccineGroupKey(v);
+    if (byCanonicalGroup.has(gKey)) continue;
+    byCanonicalGroup.set(gKey, {
+      key: makeKey(p.pet_id, 'vaccine', gKey, 'latest', dateToLocalISO(nextDate)),
       pet_id: p.pet_id,
       domain: 'vaccine',
       label: v.vaccine_name,
@@ -175,7 +180,7 @@ function processVaccines(p: PetCareDomainParams): PetCareReminder[] {
       is_derived: false,
     });
   }
-  return result;
+  return Array.from(byCanonicalGroup.values());
 }
 
 function processParasites(p: PetCareDomainParams): PetCareReminder[] {
@@ -376,7 +381,8 @@ function processEvents(p: PetCareDomainParams): PetCareReminder[] {
       !ev.next_due_date ||
       ev.source === 'document' ||
       ev.status === 'completed' ||
-      ev.status === 'cancelled'
+      ev.status === 'cancelled' ||
+      ev.type === 'vaccine'   // auto-gerado por _ensure_vaccine_reminders — não exibir na UI
     ) continue;
 
     const extra = parsePetEventExtraData(ev.extra_data);

@@ -52,7 +52,7 @@ export function WhyMapsModal({ open, onClose }: WhyMapsModalProps) {
     >
       <div 
         id="why-maps-modal"
-        className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl"
+        className="p-6 max-w-md w-full bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

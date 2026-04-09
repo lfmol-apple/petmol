@@ -35,7 +35,7 @@ export function Header() {
           {/* Marca alinhada à esquerda */}
           <Link
             href={homeHref}
-            className={`flex items-center gap-2 transition-all duration-500 ${
+            className={`flex items-center gap-2 transition-all duration-500 active:scale-95 ${
               showLogo ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
             }`}
           >
@@ -51,7 +51,7 @@ export function Header() {
             
             {/* User Auth */}
             {userLabel ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Link
                   href="/profile"
                   className="inline-flex items-center gap-2 h-9 px-4 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors"
@@ -87,7 +87,7 @@ export function Header() {
             
             {/* Mobile User Auth */}
             {userLabel ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <Link
                   href="/profile"
                   className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors max-w-[140px] truncate"

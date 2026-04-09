@@ -41,13 +41,18 @@ export function QuickAddVaccineModal({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[90]">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[92dvh]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-          <h3 className="text-lg font-bold flex items-center gap-2">⚡ {t('quick_add.title')}</h3>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm flex items-end justify-center sm:items-center sm:p-4 z-[90] animate-fadeIn">
+      <div className="bg-slate-50 native-bottom-sheet rounded-[32px] shadow-2xl w-full max-w-md flex flex-col max-h-[96dvh] animate-slideUp overflow-hidden">
+        {/* Drag Handle for iOS feel */}
+        <div className="w-full flex justify-center pt-3 pb-1 bg-white sm:hidden rounded-t-[24px]">
+          <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+        </div>
+
+        <div className="flex items-center justify-between px-5 pt-2 pb-4 border-b border-slate-100 bg-white sticky top-0 z-10">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 tracking-tight">⚡ {t('quick_add.title')}</h3>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+            className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-95 transition-all"
           >
             ✕
           </button>
@@ -57,12 +62,12 @@ export function QuickAddVaccineModal({
           <p className="text-sm text-gray-600">{t('quick_add.subtitle')}</p>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">📅 {t('quick_add.when_applied')}</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">📅 {t('quick_add.when_applied')}</label>
             <input
               type="date"
               value={quickAddData.date_administered}
               onChange={(e) => setQuickAddData((prev) => ({ ...prev, date_administered: e.target.value }))}
-              className="w-full px-4 py-3 text-base border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-[#0056D2] focus:border-transparent"
+              className="w-full px-4 py-3.5 text-[15px] border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-brand-DEFAULT focus:border-transparent outline-none transition-all shadow-sm"
             />
           </div>
 
@@ -85,16 +90,16 @@ export function QuickAddVaccineModal({
           </div>
         </div>
 
-        <div className="flex gap-3 px-5 py-4 border-t border-gray-100 flex-shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+        <div className="flex gap-3 px-5 py-4 pb-8 sm:pb-4 border-t border-slate-100 bg-white/90 backdrop-blur-md sticky bottom-0">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-medium transition-colors"
+            className="flex-1 px-4 py-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl font-semibold transition-all active:scale-[0.98]"
           >
             {t('common.cancel')}
           </button>
           <button
             onClick={onOpenFullForm}
-            className="flex-1 px-4 py-3 bg-blue-500 hover:bg-[#0056D2] text-white rounded-xl font-medium transition-colors"
+            className="flex-1 px-4 py-3.5 bg-brand-DEFAULT hover:bg-brand-dark text-white rounded-2xl font-semibold transition-all active:scale-[0.98] shadow-md shadow-brand-DEFAULT/20"
           >
             ➕ {t('health.full_form')}
           </button>

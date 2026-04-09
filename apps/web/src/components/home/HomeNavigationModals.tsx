@@ -54,7 +54,7 @@ export function HomeNavigationModals({
     <>
       {showServiceTypeModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[92dvh]">
+          <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm flex flex-col max-h-[92dvh] overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
               <h3 className="text-lg font-bold flex items-center gap-2">🔍 {t('services.find_nearby')}</h3>
               <button onClick={onCloseServiceTypeModal} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">✕</button>
@@ -91,7 +91,7 @@ export function HomeNavigationModals({
 
       {showHealthOptionsModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col">
+          <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
               <h3 className="text-lg font-bold flex items-center gap-2">🏥 Saúde{currentPet?.pet_name ? ` de ${currentPet.pet_name}` : ''}</h3>
               <button onClick={onCloseHealthOptionsModal} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">✕</button>
@@ -101,7 +101,6 @@ export function HomeNavigationModals({
                 { icon: '💉', label: 'Vacinas', borderColor: 'border-l-blue-600', tab: 'vaccines', alert: alertVaccinesValue },
                 { icon: '🛡️', label: 'Controle Parasitário', borderColor: 'border-l-amber-600', tab: 'parasites', alert: alertParasitesValue },
                 { icon: '💊', label: 'Medicação', borderColor: 'border-l-purple-600', tab: 'medication', alert: false },
-                { icon: '🩺', label: 'Consultas, Exames e Proc.', borderColor: 'border-l-teal-600', tab: 'eventos', alert: false },
               ].map(({ icon, label, borderColor, tab, alert }) => (
                 <button
                   key={tab}
@@ -142,57 +141,11 @@ export function HomeNavigationModals({
         </div>
       )}
 
-      {showEventTypeModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <button onClick={() => { onCloseEventTypeModal(); onOpenHealthOptionsModal(); }} className="text-gray-400 hover:text-gray-700 mr-1">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <h3 className="text-lg font-bold">🩺 O que deseja registrar?</h3>
-              </div>
-              <button onClick={onCloseEventTypeModal} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">✕</button>
-            </div>
-            <div className="px-4 py-3 space-y-2.5">
-              {[
-                { icon: '🩺', label: 'Consulta Veterinária', borderColor: 'border-l-cyan-600', type: 'consulta' },
-                { icon: '🔁', label: 'Retorno / Revisão', borderColor: 'border-l-teal-600', type: 'retorno' },
-                { icon: '🔬', label: 'Exame Laboratorial', borderColor: 'border-l-blue-600', type: 'exame_lab' },
-                { icon: '📷', label: 'Exame de Imagem', borderColor: 'border-l-indigo-600', type: 'exame_imagem' },
-                { icon: '✂️', label: 'Cirurgia / Procedimento', borderColor: 'border-l-rose-600', type: 'cirurgia' },
-                { icon: '🦷', label: 'Procedimento Odontológico', borderColor: 'border-l-sky-600', type: 'odonto' },
-                { icon: '🚨', label: 'Emergência', borderColor: 'border-l-red-600', type: 'emergencia' },
-                { icon: '📝', label: 'Outro registro', borderColor: 'border-l-slate-600', type: 'outro' },
-              ].map(({ icon, label, borderColor, type }) => (
-                <button
-                  key={type}
-                  onClick={() => {
-                    onCloseEventTypeModal();
-                    onStartEventRegistration(type);
-                  }}
-                  className={`w-full bg-white hover:bg-slate-50 border border-gray-200 border-l-4 ${borderColor} rounded-xl px-5 py-4 flex items-center gap-4 shadow-sm hover:shadow-md active:scale-95 transition-all`}
-                >
-                  <span className="text-2xl leading-none flex-shrink-0">{icon}</span>
-                  <span className="flex-1 text-left text-sm font-bold text-gray-900">{label}</span>
-                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              ))}
-            </div>
-            <div className="px-4 py-3 border-t border-gray-100">
-              <button onClick={onCloseEventTypeModal} className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 font-medium">Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* EventTypeModal SILENCIADO: bloco legado de Consultas/Exames removido da UI */}
 
       {showVetOptionsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 p-4 sm:p-6 max-w-md w-full max-h-[90vh] overflow-y-auto overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold flex items-center gap-2">🏥 Veterinários</h3>
               <button onClick={onCloseVetOptionsModal} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>

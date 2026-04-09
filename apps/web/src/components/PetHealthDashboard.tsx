@@ -48,7 +48,7 @@ export function PetHealthDashboard({ petId }: PetHealthDashboardProps) {
 
   if (!profile || !summary) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 p-6 overflow-hidden">
         <div className="text-center py-12">
           <div className="text-6xl mb-4">🏥</div>
           <h3 className="text-xl font-semibold mb-2">Sem histórico médico</h3>
@@ -73,8 +73,10 @@ export function PetHealthDashboard({ petId }: PetHealthDashboardProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#0056D2] to-[#003889] rounded-lg shadow-md p-6 text-white">
-        <div className="flex items-center gap-4">
+      <div className="bg-gradient-to-br from-brand-DEFAULT via-brand-light to-brand-dark rounded-[24px] shadow-premium p-6 sm:p-8 text-white relative overflow-hidden">
+        {/* Efeito de brilho de fundo */}
+        <div className="absolute top-0 right-0 -m-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 z-10">
           {/* Pet Photo */}
           {profile.photo && (() => {
             const configured = String(process.env.NEXT_PUBLIC_PHOTOS_BASE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? '')
@@ -171,20 +173,20 @@ export function PetHealthDashboard({ petId }: PetHealthDashboardProps) {
 
       {/* Upcoming Vaccines */}
       {upcomingVaccines.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <span className="mr-2">💉</span> Próximas Vacinas
+        <div className="bg-white rounded-[24px] shadow-premium border border-slate-100 p-6 overflow-hidden">
+          <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-5 flex items-center">
+            <span className="mr-2 text-2xl">💉</span> Próximas Vacinas
           </h3>
           <div className="space-y-3">
             {upcomingVaccines.map(vaccine => (
-              <div key={vaccine.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+              <div key={vaccine.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 bg-slate-50 border border-slate-100 rounded-2xl">
                 <div>
-                  <div className="font-medium">{vaccine.vaccine_name}</div>
-                  <div className="text-sm text-gray-600">
+                  <div className="font-bold text-slate-800">{vaccine.vaccine_name}</div>
+                  <div className="text-[13px] font-medium text-slate-500 mt-1">
                     {new Date(vaccine.next_dose_date!).toLocaleDateString('pt-BR')}
                   </div>
                 </div>
-                <div className="text-sm text-[#0056D2] font-medium">
+                <div className="text-sm text-brand-DEFAULT bg-brand-DEFAULT/10 px-3 py-1.5 rounded-full font-bold self-start sm:self-auto mt-2 sm:mt-0">
                   {Math.ceil((new Date(vaccine.next_dose_date!).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} dias
                 </div>
               </div>
@@ -195,7 +197,7 @@ export function PetHealthDashboard({ petId }: PetHealthDashboardProps) {
 
       {/* Active Medications */}
       {activeMeds.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 p-6 overflow-hidden">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <span className="mr-2">💊</span> Medicamentos Ativos
           </h3>
@@ -226,7 +228,7 @@ export function PetHealthDashboard({ petId }: PetHealthDashboardProps) {
 
       {/* Upcoming Appointments */}
       {upcomingAppts.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 p-6 overflow-hidden">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <span className="mr-2">📅</span> Próximas Consultas
           </h3>
@@ -297,7 +299,7 @@ export function PetHealthDashboard({ petId }: PetHealthDashboardProps) {
       )}
 
       {/* Emergency Contacts */}
-      <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 p-6 overflow-hidden">
         <h3 className="text-lg font-semibold mb-4 flex items-center">
           <span className="mr-2">📞</span> Veterinários
         </h3>
@@ -408,11 +410,11 @@ function StatCard({ icon, label, value, subtext, alert }: {
   alert?: boolean;
 }) {
   return (
-    <div className={`bg-white rounded-lg shadow-md p-4 ${alert ? 'ring-2 ring-amber-400' : ''}`}>
-      <div className="text-3xl mb-2">{icon}</div>
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs text-gray-500 uppercase font-medium">{label}</div>
-      <div className="text-xs text-gray-600 mt-1">{subtext}</div>
+    <div className={`bg-white rounded-[20px] shadow-premium border border-slate-100 p-5 transition-transform hover:scale-[1.02] ${alert ? 'ring-2 ring-amber-400/60 shadow-amber-500/10' : ''} overflow-hidden`}>
+      <div className="text-3xl sm:text-4xl mb-3 drop-shadow-sm">{icon}</div>
+      <div className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">{value}</div>
+      <div className="text-[11px] text-slate-500 uppercase font-bold tracking-wider mt-1">{label}</div>
+      <div className="text-xs text-slate-400 mt-1.5 font-medium">{subtext}</div>
     </div>
   );
 }

@@ -135,17 +135,16 @@ export function HealthModal({
   return (
     <ModalPortal>
     <>
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92dvh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm flex items-center justify-center sm:p-4 z-50 animate-fadeIn overflow-hidden">
+          <div className="bg-slate-50 rounded-[32px] shadow-premium w-full max-w-4xl max-h-[100dvh] sm:max-h-[94dvh] overflow-hidden flex flex-col animate-scaleIn border border-slate-200/50">
             {/* Header do Modal - Design Clean e Elegante */}
-            <div className="sticky top-0 z-50 shadow-md bg-white">
+            <div className="sticky top-0 z-50 shadow-sm bg-white/90 backdrop-blur-xl border-b border-slate-100">
               {/* Borda Colorida Superior - dinâmica por modo */}
               <div className={`absolute top-0 left-0 right-0 h-1 ${
                 healthModalMode === 'grooming' ? 'bg-emerald-500' :
                 healthModalMode === 'food' ? 'bg-amber-500' :
                 healthModalMode === 'health' && healthActiveTab === 'parasites' ? 'bg-orange-500' :
                 healthModalMode === 'health' && healthActiveTab === 'medication' ? 'bg-purple-500' :
-                healthModalMode === 'health' && healthActiveTab === 'eventos' ? 'bg-teal-500' :
                 'bg-blue-500'
               }`}></div>
               
@@ -158,7 +157,7 @@ export function HealthModal({
                     {/* Avatar Grande do Pet */}
                     <div className="relative group flex-shrink-0 cursor-pointer">
                       <div className="absolute -inset-0.5 bg-gray-200/50 rounded-3xl blur-md group-hover:bg-gray-300/60 transition-all duration-300"></div>
-                      <div className="relative bg-white rounded-xl sm:rounded-2xl p-0.5 sm:p-1 shadow-lg overflow-hidden w-10 h-10 sm:w-16 sm:h-16 md:w-20 md:h-20 group-hover:shadow-xl transition-all duration-300">
+                      <div className="relative rounded-2xl p-0.5 sm:p-1 overflow-hidden w-10 h-10 sm:w-16 sm:h-16 md:w-20 md:h-20 group-hover:shadow-xl transition-all duration-300 bg-white shadow-sm ring-1 ring-slate-100/50">
                         {currentPet?.photo ? (
                           <div className="relative w-full h-full rounded-xl overflow-hidden">
                             <img 
@@ -204,11 +203,6 @@ export function HealthModal({
                          healthModalMode === 'health' && healthActiveTab === 'vaccines' ? '💉 Vacinas' :
                          healthModalMode === 'health' && healthActiveTab === 'parasites' ? '🛡️ Controle Parasitário' :
                          healthModalMode === 'health' && healthActiveTab === 'medication' ? '💊 Medicação' :
-                         healthModalMode === 'health' && healthActiveTab === 'eventos' ? (
-                           eventTypeLocked
-                             ? (({ consulta:'🩺 Consulta Veterinária', retorno:'🔁 Retorno / Revisão', exame_lab:'🔬 Exame Laboratorial', exame_imagem:'📷 Exame de Imagem', cirurgia:'✂️ Cirurgia / Procedimento', odonto:'🦷 Odontologia', emergencia:'🚨 Emergência', outro:'📝 Outro' } as Record<string,string>)[eventFormData.type] || '🩺 Evento')
-                             : '🩺 Consultas, Exames e Procedimentos'
-                         ) :
                          t('health.record_title')}
                       </p>
                     </div>
@@ -219,7 +213,7 @@ export function HealthModal({
                     {healthModalMode === 'health' && (
                       <button
                         onClick={() => onBackFromHealthModal(eventTypeLocked)}
-                        className="group bg-gray-100 hover:bg-gray-200 rounded-xl sm:rounded-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0 transition-all duration-300 hover:scale-110 active:scale-95 border border-gray-200"
+                        className="group bg-gray-100 hover:bg-gray-200 rounded-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0 transition-all duration-300 hover:scale-110 active:scale-95 border border-gray-200"
                         aria-label="Voltar"
                       >
                         <svg className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,7 +223,7 @@ export function HealthModal({
                     )}
                     <button
                       onClick={onCloseHealthModal}
-                      className="group bg-gray-100 hover:bg-gray-200 rounded-xl sm:rounded-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0 transition-all duration-300 hover:scale-110 active:scale-95 border border-gray-200"
+                      className="group bg-gray-100 hover:bg-gray-200 rounded-2xl w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0 transition-all duration-300 hover:scale-110 active:scale-95 border border-gray-200"
                       aria-label={t('common.close')}
                     >
                       <svg className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700 transform group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,15 +233,14 @@ export function HealthModal({
                   </div>
                 </div>
 
-                {/* Navegação por Abas - só no modo full */}
+                {/* Navegação por Abas */}
                 {healthModalMode === 'full' && (
-                <div className="px-3 sm:px-6 pb-2.5 sm:pb-4">
-                  <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide pb-1">
+                <div className="px-3 sm:px-6 pb-2.5 sm:pb-4 pt-1">
+                  <div className="flex gap-1.5 sm:gap-2.5 overflow-x-auto scrollbar-hide pb-2">
                     {[
                       { id: 'vaccines', label: t('health.vaccines'), icon: '💉' },
-                      { id: 'parasites', label: t('health.parasite_control'), icon: '�️' },
-                      { id: 'medication', label: 'Medicação', icon: '�💊' },
-                      { id: 'eventos', label: 'Consultas, Exames, Procedimentos', icon: '🩺' },
+                      { id: 'parasites', label: t('health.parasite_control'), icon: '🛡️' },
+                      { id: 'medication', label: 'Medicação', icon: '💊' },
                       ...(healthModalMode === 'full' ? [
                         { id: 'grooming', label: t('health.grooming'), icon: '🛁' },
                         { id: 'food', label: t('health.food'), icon: '🥣' },
@@ -256,24 +249,24 @@ export function HealthModal({
                       <button
                         key={tab.id}
                         onClick={() => onSelectHealthTab(tab.id)}
-                        className={`group relative px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ${
-                          healthActiveTab === tab.id ? 'scale-105' : 'hover:scale-105'
+                        className={`group relative px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-2xl text-[13px] sm:text-sm font-bold transition-all duration-300 whitespace-nowrap flex items-center gap-2 flex-shrink-0 ${
+                          healthActiveTab === tab.id ? 'scale-105 active:scale-100 shadow-sm' : 'hover:scale-105 active:scale-95'
                         }`}
                       >
                         {healthActiveTab === tab.id ? (
                           <>
-                            <div className="absolute inset-0 bg-white rounded-xl shadow-xl"></div>
-                            <div className="absolute inset-0 ring-2 ring-white/40 rounded-xl"></div>
+                            <div className="absolute inset-0 bg-white rounded-2xl border border-slate-200"></div>
+                            <div className="absolute inset-0 ring-2 ring-brand-DEFAULT/20 rounded-2xl"></div>
                           </>
                         ) : (
-                          <div className="absolute inset-0 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 group-hover:bg-white/20"></div>
+                          <div className="absolute inset-0 bg-slate-100/50 rounded-2xl border border-slate-200/50 group-hover:bg-slate-200/50"></div>
                         )}
                         
-                        <span className={`relative text-base sm:text-lg ${healthActiveTab === tab.id ? '' : 'grayscale'}`}>
+                        <span className={`relative text-lg sm:text-xl transition-transform ${healthActiveTab === tab.id ? 'scale-110' : 'grayscale group-hover:grayscale-0'}`}>
                           {tab.icon}
                         </span>
-                        <span className={`relative font-bold text-[10px] sm:text-sm ${
-                          healthActiveTab === tab.id ? 'text-[#0056D2]' : 'text-white/95'
+                        <span className={`relative font-bold transition-colors ${
+                          healthActiveTab === tab.id ? 'text-brand-DEFAULT' : 'text-slate-500 group-hover:text-slate-700'
                         }`}>
                           {tab.label}
                         </span>
@@ -386,8 +379,8 @@ export function HealthModal({
                 </div>
               )}
 
-              {/* Aba Eventos */}
-              {healthActiveTab === 'eventos' && (
+              {/* Aba Eventos — SILENCIADA: bloco legado removido da UI */}
+              {false && healthActiveTab === 'eventos' && (
                 <HealthEventPanel
                   selectedPetId={selectedPetId}
                   eventFormData={eventFormData}

@@ -43,7 +43,7 @@ export function CheckinPickerModal({
         if (e.target === e.currentTarget) setShowCheckinPicker(false);
       }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm overflow-hidden">
         <div className="px-5 pt-5 pb-3">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">

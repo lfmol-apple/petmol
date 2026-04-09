@@ -80,7 +80,7 @@ function EstablishmentInput({
         autoComplete="off"
       />
       {open && filtered.length > 0 && (
-        <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+        <ul className="absolute z-50 left-0 right-0 top-full mt-1 border border-gray-200 max-h-52 overflow-y-auto bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
           {filtered.map((name, i) => {
             const isRecent = recents.some((r) => r.toLowerCase() === name.toLowerCase());
             return (
@@ -1414,7 +1414,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
           <div className="absolute inset-0 bg-black/60" onClick={() => setBatchConfirm(null)} />
 
           {/* Sheet */}
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl flex flex-col max-h-[85dvh]">
+          <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col max-h-[85dvh] overflow-hidden">
 
             {/* Header */}
             <div className="px-5 pt-4 pb-3 border-b border-gray-100">
@@ -1780,8 +1780,8 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
               <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
             </div>
 
-            {/* iOS table card group */}
-            <div style={{ borderRadius: 18, overflow: 'hidden', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)' }}>
+            {/* iOS table card group - Premium Edition */}
+            <div className="bg-white rounded-[24px] overflow-hidden shadow-premium border border-slate-100/60 mb-2">
               {groupItems.map((doc, idx) => {
                 const mt = doc.mime_type ?? '';
                 const nameForExt = doc.storage_key || doc.title || '';
@@ -1790,31 +1790,29 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                 return (
                   <div
                     key={doc.id}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '11px 16px',
-                      borderBottom: idx < groupItems.length - 1 ? '1px solid #f5f5f7' : 'none',
-                      cursor: 'pointer',
-                    } as React.CSSProperties}
+                    className={`flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors ${
+                      idx < groupItems.length - 1 ? 'border-b border-slate-50' : ''
+                    }`}
                     onClick={() => handleView(doc)}
                   >
                     {/* Icon / thumb */}
                     {isImg && doc.storage_key ? (
-                      <div style={{ width: 46, height: 46, borderRadius: 12, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div className="w-12 h-12 rounded-[14px] overflow-hidden shrink-0 border border-slate-200/50 shadow-sm relative group">
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors z-10" />
                         <AuthenticatedDocumentImage petId={petId} docId={doc.id} alt={doc.title ?? ''} className="w-full h-full object-cover" loading="lazy" />
                       </div>
                     ) : (
-                      <div style={{ width: 46, height: 46, borderRadius: 12, background: '#f5f5f7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                      <div className="w-12 h-12 rounded-[14px] bg-slate-100/80 flex items-center justify-center text-2xl shrink-0 border border-slate-200/50 shadow-sm">
                         {doc.icon}
                       </div>
                     )}
 
                     {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111', letterSpacing: -0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="flex-1 min-w-0 pr-2">
+                      <p className="m-0 text-[15px] font-bold text-slate-900 tracking-tight truncate leading-tight">
                         {doc.title || 'Documento'}
                       </p>
-                      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p className="m-0 mt-0.5 text-xs font-semibold text-slate-500 truncate">
                         {doc.document_date ? fmtDate(doc.document_date) : 'Sem data'}
                         {doc.establishment_name ? ` · ${doc.establishment_name}` : ''}
                       </p>

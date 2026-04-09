@@ -20,7 +20,7 @@ export function VaccineGuide({ vaccineInfo, setShowAllVaccinesGuide }: VaccineGu
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="bg-gradient-to-r from-[#0056D2] to-indigo-600 text-white p-4 sm:p-6">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">

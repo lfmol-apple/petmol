@@ -54,7 +54,7 @@ export default async function EmergencyPage({ params }: EmergencyPageProps) {
   if (!share) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl text-center">
+        <div className="p-8 max-w-md w-full text-center bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
           <div className="text-8xl mb-6">🚫</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             {tr('emergency.share.invalid.title')}
@@ -98,7 +98,7 @@ export default async function EmergencyPage({ params }: EmergencyPageProps) {
         </div>
 
         {/* Pet Info */}
-        <div className="bg-white rounded-b-3xl p-8 shadow-2xl">
+        <div className="p-8 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
           {/* Photo + Name */}
           <div className="flex items-center gap-6 mb-8 pb-8 border-b-2 border-gray-100">
             {share.pet_photo_url ? (
@@ -143,7 +143,7 @@ export default async function EmergencyPage({ params }: EmergencyPageProps) {
             
             <a
               href={`tel:${share.owner_contact}`}
-              className="block text-center py-4 bg-white text-red-600 font-bold text-xl rounded-xl hover:bg-gray-50 transition-colors shadow-lg"
+              className="block text-center py-4 text-red-600 font-bold text-xl hover:bg-gray-50 transition-colors bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden"
             >
               📱 {share.owner_contact}
             </a>

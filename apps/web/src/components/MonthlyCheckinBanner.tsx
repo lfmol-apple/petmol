@@ -181,11 +181,11 @@ export function MonthlyCheckinBanner({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md backdrop-blur-sm px-4"
       onClick={() => advance(currentPet.pet_id, 'snoozed')}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-xs overflow-hidden"
+        className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-xs overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

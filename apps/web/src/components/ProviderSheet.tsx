@@ -66,13 +66,13 @@ export default function ProviderSheet({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm z-40 transition-opacity"
         onClick={onClose}
       />
 
       {/* Sheet */}
       <div className="fixed inset-x-0 bottom-0 z-50 animate-slide-up">
-        <div className="bg-white rounded-t-3xl shadow-2xl max-w-lg mx-auto">
+        <div className="max-w-lg mx-auto bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
           {/* Handle */}
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-12 h-1.5 bg-gray-300 rounded-full" />

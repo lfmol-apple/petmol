@@ -239,40 +239,6 @@ export function getUnconfirmedVisits(): ClinicVisit[] {
 }
 
 /**
- * Fetch nearby clinics from API
- */
-export async function fetchNearbyClinics(
-  lat: number,
-  lng: number,
-  radiusMeters: number = 5000
-): Promise<ClinicLocation[]> {
-  const API = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-  
-  try {
-    const response = await fetch(
-      `${API}/places/nearby?lat=${lat}&lng=${lng}&category=vet_clinic&radius_m=${radiusMeters}&limit=10&quality=eco`
-    );
-    
-    if (!response.ok) return [];
-    
-    const data = (await response.json()) as { places?: ClinicLocation[] };
-
-    return (data.places || []).map((place) => ({
-      place_id: place.place_id,
-      name: place.name,
-      lat: place.lat,
-      lng: place.lng,
-      address: place.address,
-      phone: place.phone,
-      category: 'vet_clinic' as const,
-    }));
-  } catch (error) {
-    console.error('Error fetching clinics:', error);
-    return [];
-  }
-}
-
-/**
  * Get recent clinic visits (last 30 days)
  */
 export function getRecentClinicVisits(days: number = 30): ClinicVisit[] {

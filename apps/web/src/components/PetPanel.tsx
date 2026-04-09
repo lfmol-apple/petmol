@@ -60,7 +60,7 @@ export function PetPanel() {
 
       {/* Quick Reorder (if available) */}
       {recentItems.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-lg p-6 border border-slate-100">
+        <div className="bg-white rounded-[24px] shadow-sm ring-1 ring-slate-100/50 p-6 border border-slate-100 overflow-hidden">
           <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <span>🔄</span>
             {t('pet_panel.reorder.title')}

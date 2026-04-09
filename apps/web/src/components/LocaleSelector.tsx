@@ -63,7 +63,7 @@ export function LocaleSelector({ variant = 'default' }: { variant?: 'default' | 
           <div className="fixed inset-0 z-40" onClick={() => { setIsOpen(false); setShowLangPicker(false); }} />
           
           {showLangPicker ? (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden py-1">
+            <div className="absolute right-0 mt-2 w-48 border border-slate-200 z-50 overflow-hidden py-1 bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50">
               <div className="px-3 py-2 text-xs font-semibold text-slate-500 border-b border-slate-100">
                 {t('locale.language')}
               </div>
@@ -89,7 +89,7 @@ export function LocaleSelector({ variant = 'default' }: { variant?: 'default' | 
               </button>
             </div>
           ) : (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden py-1 max-h-80 overflow-y-auto">
+            <div className="absolute right-0 mt-2 w-48 border border-slate-200 z-50 overflow-hidden py-1 max-h-80 overflow-y-auto bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50">
               <button
                 onClick={() => setShowLangPicker(true)}
                 className="w-full px-3 py-2 text-sm text-left text-primary-600 font-medium hover:bg-primary-50 border-b border-slate-100"

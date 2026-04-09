@@ -48,7 +48,7 @@ export function OverdueEventWarningModal({ event, onClose, onContinue }: Overdue
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
       <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200"
+        className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 max-w-md w-full animate-in zoom-in-95 duration-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header com gradiente de alerta */}

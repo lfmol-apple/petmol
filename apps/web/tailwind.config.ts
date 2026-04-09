@@ -8,7 +8,28 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      boxShadow: {
+        'premium': '0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 0 3px rgba(0,0,0,0.02)',
+        'float': '0 10px 40px -10px rgba(0,0,0,0.08)',
+        'sheet': '0 -10px 40px -10px rgba(0,0,0,0.1)',
+      },
+      borderRadius: {
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+        '4xl': '2rem',
+        '5xl': '2.5rem',
+      },
       colors: {
+        brand: {
+          light: '#e8f0fe',
+          DEFAULT: '#0056D2',
+          dark: '#003889',
+        },
+        surface: {
+          DEFAULT: '#ffffff',
+          muted: '#f8fafc', // slate-50
+          dark: '#f1f5f9', // slate-100
+        },
         primary: {
           50: '#e8f0fe',
           100: '#c6d9fd',

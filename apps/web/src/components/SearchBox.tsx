@@ -249,9 +249,7 @@ export function SearchBox() {
   return (
     <div ref={containerRef} className="relative w-full max-w-2xl mx-auto">
       {/* Direct Search Input */}
-      <div className={`relative flex items-center bg-white rounded-2xl border-2 transition-all duration-200 ${
-        state.isFocused ? 'border-primary-500 shadow-lg shadow-primary-100' : 'border-slate-200 shadow-md'
-      }`}>
+      <div className={`relative flex items-center border-2 transition-all duration-200 ${ state.isFocused ? 'border-primary-500' : 'border-slate-200' } bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden`}>
         <svg className="absolute left-4 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
@@ -337,7 +335,7 @@ export function SearchBox() {
 
       {/* Autocomplete Suggestions (only if not showing non-pet warning) */}
       {state.isFocused && !state.isNonPet && state.suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-2 border border-slate-200 z-50 overflow-hidden bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60">
           <ul className="py-2" role="listbox">
             {state.suggestions.map((suggestion, index) => (
               <li key={`${suggestion}-${index}`} role="option">

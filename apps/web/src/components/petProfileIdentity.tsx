@@ -202,7 +202,7 @@ export function PetProfileIdentitySection({
         </div>
       </div>
 
-      <div className="space-y-3 rounded-[20px] border border-slate-200 bg-slate-50/85 p-3">
+      <div className="space-y-3 rounded-[24px] border border-white bg-gradient-to-b from-slate-50 to-slate-100/50 p-4 shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">Idade</p>

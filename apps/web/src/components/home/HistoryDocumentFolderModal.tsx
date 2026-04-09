@@ -38,7 +38,7 @@ export function HistoryDocumentFolderModal({
   return (
     <ModalPortal>
     <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center p-4 z-[190]">
-      <div className="bg-white w-full rounded-2xl max-w-lg max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60">
         <div className={`flex items-center justify-between px-4 py-3 bg-gradient-to-r ${palette.header} text-white rounded-t-2xl flex-shrink-0`}>
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <span className="text-2xl flex-shrink-0">{docFolderModal.icon}</span>

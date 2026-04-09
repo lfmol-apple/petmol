@@ -153,7 +153,7 @@ export default function AdminAccountsPage() {
           <p className="text-gray-600">Lista mundial (usuários, tutor e pets)</p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-4 mb-6 border border-slate-200">
+        <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 p-4 mb-6 border border-slate-200 overflow-hidden">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="font-semibold text-slate-900">Total: {filteredAccounts.length}</div>
             <input
@@ -170,7 +170,7 @@ export default function AdminAccountsPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 p-6 overflow-hidden">
           {filteredAccounts.length === 0 ? (
             <p className="text-gray-500 text-center py-6">Nenhuma conta encontrada.</p>
           ) : (

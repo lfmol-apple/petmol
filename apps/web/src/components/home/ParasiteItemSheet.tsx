@@ -331,13 +331,13 @@ export function ParasiteItemSheet({
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col"
+        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden"
         style={{ maxHeight: '92dvh' }}
         onClick={e => e.stopPropagation()}
       >
@@ -716,8 +716,8 @@ export function ParasiteItemSheet({
 
         {/* ── Delete confirm ────────────────────────────────────────────────── */}
         {confirmDeleteId && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-5 z-10 rounded-3xl">
-            <div className="bg-white rounded-2xl p-5 w-full max-w-xs shadow-2xl">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-5 z-10 rounded-3xl">
+            <div className="p-5 w-full max-w-xs bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
               <p className="text-base font-bold text-gray-900 mb-2">Remover registro?</p>
               <p className="text-sm text-gray-500 mb-5">Essa ação não pode ser desfeita.</p>
               <div className="flex gap-3">

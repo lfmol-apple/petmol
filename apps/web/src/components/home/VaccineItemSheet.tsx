@@ -176,11 +176,11 @@ export function VaccineItemSheet({
     <ModalPortal>
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm" onClick={onClose} />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl flex flex-col"
+        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden"
         style={{ maxHeight: '92dvh' }}
         onClick={e => e.stopPropagation()}
       >
@@ -480,8 +480,8 @@ export function VaccineItemSheet({
       </div>
 
       {showImportModal && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-2 sm:p-4" onClick={() => { setShowImportModal(false); setPendingCardFiles([]); }}>
-          <div className="bg-white rounded-xl shadow-2xl p-5 sm:p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-2 sm:p-4" onClick={() => { setShowImportModal(false); setPendingCardFiles([]); }}>
+          <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 p-5 sm:p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg sm:text-xl font-bold text-gray-800">📷 Importar Cartão de Vacina</h3>
               <button

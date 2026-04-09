@@ -65,7 +65,7 @@ export function LanguageCountrySelector() {
           />
           
           {/* Panel */}
-          <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-80 bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 border border-slate-200 z-50 overflow-hidden">
             {/* Language section */}
             <div className="p-4 border-b border-slate-200">
               <div className="text-xs font-semibold text-slate-500 uppercase mb-3">

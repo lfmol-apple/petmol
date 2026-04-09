@@ -10,8 +10,8 @@ import { ModalPortal } from '@/components/ModalPortal';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { localTodayISO } from '@/lib/localDate';
 
-const G   = 'divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200';
-const ROW = 'bg-white px-4 py-3';
+const G   = 'divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm';
+const ROW = 'bg-white px-4 py-3.5';
 
 function Switch({ on, onChange }: { on: boolean; onChange: () => void }) {
   return (
@@ -158,22 +158,27 @@ export function AddPetModal({ onClose, onComplete }: AddPetModalProps) {
         <PetPhotoPicker initialSrc={petPhoto || null} onConfirm={handlePhotoPickerConfirm} onCancel={() => setShowPhotoPicker(false)} />
       )}
 
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4">
-        <div className="flex max-h-[96dvh] w-full flex-col bg-gray-50 sm:max-w-sm sm:rounded-2xl sm:shadow-2xl overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-md backdrop-blur-sm sm:items-center sm:p-4 animate-fadeIn">
+        <div className="flex max-h-[96dvh] w-full flex-col bg-slate-50 native-bottom-sheet sm:max-w-sm rounded-[32px] animate-slideUp overflow-hidden">
+          
+          {/* Drag Handle for iOS feel */}
+          <div className="w-full flex justify-center pt-3 pb-1 bg-white sm:hidden rounded-t-[24px]">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
+          </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-4 bg-white border-b border-gray-100">
+          <div className="flex items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-slate-100/60 sticky top-0 z-10">
             <div>
-              <p className="text-base font-bold text-gray-900">Novo pet</p>
-              <p className="text-xs text-gray-500">Último passo — quase lá</p>
+              <p className="text-lg font-bold text-slate-900 tracking-tight">Novo pet</p>
+              <p className="text-[13px] text-slate-500 font-medium">Último passo — quase lá</p>
             </div>
             <button type="button" onClick={onClose}
-              className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors">
+              className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 active:scale-95 transition-all">
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
 
             {/* Photo + name */}
             <div className={G}>
@@ -288,14 +293,14 @@ export function AddPetModal({ onClose, onComplete }: AddPetModalProps) {
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-100 bg-white px-4 py-4 flex gap-3">
+          <div className="border-t border-slate-100 bg-white/90 backdrop-blur-md px-5 py-4 pb-8 sm:pb-4 flex gap-3">
             <button type="button" onClick={onClose}
-              className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 bg-white active:scale-[0.98] transition-transform">
+              className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-[15px] font-semibold text-slate-700 bg-white hover:bg-slate-50 active:scale-[0.98] transition-all">
               Cancelar
             </button>
             <button type="button" onClick={handleSubmit} disabled={loading || !canSubmit}
-              className="flex-1 py-3 rounded-xl bg-[#0056D2] text-white text-sm font-semibold active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed">
-              {loading ? 'Salvando...' : 'Criar pet'}
+              className="flex-1 py-3.5 rounded-2xl bg-brand-DEFAULT text-white text-[15px] font-semibold active:scale-[0.98] transition-all disabled:opacity-50 disabled:bg-slate-400 shadow-md shadow-brand-DEFAULT/20">
+              {loading ? 'Salvando...' : 'Adicionar pet'}
             </button>
           </div>
         </div>

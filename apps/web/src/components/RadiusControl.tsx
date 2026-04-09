@@ -131,7 +131,7 @@ export function RadiusControl(props: {
           
           {/* Thumb - large and easy to grab */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 -ml-5 w-10 h-10 rounded-full bg-white border-4 border-slate-900 shadow-lg transition-transform"
+            className="absolute top-1/2 -translate-y-1/2 -ml-5 w-10 h-10 border-4 border-slate-900 transition-transform bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden"
             style={{
               left: `${((valueKm - 1) / 49) * 100}%`,
               transform: isDragging ? 'translateY(-50%) scale(1.15)' : 'translateY(-50%)',

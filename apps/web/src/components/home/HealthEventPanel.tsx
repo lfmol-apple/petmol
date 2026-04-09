@@ -281,6 +281,8 @@ export function HealthEventPanel({
         const manualEvents = petEvents.filter(ev => {
           if (ev.source === 'document') return false;
           if (ev.type === 'medicacao' || ev.type === 'medication') return false;
+          // Filtro defensivo: ocultar eventos auto-gerados de lembrete de vacina
+          if (ev.type === 'vaccine') return false;
           if (seenIds.has(ev.id)) return false;
           seenIds.add(ev.id);
           return true;
@@ -352,7 +354,7 @@ export function HealthEventPanel({
                           R$ {Number(ev.cost).toFixed(2)}
                         </p>
                       )}
-                      {ev.notes && (
+                      {ev.notes && !ev.notes.startsWith('vaccine_id=') && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate">{ev.notes}</p>
                       )}
                     </div>

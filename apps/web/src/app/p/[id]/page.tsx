@@ -91,7 +91,7 @@ export default async function PublicRGPage({ params }: { params: { id: string } 
       </div>
       <div className="max-w-2xl w-full mt-14">
         {/* Card Principal */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
           {/* Header com gradiente */}
           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-8 text-center relative">
             <div className="absolute top-4 right-4 text-white/20 text-6xl">🐾</div>

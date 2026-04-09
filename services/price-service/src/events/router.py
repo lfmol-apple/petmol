@@ -19,15 +19,20 @@ router = APIRouter(prefix="/events", tags=["Events"])
 
 
 def _get_accessible_owner_ids(user_id: str, db: Session) -> List[str]:
-    """Retorna user_ids acessíveis: o próprio usuário + donos de grupos familiares que ele pertence."""
-    from ..family.models import FamilyGroup, FamilyMember
-    owner_ids = {user_id}
-    memberships = db.query(FamilyMember).filter(FamilyMember.user_id == user_id).all()
-    for m in memberships:
-        group = db.query(FamilyGroup).filter(FamilyGroup.id == m.group_id).first()
-        if group:
-            owner_ids.add(group.owner_id)
-    return list(owner_ids)
+    """Retorna user_ids acessíveis.
+    SILENCIADO: compartilhamento familiar desativado — retorna apenas o próprio usuário.
+    Para reativar acesso familiar, restaurar o bloco de FamilyMember abaixo.
+    """
+    # SILENCIADO — family lookup removido temporariamente
+    # from ..family.models import FamilyGroup, FamilyMember
+    # owner_ids = {user_id}
+    # memberships = db.query(FamilyMember).filter(FamilyMember.user_id == user_id).all()
+    # for m in memberships:
+    #     group = db.query(FamilyGroup).filter(FamilyGroup.id == m.group_id).first()
+    #     if group:
+    #         owner_ids.add(group.owner_id)
+    # return list(owner_ids)
+    return [user_id]
 
 
 @router.post("", response_model=EventOut, status_code=status.HTTP_201_CREATED)

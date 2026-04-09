@@ -68,10 +68,10 @@ export function ArrivalAlert({
   return (
     <ModalPortal>
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 overflow-hidden">
         <div className="bg-gradient-to-r from-[#0066ff] to-indigo-600 text-white p-3 rounded-t-2xl">
           <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg">
+            <div className="w-8 h-8 flex items-center justify-center bg-white rounded-[20px] shadow-sm ring-1 ring-slate-100/50 overflow-hidden">
               <span className="text-lg">📍</span>
             </div>
             <div className="flex-1">

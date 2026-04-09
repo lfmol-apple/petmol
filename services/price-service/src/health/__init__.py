@@ -353,20 +353,11 @@ async def confirm_event(
         logger.info(f"[Health] Request recebido: pet_id={request.pet_id} (type={type(request.pet_id).__name__}), event_id={request.event_id}, type={request.event_type}")
         logger.info(f"[Health] User: {current_user.id}, confirmed={request.confirmed}, reschedule_days={request.reschedule_days}")
         
-        # Verificar se pet pertence ao usuário ou à família
-        from ..family.models import FamilyGroup, FamilyMember
+        # SILENCIADO: acesso familiar removido temporariamente — apenas dono do pet é aceito.
+        # Para reativar acesso familiar, restaurar o bloco FamilyMember abaixo.
+        # from ..family.models import FamilyGroup, FamilyMember
         logger.info(f"[Confirm] Buscando pet {request.pet_id} do user {current_user.id}")
-        pet = db.query(Pet).filter(Pet.id == request.pet_id).first()
-        if pet:
-            owner_ids = {pet.user_id}
-            memberships = db.query(FamilyMember).filter(FamilyMember.user_id == current_user.id).all()
-            for m in memberships:
-                g = db.query(FamilyGroup).filter(FamilyGroup.id == m.group_id).first()
-                if g:
-                    owner_ids.add(g.owner_id)
-            # Also allow if current_user is the group owner someone else is a member of
-            if current_user.id not in owner_ids and pet.user_id != current_user.id:
-                pet = None
+        pet = db.query(Pet).filter(Pet.id == request.pet_id, Pet.user_id == current_user.id).first()
         
         if not pet:
             logger.error(f"[Health] ❌ Pet {request.pet_id} não encontrado ou não pertence ao usuário {current_user.id}")

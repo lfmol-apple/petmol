@@ -151,8 +151,8 @@ export function PushActionSheet({
   if (done) {
     return (
       <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-        <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 text-center">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm" />
+        <div className="relative w-full max-w-sm bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 p-6 text-center overflow-hidden">
           <p className="text-lg font-bold text-gray-900">{done}</p>
           <p className="text-sm text-gray-500 mt-1">{petName}</p>
         </div>
@@ -162,7 +162,7 @@ export function PushActionSheet({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm" />
       <div
         className={`relative w-full max-w-sm bg-gradient-to-b ${bg} rounded-2xl shadow-2xl overflow-hidden`}
         onClick={(e) => e.stopPropagation()}

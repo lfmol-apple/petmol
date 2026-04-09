@@ -103,9 +103,9 @@ export function ShoppingSearchModal({ open, onClose, onTrack }: ShoppingSearchMo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50">
       <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+        className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-md p-6 overflow-hidden"
         role="dialog" 
         aria-labelledby="shopping-modal-title"
         aria-describedby="shopping-modal-subtitle"

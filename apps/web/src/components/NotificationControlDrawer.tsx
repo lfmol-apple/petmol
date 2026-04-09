@@ -627,7 +627,7 @@ export function NotificationControlDrawer({
       {/* Backdrop */}
       <motion.div
         key="backdrop"
-        className="fixed inset-0 z-40 bg-black/50"
+        className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-md"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -643,7 +643,7 @@ export function NotificationControlDrawer({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="w-full max-w-lg rounded-3xl bg-white shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden pointer-events-auto"
+          className="w-full max-w-lg flex flex-col max-h-[92dvh] overflow-hidden pointer-events-auto bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60"
         >
 
           {/* Header */}

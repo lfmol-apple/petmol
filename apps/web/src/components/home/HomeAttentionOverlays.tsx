@@ -24,8 +24,8 @@ export function HomeAttentionOverlays({
     <>
       {showTopAttentionModal && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={onCloseTopAttentionModal} />
-          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onCloseTopAttentionModal} />
+          <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 bg-red-50 border-b border-red-100 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-base">🔴</span>
