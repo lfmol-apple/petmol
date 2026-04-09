@@ -79,7 +79,7 @@ export function HomePetHeader({
   return (
     <>
       <div className="px-4 pt-4">
-        <div className="relative w-full h-[240px] sm:h-[280px] bg-gradient-to-br from-brand-DEFAULT to-blue-800 group rounded-[32px] overflow-hidden shadow-premium border border-white/20 transition-all duration-500">
+        <div className="relative w-full h-[180px] sm:h-[220px] bg-gradient-to-br from-brand-DEFAULT to-blue-800 group rounded-[32px] overflow-hidden shadow-premium border border-white/20 transition-all duration-500">
         <div className="w-full h-full flex items-center justify-center">
           <span className="text-white text-6xl sm:text-7xl transition-transform duration-500 group-hover:scale-110 opacity-50">
             {currentPet.species === 'dog' ? '🐕' : currentPet.species === 'cat' ? '🐱' : '🐾'}
@@ -149,15 +149,15 @@ export function HomePetHeader({
     </div>
 
     {/* Overlay de informações integrado na base da foto */}
-      <div className="relative mx-4 -mt-12 z-30">
-        <div className="rounded-[32px] bg-white/95 shadow-premium p-5 sm:p-6 backdrop-blur-3xl border border-white/80">
+      <div className="relative mx-4 -mt-14 z-30">
+        <div className="rounded-[32px] bg-white/95 shadow-premium p-4 sm:p-5 backdrop-blur-3xl border border-white/80">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="min-w-0">
               <button
                 onClick={onTogglePetSelector}
                 className="group flex items-center gap-3 mb-1.5 transition-all active:scale-95"
               >
-                <h2 className="text-3xl sm:text-4xl font-black font-outfit text-slate-800 tracking-tighter leading-none truncate">
+                <h2 className="text-2xl sm:text-3xl font-black font-outfit text-slate-800 tracking-tighter leading-none truncate">
                   {currentPet.pet_name}
                 </h2>
                 <div className={`w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center transition-transform duration-300 ${showPetSelector ? 'rotate-180 bg-brand-light text-brand-DEFAULT' : 'text-slate-400'}`}>
@@ -167,7 +167,7 @@ export function HomePetHeader({
                 </div>
               </button>
               
-              <div className="flex items-center gap-2 text-[13px] font-bold text-slate-500/80 uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-[12px] font-bold text-slate-500/80 uppercase tracking-wider">
                 <span className="bg-brand-DEFAULT/10 text-brand-DEFAULT px-2 py-0.5 rounded-md">
                    {currentPet.species === 'dog' ? '🐕' : '🐱'} {currentPet.breed}
                 </span>

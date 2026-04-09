@@ -65,11 +65,11 @@ export function AppleControlButtons({
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
   const [showEmergencySheet, setShowEmergencySheet] = useState(false);
 
-  const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-3 h-[84px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
-  const iconWrapClass = 'absolute top-2.5 right-2.5 w-9 h-9 rounded-xl bg-white/95 ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center pointer-events-none';
-  const emojiIconClass = 'text-[20px] leading-none';
-  const titleClass = 'text-[15px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
-  const descBaseClass = 'text-[13px] truncate mt-1 leading-tight font-medium';
+  const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-2.5 h-[76px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
+  const iconWrapClass = 'absolute top-2 right-2 w-8 h-8 rounded-xl bg-white/95 ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center pointer-events-none';
+  const emojiIconClass = 'text-[18px] leading-none';
+  const titleClass = 'text-[14px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
+  const descBaseClass = 'text-[12px] truncate mt-0.5 leading-tight font-medium';
   const alertCardClass = 'bg-gradient-to-br from-rose-100 via-red-50 to-white border-red-300 border-l-4 border-l-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.15)]';
   const okCardClass = 'bg-emerald-50/50 border-emerald-200 border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md hover:border-emerald-300';
   const warningCardClass = 'bg-amber-50/60 border-amber-200 border-l-4 border-l-amber-500 shadow-sm hover:shadow-md hover:border-amber-300';
@@ -144,21 +144,8 @@ export function AppleControlButtons({
       alert: alertFood,
       toneClass: toneByStatus(colorFood),
     },
-    {
-      id: 'medication' as const,
-      title: 'Medicação',
-      description: isEmptyCard(colorMedicacao)
-        ? 'Sem tratamentos ativos'
-        : colorMedicacao === 'ok'
-          ? 'Em dia hoje ✓'
-          : 'Doses pendentes hoje',
-      isEmpty: isEmptyCard(colorMedicacao),
-      icon: '💊',
-      onClick: onMedicacaoClick ?? (() => {}),
-      alert: alertMedicacao,
-      toneClass: toneByStatus(colorMedicacao),
-    },
     // V-L: Banho/Tosa removido da superfície de lançamento (V1)
+    // V-L: Medicação movida para posição estática (abaixo de Documentos), Shopping assume posição V-line
   ];
 
   const activeDockableCards = dockableCards.filter((card) => !inactiveSet.has(card.id));
@@ -193,6 +180,18 @@ export function AppleControlButtons({
       <div className="grid grid-cols-2 gap-3 mb-4">
         {activeDockableCards.map(renderDockableCard)}
 
+        {/* SHOPPING — posição anterior de Medicação, estilo neutro */}
+        <button
+          onClick={() => setShowShoppingSheet(true)}
+          className={`${cardBaseClass} ${neutralCardClass}`}
+        >
+          <span className={iconWrapClass}><span className={emojiIconClass}>🛒</span></span>
+          <div className="flex flex-col justify-center h-full pr-9 text-left">
+            <h3 className={titleClass}>Shopping</h3>
+            <p className={`${descBaseClass} text-slate-500`}>Cobasi · Petz · Petlove</p>
+          </div>
+        </button>
+
         {/* DOCUMENTOS */}
         <button
           onClick={onDocumentosClick}
@@ -205,30 +204,37 @@ export function AppleControlButtons({
           </div>
         </button>
 
-        {/* SHOPPING */}
-        <button
-          onClick={() => setShowShoppingSheet(true)}
-          className={`${cardBaseClass} bg-blue-50 border-[#0056D2]/25 hover:bg-blue-100/60 hover:border-[#0056D2]/40 shadow-sm hover:shadow-md`}
-        >
-          <span className={iconWrapClass}><span className={emojiIconClass}>🛒</span></span>
-          <div className="flex flex-col justify-center h-full pr-9 text-left">
-            <h3 className="text-[15px] font-semibold text-[#0047ad] leading-tight tracking-[-0.01em] truncate">Shopping</h3>
-            <p className="text-[13px] truncate mt-1 leading-tight font-medium text-blue-400">Cobasi · Petz · Petlove</p>
-          </div>
-        </button>
+        {/* MEDICAÇÃO — posição anterior de Shopping, com alerta e desativação */}
+        {!inactiveSet.has('medication') && (
+          <button
+            onClick={onMedicacaoClick ?? (() => {})}
+            onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.('medication'); }}
+            onDoubleClick={() => onDeactivateControl?.('medication')}
+            className={`${cardBaseClass} ${toneByStatus(colorMedicacao)}`}
+          >
+            {renderAlertBadge(alertMedicacao)}
+            <span className={iconWrapClass}><span className={emojiIconClass}>💊</span></span>
+            <div className={`flex flex-col justify-center h-full pr-9 text-left ${alertMedicacao ? 'pt-3' : ''}`}>
+              <h3 className={titleClass}>Medicação</h3>
+              <p className={`${descBaseClass} ${alertMedicacao ? 'text-red-700' : isEmptyCard(colorMedicacao) ? 'text-slate-400' : 'text-slate-500'}`}>
+                {isEmptyCard(colorMedicacao) ? 'Sem tratamentos ativos' : colorMedicacao === 'ok' ? 'Em dia hoje ✓' : 'Doses pendentes hoje'}
+              </p>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* ── Emergência Vet ── */}
       <button
         onClick={() => setShowEmergencySheet(true)}
-        className="w-full flex items-center gap-3.5 px-3.5 py-3 h-[62px] rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-50 to-rose-50/60 hover:from-red-100/70 hover:to-rose-100/60 active:scale-[0.99] transition-all duration-200 shadow-sm hover:shadow-md text-left mb-3"
+        className="w-full flex items-center gap-3 px-3 py-2.5 h-[56px] rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-50 to-rose-50/60 hover:from-red-100/70 hover:to-rose-100/60 active:scale-[0.99] transition-all duration-200 shadow-sm hover:shadow-md text-left mb-3"
       >
-        <div className="w-9 h-9 rounded-xl bg-white/95 ring-1 ring-red-200 shadow-sm flex items-center justify-center flex-shrink-0">
-          <span className="text-[20px] leading-none">🚨</span>
+        <div className="w-8 h-8 rounded-xl bg-white/95 ring-1 ring-red-200 shadow-sm flex items-center justify-center flex-shrink-0">
+          <span className="text-[18px] leading-none">🚨</span>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-red-900 leading-tight tracking-[-0.01em]">Emergência Vet</p>
-          <p className="text-[13px] text-red-500 font-medium mt-0.5 leading-tight">Clínicas/Hosp 24h</p>
+          <p className="text-[14px] font-semibold text-red-900 leading-tight tracking-[-0.01em]">Emergência Vet</p>
+          <p className="text-[12px] text-red-500 font-medium mt-0.5 leading-tight">Clínicas/Hosp 24h</p>
         </div>
         <svg className="w-4 h-4 text-red-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
