@@ -6,6 +6,8 @@ import { showBlockingNotice } from '@/features/interactions/userPromptChannel';
 import { ModalPortal } from '@/components/ModalPortal';
 import type { PetHealthProfile } from '@/lib/petHealth';
 
+type ControlTone = 'neutral' | 'ok' | 'warning' | 'critical';
+
 interface HomeNavigationModalsProps {
   currentPet: PetHealthProfile | null | undefined;
   showServiceTypeModal: boolean;
@@ -21,6 +23,11 @@ interface HomeNavigationModalsProps {
   alertVaccinesValue: boolean;
   alertParasitesValue: boolean;
   alertMedicationValue: boolean;
+  colorVaccinesValue?: ControlTone;
+  colorVermifugoValue?: ControlTone;
+  colorAntipulgasValue?: ControlTone;
+  colorColeiraValue?: ControlTone;
+  colorMedicationValue?: ControlTone;
   onOpenHealthTab: (tab: string) => void;
   onStartEventRegistration: (type: string) => void;
   onOpenEditPet: () => void;
@@ -32,6 +39,31 @@ interface HomeNavigationModalsProps {
   onOpenAntipulgas?: () => void;
   onOpenColeira?: () => void;
   onOpenMedication?: () => void;
+}
+
+function shouldShowAlert(tone?: ControlTone, fallbackAlert?: boolean) {
+  if (tone) return tone === 'warning' || tone === 'critical';
+  return fallbackAlert === true;
+}
+
+function ControlAlertBadge({ tone = 'critical' }: { tone?: ControlTone }) {
+  if (tone === 'warning') {
+    return (
+      <div className="absolute top-2 left-2 w-6 h-6 flex items-center justify-center animate-pulse z-10">
+        <span
+          className="absolute inset-0 bg-amber-400 shadow-sm ring-2 ring-white"
+          style={{ clipPath: 'polygon(50% 0%, 100% 92%, 0% 92%)' }}
+        />
+        <span className="relative mt-1 text-[11px] font-black text-amber-950 leading-none">!</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute top-2.5 left-2.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
+      !
+    </div>
+  );
 }
 
 export function HomeNavigationModals({
@@ -49,6 +81,11 @@ export function HomeNavigationModals({
   alertVaccinesValue,
   alertParasitesValue,
   alertMedicationValue,
+  colorVaccinesValue,
+  colorVermifugoValue,
+  colorAntipulgasValue,
+  colorColeiraValue,
+  colorMedicationValue,
   onOpenHealthTab,
   onStartEventRegistration,
   onOpenEditPet,
@@ -132,12 +169,12 @@ export function HomeNavigationModals({
             <div className="p-4 sm:p-6 bg-slate-50">
               <div className="grid grid-cols-2 gap-3 mb-2">
                 {[
-                  { icon: '💉', label: 'Vacinas', gradient: 'from-blue-100 to-blue-200 border-blue-300', tab: 'vaccines', alert: alertVaccinesValue },
-                  { icon: '🪱', label: 'Vermífugo', gradient: 'from-orange-100 to-amber-200 border-amber-300', tab: 'dewormer', alert: alertParasitesValue },
-                  { icon: '🛡️', label: 'Antipulgas', gradient: 'from-emerald-100 to-green-200 border-green-300', tab: 'flea_tick', alert: alertParasitesValue },
-                  { icon: '📿', label: 'Coleira', gradient: 'from-teal-100 to-cyan-200 border-teal-300', tab: 'collar', alert: alertParasitesValue },
-                  { icon: '💊', label: 'Medicação', gradient: 'from-purple-100 to-violet-200 border-purple-300', tab: 'medication', alert: alertMedicationValue, full: true },
-                ].map(({ icon, label, gradient, tab, alert, full }) => (
+                  { icon: '💉', label: 'Vacinas', gradient: 'from-blue-100 to-blue-200 border-blue-300', tab: 'vaccines', alert: alertVaccinesValue, tone: colorVaccinesValue },
+                  { icon: '🪱', label: 'Vermífugo', gradient: 'from-orange-100 to-amber-200 border-amber-300', tab: 'dewormer', alert: alertParasitesValue, tone: colorVermifugoValue },
+                  { icon: '🛡️', label: 'Antipulgas', gradient: 'from-emerald-100 to-green-200 border-green-300', tab: 'flea_tick', alert: alertParasitesValue, tone: colorAntipulgasValue },
+                  { icon: '📿', label: 'Coleira', gradient: 'from-teal-100 to-cyan-200 border-teal-300', tab: 'collar', alert: alertParasitesValue, tone: colorColeiraValue },
+                  { icon: '💊', label: 'Medicação', gradient: 'from-purple-100 to-violet-200 border-purple-300', tab: 'medication', alert: alertMedicationValue, tone: colorMedicationValue, full: true },
+                ].map(({ icon, label, gradient, tab, alert, tone, full }) => (
                   <button
                     key={tab}
                     onClick={() => {
@@ -172,11 +209,7 @@ export function HomeNavigationModals({
                     }}
                     className={`group relative overflow-hidden bg-gradient-to-br ${gradient} border rounded-2xl p-4 h-[94px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 text-left flex flex-col justify-end shadow-sm ${full ? 'col-span-2' : ''}`}
                   >
-                    {alert && (
-                      <div className="absolute top-2.5 left-2.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
-                        !
-                      </div>
-                    )}
+                    {shouldShowAlert(tone, alert) && <ControlAlertBadge tone={tone} />}
                     <span className="absolute top-2 right-2 text-2xl transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6 opacity-90">{icon}</span>
                     <div className="relative">
                       <span className="text-[14px] font-bold text-slate-900 leading-tight block">{label}</span>

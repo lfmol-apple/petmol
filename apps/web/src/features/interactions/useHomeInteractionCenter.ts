@@ -36,6 +36,11 @@ function resolveTone(events: CanonicalPetEvent[]): CardTone {
   return 'neutral';
 }
 
+function shouldAlert(events: CanonicalPetEvent[]): boolean {
+  const tone = resolveTone(events);
+  return tone === 'warning' || tone === 'critical';
+}
+
 export function useHomeInteractionCenter(
   interactions: PetInteractionItem[],
   canonicalEvents: CanonicalPetEvent[],
@@ -76,12 +81,12 @@ export function useHomeInteractionCenter(
       selectedPetActiveAlerts,
       selectedPetAllAlerts,
       selectedPetCardAlerts: {
-        vacinas: vaccineEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        vermifugo: dewormerEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        antipulgas: fleaTickEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        coleira: collarEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        grooming: groomingEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        food: foodEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
+        vacinas: shouldAlert(vaccineEvents),
+        vermifugo: shouldAlert(dewormerEvents),
+        antipulgas: shouldAlert(fleaTickEvents),
+        coleira: shouldAlert(collarEvents),
+        grooming: shouldAlert(groomingEvents),
+        food: shouldAlert(foodEvents),
       },
       selectedPetCardColors: {
         vacinas: resolveTone(vaccineEvents),

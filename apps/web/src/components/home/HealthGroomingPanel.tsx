@@ -346,6 +346,12 @@ export function HealthGroomingPanel({
                   .filter((r) => r.type === record.type)
                   .sort((a, b) => new Date(b.date || '0').getTime() - new Date(a.date || '0').getTime())[0]?.id;
                 const isGroomHistory = record.id !== latestGroomIdForType;
+                const nextRecommendedDate = record.next_recommended_date ? createLocalDate(record.next_recommended_date) : null;
+                const nextRecommendedDaysLeft = nextRecommendedDate
+                  ? Math.ceil((nextRecommendedDate.getTime() - new Date().getTime()) / (24 * 60 * 60 * 1000))
+                  : null;
+                const isGroomOverdue = !isGroomHistory && nextRecommendedDaysLeft !== null && nextRecommendedDaysLeft < 0;
+                const isGroomUrgent = !isGroomHistory && nextRecommendedDaysLeft !== null && nextRecommendedDaysLeft >= 0 && nextRecommendedDaysLeft <= 7;
 
                 return (
                   <div
@@ -363,9 +369,18 @@ export function HealthGroomingPanel({
                        <div className="flex items-center gap-2">
                         <div className="relative">
                           <span className="font-bold text-gray-900 text-sm">{typeLabels[record.type]}</span>
-                          {record.next_recommended_date && !isGroomHistory && new Date(record.next_recommended_date) < new Date() && (
+                          {isGroomOverdue && (
                             <div className="absolute -top-3 -left-3 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
                               !
+                            </div>
+                          )}
+                          {isGroomUrgent && !isGroomOverdue && (
+                            <div className="absolute -top-3 -left-3 w-6 h-6 flex items-center justify-center animate-pulse z-10">
+                              <span
+                                className="absolute inset-0 bg-amber-400 shadow-sm ring-2 ring-white"
+                                style={{ clipPath: 'polygon(50% 0%, 100% 92%, 0% 92%)' }}
+                              />
+                              <span className="relative mt-1 text-[11px] font-black text-amber-950 leading-none">!</span>
                             </div>
                           )}
                         </div>

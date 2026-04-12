@@ -385,6 +385,15 @@ export function HealthParasiteControlPanel({
                             !
                           </div>
                         )}
+                        {isUrgent && !isOverdue && (
+                          <div className="absolute -top-1.5 -right-1.5 w-6 h-6 flex items-center justify-center animate-pulse z-10">
+                            <span
+                              className="absolute inset-0 bg-amber-400 shadow-sm ring-2 ring-white"
+                              style={{ clipPath: 'polygon(50% 0%, 100% 92%, 0% 92%)' }}
+                            />
+                            <span className="relative mt-1 text-[11px] font-black text-amber-950 leading-none">!</span>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <div className="font-bold text-gray-800">{control.product_name}</div>

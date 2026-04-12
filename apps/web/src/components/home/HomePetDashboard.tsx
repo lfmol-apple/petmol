@@ -7,6 +7,8 @@ import type { PetHealthProfile, VaccineRecord } from '@/lib/petHealth';
 import type { FeedingPlanEntry } from '@/lib/types/homeForms';
 import type { GroomingRecord, ParasiteControl } from '@/lib/types/home';
 
+type CardTone = 'neutral' | 'ok' | 'warning' | 'critical';
+
 interface HomePetDashboardProps {
   petEvents: PetEventRecord[];
   vaccines: VaccineRecord[];
@@ -31,19 +33,19 @@ interface HomePetDashboardProps {
   onOpenHealth: () => void;
   onOpenDocuments: () => void;
   alertVacinas?: boolean;
-  colorVacinas?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorVacinas?: CardTone;
   alertVermifugo?: boolean;
-  colorVermifugo?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorVermifugo?: CardTone;
   alertAntipulgas?: boolean;
-  colorAntipulgas?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorAntipulgas?: CardTone;
   alertColeira?: boolean;
-  colorColeira?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorColeira?: CardTone;
   alertGrooming?: boolean;
-  colorGrooming?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorGrooming?: CardTone;
   alertFood?: boolean;
-  colorFood?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorFood?: CardTone;
   alertMedicacao?: boolean;
-  colorMedicacao?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorMedicacao?: CardTone;
   onOpenGrooming: () => void;
   onOpenMedication: () => void;
   onOpenFood: () => void;
@@ -74,7 +76,15 @@ export function HomePetDashboard({
   onOpenFamily,
 }: HomePetDashboardProps) {
 
-  const alertHealth = alertVacinas || alertVermifugo || alertAntipulgas || alertColeira || alertMedicacao;
+  const healthTones = [colorVacinas, colorVermifugo, colorAntipulgas, colorColeira, colorMedicacao];
+  const colorHealth: CardTone = healthTones.includes('critical')
+    ? 'critical'
+    : healthTones.includes('warning')
+      ? 'warning'
+      : healthTones.includes('ok')
+        ? 'ok'
+        : 'neutral';
+  const alertHealth = colorHealth === 'warning' || colorHealth === 'critical' || alertVacinas || alertVermifugo || alertAntipulgas || alertColeira || alertMedicacao;
   
   return (
     <div className="relative px-2 pt-0 space-y-3 -mt-6">
@@ -89,6 +99,10 @@ export function HomePetDashboard({
         alertGrooming={alertGrooming}
         alertFood={alertFood}
         alertMedicacao={alertMedicacao}
+        colorHealth={colorHealth}
+        colorGrooming={colorGrooming}
+        colorFood={colorFood}
+        colorMedicacao={colorMedicacao}
       />
     </div>
   );

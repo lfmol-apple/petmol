@@ -31,7 +31,26 @@ interface AppleControlButtonsProps {
   onDeactivateControl?: (controlId: HomeInactiveEligibleControlId) => void;
 }
 
-function AlertBadge() {
+type ControlTone = 'neutral' | 'ok' | 'warning' | 'critical';
+
+function shouldShowAlert(tone?: ControlTone, fallbackAlert?: boolean) {
+  if (tone) return tone === 'warning' || tone === 'critical';
+  return fallbackAlert === true;
+}
+
+function AlertBadge({ tone = 'critical' }: { tone?: ControlTone }) {
+  if (tone === 'warning') {
+    return (
+      <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-6 h-6 animate-pulse">
+        <span
+          className="absolute inset-0 bg-amber-400 shadow-md ring-2 ring-white"
+          style={{ clipPath: 'polygon(50% 0%, 100% 92%, 0% 92%)' }}
+        />
+        <span className="relative mt-1 text-amber-950 font-black leading-none" style={{ fontSize: '11px' }}>!</span>
+      </span>
+    );
+  }
+
   return (
     <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 shadow-md ring-2 ring-white animate-pulse">
       <span className="text-white font-black leading-none" style={{ fontSize: '10px' }}>!</span>
@@ -48,10 +67,12 @@ export function AppleControlButtons({
   alertHealth,
   alertGrooming,
   alertFood,
+  alertMedicacao,
   alertShopping,
   colorHealth,
   colorGrooming,
   colorFood,
+  colorMedicacao,
   inactiveControls = [],
 }: AppleControlButtonsProps) {
   const { t } = useI18n();
@@ -71,7 +92,7 @@ export function AppleControlButtons({
             onClick={onHealthClick}
             className="group relative overflow-hidden bg-gradient-to-br from-blue-100 to-blue-200 border-blue-300 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 border rounded-xl p-3 h-[82px]"
           >
-            {alertHealth && <AlertBadge />}
+            {shouldShowAlert(colorHealth, alertHealth) && <AlertBadge tone={colorHealth} />}
             <span className="absolute top-2 right-2 text-2xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
             <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
               <h3 className="text-base font-semibold leading-tight truncate text-sky-900">
@@ -86,7 +107,7 @@ export function AppleControlButtons({
             onClick={onBanhoTosaClick}
             className="group relative overflow-hidden bg-gradient-to-br from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 border border-green-300 rounded-xl p-3 h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
           >
-            {alertGrooming && <AlertBadge />}
+            {shouldShowAlert(colorGrooming, alertGrooming) && <AlertBadge tone={colorGrooming} />}
             <span className="absolute top-2 right-2 text-2xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
             <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
               <h3 className="text-base font-semibold text-green-900 leading-tight truncate">
@@ -101,7 +122,7 @@ export function AppleControlButtons({
             onClick={onAlimentacaoClick}
             className="group relative overflow-hidden bg-gradient-to-br from-orange-100 to-amber-200 hover:from-orange-200 hover:to-amber-300 border border-orange-200 rounded-xl p-3 h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
           >
-            {alertFood && <AlertBadge />}
+            {shouldShowAlert(colorFood, alertFood) && <AlertBadge tone={colorFood} />}
             <span className="absolute top-2 right-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
               <span className="text-2xl">🥣</span>
             </span>
@@ -116,7 +137,7 @@ export function AppleControlButtons({
             onClick={() => setShowShoppingSheet(true)}
             className="group relative overflow-hidden bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] hover:from-[#1d4ed8] hover:to-[#6d28d9] rounded-xl p-3 h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
           >
-            {alertShopping && <AlertBadge />}
+            {alertShopping && <AlertBadge tone="critical" />}
             <span className="absolute top-2 right-2 text-2xl pointer-events-none transition-transform group-hover:scale-110" style={{ filter: 'brightness(0) invert(1)' }}>🛒</span>
             <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
               <h3 className="text-base font-bold text-white leading-tight truncate drop-shadow-sm">{t('home.shopping.title')}</h3>

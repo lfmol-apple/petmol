@@ -733,30 +733,6 @@ export default function HomePage() {
   const [showMedicationSheet, setShowMedicationSheet] = useState(false);
   const [showFoodSheet, setShowFoodSheet] = useState(false);
 
-  // ── Alertas por tipo de parasita ─────────────────────────────────────────
-  const parasiteAlerts = useMemo(() => {
-    function needsAlert(controls: typeof parasiteControls): boolean {
-      if (!controls.length) return false;
-      const sorted = [...controls].sort(
-        (a, b) => new Date(b.date_applied).getTime() - new Date(a.date_applied).getTime(),
-      );
-      const latest = sorted[0];
-      const nextDate = latest.type === 'collar'
-        ? (latest.collar_expiry_date || latest.next_due_date)
-        : latest.next_due_date;
-      if (!nextDate) return false;
-      const [y, m, d] = nextDate.split('-').map(Number);
-      const target = new Date(y, m - 1, d); target.setHours(0, 0, 0, 0);
-      const now = new Date(); now.setHours(0, 0, 0, 0);
-      return Math.round((target.getTime() - now.getTime()) / 86400000) <= 7;
-    }
-    return {
-      vermifugo: needsAlert(parasiteControls.filter(p => p.type === 'dewormer' || p.type === 'heartworm' || p.type === 'leishmaniasis')),
-      antipulgas: needsAlert(parasiteControls.filter(p => p.type === 'flea_tick')),
-      coleira: needsAlert(parasiteControls.filter(p => p.type === 'collar')),
-    };
-  }, [parasiteControls]);
-
   // Estado para simulação de chegada em estabelecimento
   const [showArrivalAlert, setShowArrivalAlert] = useState(false);
   const [arrivalPlace, setArrivalPlace] = useState<{name: string, address: string, phone?: string, rating?: number, reviews?: number} | null>(null);
@@ -2881,6 +2857,7 @@ export default function HomePage() {
 
   const medicationCardStatus = useMemo(() => {
     const todayStr = localTodayISO();
+    const todayRef = new Date(`${todayStr}T00:00:00`);
     const activeMeds = petEvents.filter(ev => {
       if ((ev.type !== 'medicacao' && ev.type !== 'medication') || ev.source === 'document' || ev.status === 'cancelled') return false;
       if (ev.status !== 'completed') return true;
@@ -2899,6 +2876,15 @@ export default function HomePage() {
     activeMeds.forEach(ev => {
       try {
         const ex = JSON.parse(String((ev as unknown as Record<string, unknown>).extra_data || '{}')) as Record<string, unknown>;
+        const startRaw = String(ev.scheduled_at || '').replace('T', ' ').split(' ')[0];
+        const startDate = startRaw ? createLocalDate(startRaw) : null;
+        const nextDueRaw = ev.next_due_date ? String(ev.next_due_date).replace('T', ' ').split(' ')[0] : '';
+        const nextDueDate = nextDueRaw ? createLocalDate(nextDueRaw) : null;
+        const isFutureStart = startDate && !Number.isNaN(startDate.getTime()) && startDate.getTime() > todayRef.getTime();
+        const isFutureDue = nextDueDate && !Number.isNaN(nextDueDate.getTime()) && nextDueDate.getTime() > todayRef.getTime();
+
+        if (isFutureStart || isFutureDue) return;
+
         const times = Array.isArray(ex.reminder_times) && (ex.reminder_times as string[]).length > 0
           ? ex.reminder_times as string[]
           : null;
@@ -2913,6 +2899,7 @@ export default function HomePage() {
         }
       } catch {}
     });
+    if (totalSlots === 0) return { alert: false as const, color: 'ok' as const };
     if (doneSlots === totalSlots) return { alert: false as const, color: 'ok' as const };
     if (doneSlots > 0) return { alert: true as const, color: 'warning' as const };
     return { alert: true as const, color: 'critical' as const };
@@ -3407,11 +3394,11 @@ export default function HomePage() {
                     onOpenDocuments={handleOpenDocuments}
                     alertVacinas={selectedPetCardAlerts.vacinas}
                     colorVacinas={selectedPetCardColors.vacinas}
-                    alertVermifugo={selectedPetCardAlerts.vermifugo || (parasiteAlerts && parasiteAlerts.vermifugo)}
+                    alertVermifugo={selectedPetCardAlerts.vermifugo}
                     colorVermifugo={selectedPetCardColors.vermifugo}
-                    alertAntipulgas={selectedPetCardAlerts.antipulgas || (parasiteAlerts && parasiteAlerts.antipulgas)}
+                    alertAntipulgas={selectedPetCardAlerts.antipulgas}
                     colorAntipulgas={selectedPetCardColors.antipulgas}
-                    alertColeira={selectedPetCardAlerts.coleira || (parasiteAlerts && parasiteAlerts.coleira)}
+                    alertColeira={selectedPetCardAlerts.coleira}
                     colorColeira={selectedPetCardColors.coleira}
                     alertGrooming={selectedPetCardAlerts.grooming}
                     colorGrooming={selectedPetCardColors.grooming}
@@ -3639,6 +3626,11 @@ export default function HomePage() {
         alertVaccinesValue={alertVaccinesValue}
         alertParasitesValue={alertParasitesValue}
         alertMedicationValue={alertMedicationValue}
+        colorVaccinesValue={selectedPetCardColors.vacinas}
+        colorVermifugoValue={selectedPetCardColors.vermifugo}
+        colorAntipulgasValue={selectedPetCardColors.antipulgas}
+        colorColeiraValue={selectedPetCardColors.coleira}
+        colorMedicationValue={medicationCardStatus.color}
         onOpenHealthTab={openHealthTab}
         onStartEventRegistration={startEventRegistration}
         onOpenEditPet={openEditPetModal}
