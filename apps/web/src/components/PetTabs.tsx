@@ -36,6 +36,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const horizontalIntentRef = useRef<boolean | null>(null);
+  const [dragX, setDragX] = useState(0);
 
   const currentIndex = pets.findIndex(p => p.id === selectedPetId);
   const canGoPrev = currentIndex > 0;
@@ -75,6 +76,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
 
     if (horizontalIntentRef.current) {
       e.stopPropagation();
+      setDragX(dx);
     }
   };
 
@@ -98,6 +100,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     touchStartXRef.current = null;
     touchStartYRef.current = null;
     horizontalIntentRef.current = null;
+    setDragX(0);
   };
 
   return (
@@ -116,8 +119,8 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
           style={{
             backfaceVisibility: 'hidden',
             WebkitBackfaceVisibility: 'hidden',
-            transform: 'translateZ(0)',
-            WebkitTransform: 'translateZ(0)',
+            transform: `translateX(${dragX}px)`,
+            transition: dragX === 0 ? 'transform 0.2s ease-out' : 'none',
           }}
         >
           {children}

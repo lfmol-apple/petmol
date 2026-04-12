@@ -17,6 +17,7 @@ import { HistoryDocumentsOverlay } from '@/components/home/HistoryDocumentsOverl
 import { MedicalVaultModal } from '@/components/home/MedicalVaultModal';
 import { HomeNavigationModals } from '@/components/home/HomeNavigationModals';
 import { HomePetHeader } from '@/components/home/HomePetHeader';
+import { PetTabs } from '@/components/PetTabs';
 
 import { HomePetDashboard } from '@/components/home/HomePetDashboard';
 import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
@@ -3345,30 +3346,41 @@ export default function HomePage() {
               
               return (
                 <div className="max-w-md mx-auto space-y-2">
-                  <HomePetHeader
-                    currentPet={currentPet}
-                    pets={pets}
-                    selectedPetId={selectedPetId}
-                    setSelectedPetId={setSelectedPetId}
-                    photoTimestamps={photoTimestamps}
-                    getPhotoUrl={getPhotoUrl}
-                    switchPetByOffset={switchPetByOffset}
-                    onOpenAddPetModal={openAddPetModal}
-                    onOpenEditPetModal={openEditPetModal}
-                    loggedUserId={loggedUserId}
-                    familyOwnerNames={familyOwnerNames}
-                    showPetSelector={showPetSelector}
-                    onTogglePetSelector={togglePetSelector}
-                    onClosePetSelector={closePetSelector}
-                    topAttentionPetCount={topAttentionPetCount}
-                    onOpenTopAttentionModal={openTopAttentionModal}
-                    onCloseTopAttentionModal={closeTopAttentionModal}
-                    showTopAttentionModal={showTopAttentionModal}
-                    topAttentionAlerts={topAttentionAlerts}
-                    onAlertSelect={handleTopAttentionSelect}
-                    selectedPetNeedsAttention={_selectedPetNeedsAttention}
-                    selectedPetCareScore={_selectedPetCareScore}
-                  />
+                  <PetTabs
+                    pets={pets.map(p => ({
+                      id: p.pet_id,
+                      name: p.pet_name,
+                      photo: p.photo,
+                      species: p.species
+                    }))}
+                    selectedPetId={selectedPetId!}
+                    onPetChange={(petId) => setSelectedPetId(String(petId))}
+                  >
+                    <HomePetHeader
+                      currentPet={currentPet}
+                      pets={pets}
+                      selectedPetId={selectedPetId}
+                      setSelectedPetId={setSelectedPetId}
+                      photoTimestamps={photoTimestamps}
+                      getPhotoUrl={getPhotoUrl}
+                      switchPetByOffset={switchPetByOffset}
+                      onOpenAddPetModal={openAddPetModal}
+                      onOpenEditPetModal={openEditPetModal}
+                      loggedUserId={loggedUserId}
+                      familyOwnerNames={familyOwnerNames}
+                      showPetSelector={showPetSelector}
+                      onTogglePetSelector={togglePetSelector}
+                      onClosePetSelector={closePetSelector}
+                      topAttentionPetCount={topAttentionPetCount}
+                      onOpenTopAttentionModal={openTopAttentionModal}
+                      onCloseTopAttentionModal={closeTopAttentionModal}
+                      showTopAttentionModal={showTopAttentionModal}
+                      topAttentionAlerts={topAttentionAlerts}
+                      onAlertSelect={handleTopAttentionSelect}
+                      selectedPetNeedsAttention={_selectedPetNeedsAttention}
+                      selectedPetCareScore={_selectedPetCareScore}
+                    />
+                  </PetTabs>
 
                   <HomePetDashboard
                     petEvents={petEvents}

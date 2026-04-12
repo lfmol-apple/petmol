@@ -1,4 +1,5 @@
 'use client';
+import { PetTabs } from '@/components/PetTabs';
 
 import { useI18n } from '@/lib/I18nContext';
 import { HomeAttentionOverlays } from '@/components/home/HomeAttentionOverlays';
@@ -79,7 +80,10 @@ export function HomePetHeader({
   return (
     <>    <div className="px-4 pt-4 space-y-3">
       {/* Container da Foto + Navegação Estilo Apple */}
-      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72">
+      <div className={`relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72 ${selectedPetNeedsAttention ? 'border-2 border-rose-500' : ''}`}>
+          {selectedPetNeedsAttention && (
+            <div className="absolute top-2 right-2 w-3 h-3 bg-rose-500 rounded-full shadow-lg" />
+          )}
         
         {/* Emoji de Fundo para Pets sem Foto */}
         <div className="w-full h-full flex items-center justify-center opacity-40">
@@ -104,21 +108,7 @@ export function HomePetHeader({
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
 
         {/* Badge de Status de Saúde (PRESERVADO) */}
-        <div className="absolute top-4 left-4 z-20">
-          <button
-            onClick={topAttentionPetCount > 0 ? onOpenTopAttentionModal : undefined}
-            className={`flex items-center gap-1.5 rounded-full px-3 h-[28px] transition-all backdrop-blur-md border border-white/40 shadow-lg ${
-              topAttentionPetCount > 0
-                ? 'bg-rose-500 text-white active:scale-95'
-                : 'bg-white/20 text-white cursor-default'
-            }`}
-          >
-            <div className={`w-1.5 h-1.5 rounded-full ${topAttentionPetCount > 0 ? 'bg-white animate-pulse' : 'bg-emerald-400'}`} />
-            <span className="text-[10px] font-black uppercase tracking-widest">
-               {topAttentionPetCount === 0 ? 'Tudo OK' : `${topAttentionPetCount} Pendente${topAttentionPetCount > 1 ? 's' : ''}`}
-            </span>
-          </button>
-        </div>
+        
 
         {/* Botões de Ação Rápida no Canto Superior Direito */}
         <div className="absolute top-4 right-4 flex gap-2 z-20">
@@ -140,27 +130,7 @@ export function HomePetHeader({
           </button>
         </div>
 
-        {/* Setas Laterais de Navegação Rápida entre Pets */}
-        {pets.length > 1 && (
-          <>
-            <button
-              onClick={() => switchPetByOffset(-1)}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/10 backdrop-blur-sm text-white rounded-full transition-all border border-white/20 hover:bg-white/30 active:scale-90 z-20"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              onClick={() => switchPetByOffset(1)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/10 backdrop-blur-sm text-white rounded-full transition-all border border-white/20 hover:bg-white/30 active:scale-90 z-20"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </>
-        )}
+
       </div>
 
       {/* Dados de Identidade do Pet (Abaixo da Foto) */}
