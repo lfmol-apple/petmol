@@ -12,7 +12,7 @@ import uuid
 import zipfile
 from datetime import date as date_type
 from pathlib import Path
-from typing import NamedTuple, Optional
+from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -37,13 +37,6 @@ from .models import Pet
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Pet Documents"])
-
-
-class DocumentClassification(NamedTuple):
-    category: str
-    document_date: date_type | None
-    establishment: str | None
-    suggested_title: str | None = None
 
 
 # ── Category → Event type mapping ────────────────────────────────────────────
@@ -333,11 +326,13 @@ _CONTENT_KEYWORDS: list[tuple[str, list[str]]] = [
         "hemoglobina", "colesterol", "triglicérides", "glicose", "creatinina",
         "ureia", "alt", "ast", "bilirrubina", "proteína total", "albumina",
         "exame de urina", "urocultura", "antibiograma", "parasitologia",
-        "ultrassonografia", "ultrassonográfico", "ultrassom", "radiografia",
-        "radiológico", "ecocardiograma", "ecocardiográfico",
+        "ultrassonografia", "ultrassonográfico", "ultrassonografico",
+        "ultrassom", "radiografia", "radiológico", "radiologico", "ecocardiograma",
+        "ecocardiográfico", "ecocardiografico", "laudo ultrassonográfico",
+        "laudo ultrassonografico", "laudo radiológico", "laudo radiologico",
+        "laudo ecocardiográfico", "laudo ecocardiografico",
         "tomografia", "ressonância", "endoscopia", "bioquímica sérica",
         "valor de referência", "resultado:", "laudo laboratorial",
-        "laudo ultrassonográfico", "laudo radiológico", "laudo ecocardiográfico",
     ]),
     ("report", [
         "laudo", "histopatológico", "histopatologia", "biópsia", "citologia",
@@ -384,26 +379,6 @@ def _extract_pdf_text(content: bytes) -> str:
                 pass
         return "\n".join(parts)
     except Exception:
-        return ""
-
-
-def _extract_image_text(content: bytes) -> str:
-    """Extrai texto de imagens via Tesseract quando disponível."""
-    try:
-        from PIL import Image, ImageFilter, ImageOps
-        import pytesseract
-
-        img = Image.open(io.BytesIO(content))
-        img = ImageOps.exif_transpose(img)
-        img = img.convert("L")
-        img = ImageOps.autocontrast(img)
-        img = img.filter(ImageFilter.MedianFilter(size=3))
-        img = img.resize((img.size[0] * 2, img.size[1] * 2))
-
-        text = pytesseract.image_to_string(img, lang="por+eng", config="--psm 6")
-        return "\n".join(line.strip() for line in text.splitlines() if line.strip())
-    except Exception as exc:
-        logger.info("[document-classify] image OCR unavailable/failed: %s", exc)
         return ""
 
 
@@ -475,31 +450,9 @@ def _extract_establishment_name(text: str) -> str | None:
     return None
 
 
-def _infer_document_title(category: str, text: str) -> str | None:
-    low = text.lower()
-    checks: list[tuple[str, tuple[str, ...], str]] = [
-        ("vaccine", ("carteira de vacinação", "carteirinha", "vacinação", "v8", "v10", "antirrábica", "antirrabica"), "Carteira de vacinação"),
-        ("exam", ("ultrassonografia", "ultrassonográfico", "ultrassonografico", "ultrassom", "ultra-sonografia", "usg"), "Ultrassonografia"),
-        ("exam", ("radiografia", "radiológico", "radiologico", "raio x", "raio-x", "rx "), "Radiografia"),
-        ("exam", ("ecocardiograma", "ecocardiográfico", "ecocardiografico", "eco doppler", "ecodopplercardiograma"), "Ecocardiograma"),
-        ("exam", ("eletrocardiograma", "ecg"), "Eletrocardiograma"),
-        ("exam", ("hemograma",), "Hemograma"),
-        ("exam", ("bioquímica", "bioquimica", "creatinina", "ureia", "alt", "ast"), "Exame bioquímico"),
-        ("exam", ("urina", "urinálise", "urinalise"), "Exame de urina"),
-        ("exam", ("fezes", "parasitológico", "parasitologico"), "Exame de fezes"),
-        ("prescription", ("receituário", "receituario", "prescrição", "prescricao", "posologia"), "Receita veterinária"),
-        ("report", ("laudo ultrassonográfico", "laudo ultrassonografico", "laudo radiológico", "laudo radiologico"), "Laudo de imagem"),
-        ("report", ("laudo", "relatório", "relatorio", "atestado", "prontuário", "prontuario"), "Laudo veterinário"),
-    ]
-    for expected_category, needles, title in checks:
-        if category == expected_category and any(needle in low for needle in needles):
-            return title
-    return None
-
-
-def _classify_local(content: bytes, mime: str, filename: str) -> DocumentClassification:
+def _classify_local(content: bytes, mime: str, filename: str) -> tuple[str, date_type | None, str | None]:
     """
-    Analisa o conteúdo do arquivo e retorna categoria, data, estabelecimento e título sugerido.
+    Analisa o conteúdo do arquivo e retorna (categoria, data_ou_None, estabelecimento_ou_None).
     Prioridade: conteúdo > nome do arquivo > extensão.
     Para imagens sem texto, retorna (categoria, None, None) — deixar o caller propagar
     o contexto do batch (PDF companheiro).
@@ -507,8 +460,6 @@ def _classify_local(content: bytes, mime: str, filename: str) -> DocumentClassif
     text = ""
     if mime == "application/pdf" or filename.lower().endswith(".pdf"):
         text = _extract_pdf_text(content)
-    elif mime.startswith("image/") or filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic")):
-        text = _extract_image_text(content)
 
     detected_date: date_type | None = None
     establishment: str | None = None
@@ -593,68 +544,45 @@ def _classify_local(content: bytes, mime: str, filename: str) -> DocumentClassif
         if scores:
             best = max(scores, key=lambda c: scores[c])
             if scores[best] >= 2:
-                return DocumentClassification(best, detected_date, establishment, _infer_document_title(best, text))
+                return best, detected_date, establishment
 
     # Fallback: classificação por nome do arquivo
-    category = _category_from_filename(filename)
-    return DocumentClassification(category, detected_date, establishment, _infer_document_title(category, filename))
+    return _category_from_filename(filename), detected_date, establishment
 
 
 # ── Gemini AI classification ──────────────────────────────────────────────────
 
 _GEMINI_PROMPT = """\
-Você é um especialista em análise de documentos veterinários. Sua tarefa é olhar a imagem/PDF inteiro e extrair quatro informações deste documento.
+Você é um especialista em análise de documentos veterinários. Sua tarefa é extrair três informações deste documento.
 
 Retorne APENAS JSON válido, sem markdown:
-{"categoria": "...", "tipo_documento": "... ou null", "data": "YYYY-MM-DD ou null", "estabelecimento": "nome ou null"}
+{"categoria": "...", "data": "YYYY-MM-DD ou null", "estabelecimento": "nome ou null"}
 
 ═══ CATEGORIA ═══
-Escolha UMA opção pelo CONTEXTO VISUAL e pelo texto principal, não pelo nome do arquivo:
-- "vaccine"      → carteirinha/tabela de vacinação, adesivos de vacinas, colunas de data/lote/próxima dose, V8, V10, V4, antirrábica, imunização
-- "prescription" → receita/receituário: medicamento, dose, posologia, frequência, via oral/tópica/injetável, duração, assinatura/CRMV
-- "exam"         → exame ou resultado laboratorial/imagem: hemograma, bioquímico, urina, fezes, ultrassonografia, laudo ultrassonográfico, radiografia, laudo radiológico, ecocardiograma, laudo ecocardiográfico, cultura, antibiograma, valores de referência, resultado
-- "report"       → laudo/relatório/prontuário/atestado: texto narrativo clínico, diagnóstico, conclusão, evolução, histopatológico, anátomo-patológico; NÃO use para ultrassom/radiografia/ecocardiograma, pois esses são "exam"
-- "photo"        → foto clínica pura, lesão, ferida, dente, pele, cirurgia, antes/depois, sem estrutura de documento, sem cabeçalho formal e sem texto suficiente para ser exame/receita/laudo
-- "other"        → nota fiscal, recibo, orçamento, comprovante, contrato ou documento que não seja clínico
+Escolha UMA das opções abaixo com base no CONTEÚDO principal:
+- "exam"         → hemograma, bioquímico, ultrassonografia, laudo ultrassonográfico, radiografia, laudo radiológico, ecocardiograma, laudo ecocardiográfico, eletrocardiograma, cultivo, antibiograma, urina, fezes, citologia
+- "vaccine"      → vacina, imunização, antirrábica, V8, V10, V4, polivalente, carteirinha de vacinação
+- "prescription" → receita médica, posologia, prescrição, medicamento a administrar
+- "report"       → laudo clínico narrativo, diagnóstico, histopatológico, patologia, anátomo-patológico, relatório médico, evolução clínica, prontuário, atestado; NÃO use para ultrassonografia/radiografia/ecocardiograma
+- "photo"        → fotografia clínica, imagem de lesão, foto cirúrgica, antes/depois
+- "other"        → demais documentos
 
-Regras de desempate:
-- Se a imagem parece uma folha/documento com cabeçalho, corpo textual e assinatura, NÃO classifique como "photo"; escolha exam, prescription, vaccine ou report.
-- Se houver tabela com valores e referência, prefira "exam".
-- Se for ultrassom, radiografia, ecocardiograma ou outro laudo de imagem, prefira "exam" e use tipo_documento específico.
-- Se houver instruções de medicamento ao tutor, prefira "prescription".
-- Se houver adesivos/selos de vacinas ou carteira de vacinação, prefira "vaccine".
-- Se houver laudo narrativo com conclusão/diagnóstico, prefira "report".
+Dicas de contexto visual/textual:
+- Carteira/cartão de vacinação com adesivos, lotes, doses ou "próxima dose" → "vaccine".
+- Ultrassom/radiografia/ecocardiograma, mesmo quando o título diz "laudo", → "exam".
+- Laudo clínico narrativo, prontuário, evolução, histopatológico ou atestado → "report".
 
 ═══ DATA ═══
-Procure pela data de REALIZAÇÃO ou EMISSÃO do documento, inclusive quando o arquivo veio dentro de um ZIP.
-Não use data de validade, próxima dose, retorno ou vencimento como data do documento.
+Procure pela data de REALIZAÇÃO ou EMISSÃO do documento (não validade, vencimento, retorno ou próxima dose).
 Formatos a reconhecer: dd/mm/aaaa, dd-mm-aaaa, dd.mm.aaaa, dd/mm/aa.
 Retorne sempre em formato YYYY-MM-DD. Se não encontrar, retorne null.
 Dê prioridade a rótulos como: "Data:", "Realizado em:", "Emitido em:", "Data do exame:", "Data de atendimento:".
 
 ═══ ESTABELECIMENTO ═══
-Procure o nome da clínica, hospital veterinário ou laboratório.
+Procure o nome da clínica, hospital veterinário, laboratório ou centro de imagem onde foi feito.
 Ele normalmente está: no cabeçalho (topo da página, geralmente em negrito ou maior), no rodapé, ao lado do CRMV ou CNPJ.
 Exemplos de padrões: "Clínica Veterinária Tal", "Hospital Veterinário Tal", "Lab. Tal", "Pet Center Tal".
 Ignore nomes de tutores ou pacientes. Se não encontrar, retorne null.
-
-═══ TIPO_DOCUMENTO ═══
-Retorne um nome curto e útil para salvar como título, com base no contexto do documento:
-- "Carteira de vacinação"
-- "Ultrassonografia"
-- "Radiografia"
-- "Ecocardiograma"
-- "Eletrocardiograma"
-- "Hemograma"
-- "Exame bioquímico"
-- "Exame de urina"
-- "Exame de fezes"
-- "Receita veterinária"
-- "Laudo veterinário"
-- "Laudo de imagem"
-- "Atestado veterinário"
-- "Recibo"
-Se não der para identificar, retorne null.
 
 Responda SOMENTE o JSON.\
 """
@@ -671,7 +599,7 @@ _GEMINI_SUPPORTED_MIMES = {
 
 def _gemini_classify_sync(
     content: bytes, mime: str, filename: str, api_key: str
-) -> DocumentClassification | None:
+) -> tuple[str, date_type | None, str | None] | None:
     """Blocking Gemini call — run via asyncio.to_thread."""
     try:
         import google.generativeai as genai
@@ -711,41 +639,26 @@ def _gemini_classify_sync(
         if not est or str(est).lower() in ("null", "none", ""):
             est = None
 
-        title: str | None = data.get("tipo_documento") or data.get("titulo")
-        if not title or str(title).lower() in ("null", "none", ""):
-            title = _infer_document_title(categoria, "")
-        elif len(str(title)) > 80:
-            title = str(title)[:80].strip()
-        else:
-            title = str(title).strip()
-
         logger.info(
-            "[gemini-classify] file=%s → cat=%s title=%s date=%s est=%s",
-            filename, categoria, title, doc_date, est,
+            "[gemini-classify] file=%s → cat=%s date=%s est=%s",
+            filename, categoria, doc_date, est,
         )
-        return DocumentClassification(categoria, doc_date, est, title)
+        return categoria, doc_date, est
 
     except Exception as exc:
         logger.warning("[gemini-classify] failed for %s: %s", filename, exc)
         return None
 
 
-def _document_ai_classify_enabled(api_key: str | None) -> bool:
-    """IA fica ativa quando há chave, salvo desativação explícita por env."""
-    raw = os.environ.get("DOCUMENT_AI_CLASSIFY_ENABLED")
-    if raw is None:
-        return bool(api_key)
-    return raw.strip().lower() not in ("false", "0", "no", "off")
-
-
 async def _classify_from_content(
     content: bytes, mime: str, filename: str
-) -> DocumentClassification:
+) -> tuple[str, date_type | None, str | None]:
     """
     Classifica documento com Gemini (se disponível) e fallback para pypdf+regex.
     """
+    # DOCUMENT_AI_CLASSIFY_ENABLED: default false — IA só roda quando ligado explicitamente
+    ai_enabled = os.environ.get("DOCUMENT_AI_CLASSIFY_ENABLED", "false").lower() not in ("false", "0", "no")
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    ai_enabled = _document_ai_classify_enabled(api_key)
     if ai_enabled and api_key and mime in _GEMINI_SUPPORTED_MIMES:
         try:
             result = await asyncio.wait_for(
@@ -853,18 +766,16 @@ async def _extract_zip(
                 ext_lower = Path(fname).suffix.lower()
                 mime = _mime_from_ext(ext_lower)
                 try:
-                    classification = await _classify_from_content(data, mime, fname)
+                    cat, detected_date, establishment = await _classify_from_content(data, mime, fname)
                 except Exception:
-                    classification = DocumentClassification("other", None, None, None)
-                cat = classification.category
+                    cat, detected_date, establishment = "other", None, None
                 if default_category:
                     cat = default_category
                 zip_items.append({
                     "data": data, "fname": fname, "ext": ext_lower, "mime": mime,
                     "cat": cat,
-                    "doc_date": document_date or classification.document_date,
-                    "establishment": classification.establishment,
-                    "suggested_title": classification.suggested_title,
+                    "doc_date": document_date or detected_date,
+                    "establishment": establishment,
                 })
 
 
@@ -894,7 +805,7 @@ async def _extract_zip(
                 doc = PetDocument(
                     pet_id=pet_id,
                     kind="file",
-                    title=(item.get("suggested_title") or Path(item["fname"]).stem)[:255],
+                    title=Path(item["fname"]).stem[:255],
                     source="upload",
                     storage_key=storage_key,
                     mime_type=item["mime"],
@@ -1306,16 +1217,15 @@ async def upload_documents(
             zip_extracted += len(zip_docs)
             continue
 
-        classification = await _classify_from_content(content, mime, fname)
+        category, doc_date, establishment = await _classify_from_content(content, mime, fname)
         batch_items.append({
             "content": content,
             "fname": fname,
             "mime": mime,
             "ext": ext,
-            "category": classification.category,
-            "doc_date": classification.document_date,
-            "establishment": classification.establishment,
-            "suggested_title": classification.suggested_title,
+            "category": category,
+            "doc_date": doc_date,
+            "establishment": establishment,
         })
 
     # ── 2ª passagem: propagar contexto para imagens do batch ──────────────
@@ -1343,7 +1253,7 @@ async def upload_documents(
     # ── 3ª passagem: persistir ────────────────────────────────────────────
     for item in batch_items:
         storage_key = _save_bytes_to_disk(item["content"], item["fname"])
-        final_title     = (_form_title or item.get("suggested_title") or Path(item["fname"]).stem)[:255]
+        final_title     = _form_title or Path(item["fname"]).stem[:255]
         final_category  = _form_category or item["category"]
         final_date      = _form_date or item["doc_date"]
         final_establish = _form_establish or item["establishment"]
@@ -1482,14 +1392,14 @@ async def import_link(
         ext = _ext_from_mime(content_type)
         storage_key = _save_bytes_to_disk(content, f"import{ext}")
         title = _title_from_url(body.url)
-        classification = await _classify_from_content(content, content_type, title + ext)
+        ai_cat, ai_date, ai_est = await _classify_from_content(content, content_type, title + ext)
         doc = PetDocument(
             pet_id=pet_id, kind="file",
-            title=classification.suggested_title or title,
-            category=body.category or classification.category,
-            document_date=body.document_date or classification.document_date, source="import",
+            title=title,
+            category=body.category or ai_cat,
+            document_date=body.document_date or ai_date, source="import",
             storage_key=storage_key, mime_type=content_type, size_bytes=len(content),
-            establishment_name=classification.establishment,
+            establishment_name=ai_est,
         )
         db.add(doc)
         db.commit()
@@ -1619,13 +1529,13 @@ async def import_items(
                 ext = _ext_from_mime(content_type)
                 storage_key = _save_bytes_to_disk(content, f"import{ext}")
                 title = req_item.title or _title_from_url(url_real)
-                classification = await _classify_from_content(content, content_type, title + ext)
+                ai_cat, ai_date, ai_est = await _classify_from_content(content, content_type, title + ext)
                 doc = PetDocument(
-                    pet_id=pet_id, kind="file", title=classification.suggested_title or title,
-                    category=body.category or classification.category,
-                    document_date=body.document_date or classification.document_date, source="import",
+                    pet_id=pet_id, kind="file", title=title,
+                    category=body.category or ai_cat,
+                    document_date=body.document_date or ai_date, source="import",
                     storage_key=storage_key, mime_type=content_type, size_bytes=len(content),
-                    establishment_name=classification.establishment,
+                    establishment_name=ai_est,
                 )
                 db.add(doc)
                 db.commit()
