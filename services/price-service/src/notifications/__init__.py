@@ -95,6 +95,15 @@ def _send_push(subscription: dict, payload: dict) -> bool:
         return True
 
 
+def _parasite_modal_for_type(type_key: str) -> str:
+    normalized = (type_key or "").lower().strip()
+    if normalized == "flea_tick":
+        return "antipulgas"
+    if normalized == "collar":
+        return "coleira"
+    return "vermifugo"
+
+
 def send_checkin_pushes() -> None:
     """Called every minute by APScheduler. Sends push at configured day+hour+minute (Brasilia time)."""
     from datetime import timezone, timedelta
@@ -460,6 +469,7 @@ def send_care_pushes() -> None:
                         body = f"{label} de {pet.name} vence em {days_left} dia{'s' if days_left != 1 else ''} — hora de comprar"
                     from urllib.parse import quote as _pquote
                     _plabel = _pquote(label or "")
+                    _pmodal = _parasite_modal_for_type(key)
                     payloads.append({
                         "title": f"🛡️ {pet.name}" + (" — atrasado" if days_left < 0 else ""),
                         "body": body,
@@ -468,7 +478,7 @@ def send_care_pushes() -> None:
 
                         "image": "/brand/notification-banner.png",
                         "tag": f"petmol-care-parasite-{pet.id}-{key}-{today_str}",
-                        "data": {"url": f"/home?modal=parasites&petId={pet.id}&itemName={_plabel}&buy=1"},
+                        "data": {"url": f"/home?modal={_pmodal}&petId={pet.id}&itemName={_plabel}&buy=1"},
                         "requireInteraction": True,
                         "autoCloseMs": 0,
                     })
@@ -741,6 +751,7 @@ async def send_on_open(current_user: User = Depends(get_current_user)):
                         continue
                     label = parasite_labels.get(k) or c.product_name or k
                     from urllib.parse import quote as _q2
+                    _pmodal = _parasite_modal_for_type(k)
                     payloads.append({
                         "title": f"🛡️ {pet.name} — {label.lower()} em atraso",
                         "body": f"Venceu há {days_late} dia{'s' if days_late != 1 else ''}",
@@ -749,7 +760,7 @@ async def send_on_open(current_user: User = Depends(get_current_user)):
 
                         "image": "/brand/notification-banner.png",
                         "tag": f"petmol-open-parasite-{pet.id}-{k}",
-                        "data": {"url": f"/home?modal=parasites&petId={pet.id}&itemName={_q2(label)}"},
+                        "data": {"url": f"/home?modal={_pmodal}&petId={pet.id}&itemName={_q2(label)}"},
                         "requireInteraction": True,
                         "autoCloseMs": 0,
                     })

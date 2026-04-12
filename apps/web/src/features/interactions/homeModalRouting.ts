@@ -15,7 +15,7 @@ export type HomeSurfaceResolution =
     }
   | {
       kind: 'sheet';
-      sheet: 'grooming' | 'food' | 'vaccines' | 'vermifugo' | 'antipulgas' | 'coleira';
+      sheet: 'grooming' | 'food' | 'vaccines' | 'vermifugo' | 'antipulgas' | 'coleira' | 'medication';
     }
   | {
       kind: 'edit-pet';
@@ -27,14 +27,6 @@ export function resolveHomeDeepLinkDestination(
   tabParam: string | null,
 ): HomeSurfaceResolution | null {
   if (!modal) return null;
-
-  const actionSheetTypes: HomePushActionType[] = ['vaccines', 'parasites', 'medication', 'food', 'grooming'];
-  if (actionSheetTypes.includes(modal as HomePushActionType)) {
-    return {
-      kind: 'push-action-sheet',
-      actionSheetType: modal as HomePushActionType,
-    };
-  }
 
   if (modal === 'food-setup') {
     return { kind: 'edit-pet', initialSection: 'food' };
@@ -75,11 +67,11 @@ export function resolveHomeDeepLinkDestination(
     };
   }
 
-  if (modal === 'vaccine-sheet') {
+  if (modal === 'vaccines' || modal === 'vaccine-sheet') {
     return { kind: 'sheet', sheet: 'vaccines' };
   }
 
-  if (modal === 'vermifugo') {
+  if (modal === 'parasites' || modal === 'vermifugo') {
     return { kind: 'sheet', sheet: 'vermifugo' };
   }
 
@@ -93,6 +85,14 @@ export function resolveHomeDeepLinkDestination(
 
   if (modal === 'banho' || modal === 'grooming') {
     return { kind: 'sheet', sheet: 'grooming' };
+  }
+
+  if (modal === 'medication') {
+    return { kind: 'sheet', sheet: 'medication' };
+  }
+
+  if (modal === 'food') {
+    return { kind: 'sheet', sheet: 'food' };
   }
 
   return null;

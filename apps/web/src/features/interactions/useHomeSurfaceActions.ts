@@ -100,6 +100,8 @@ export function useHomeSurfaceActions({
         setShowAntipulgasSheet(true);
       } else if (resolution.sheet === 'coleira') {
         setShowColeiraSheet(true);
+      } else if (resolution.sheet === 'medication') {
+        setShowMedicationSheet(true);
       }
       return;
     }
@@ -119,6 +121,7 @@ export function useHomeSurfaceActions({
     setShowFoodSheet,
     setShowHealthModal,
     setShowHealthOptionsModal,
+    setShowMedicationSheet,
     setShowVaccineSheet,
     setShowVermifugoSheet,
   ]);

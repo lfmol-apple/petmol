@@ -234,7 +234,7 @@ const ACTION_TARGET_TO_MODAL: Record<string, string> = {
   'health/parasites/dewormer': 'vermifugo',
   'health/parasites/flea_tick':'antipulgas',
   'health/parasites/collar':   'coleira',
-  'health/parasites':          'parasites',
+  'health/parasites':          'vermifugo',
   'health/medication':         'medication',
   'health/grooming':           'grooming',
   'health/food':               'food',
@@ -242,17 +242,11 @@ const ACTION_TARGET_TO_MODAL: Record<string, string> = {
 };
 
 function buildClickUrl(destination: NotificationDestination, event: CanonicalPetEvent): string {
-  const params = new URLSearchParams({ petId: event.pet_id });
-  switch (destination) {
-    case 'purchase':
-      return `/buy?${params}&from=${encodeURIComponent(event.action_target)}`;
-    case 'central':
-      return `/home?openCenter=1&${params}`;
-    default: {
-      const modal = ACTION_TARGET_TO_MODAL[event.action_target] ?? 'health';
-      return `/home?modal=${modal}&${params}`;
-    }
-  }
+  const modal = ACTION_TARGET_TO_MODAL[event.action_target] ?? 'health';
+  const params = new URLSearchParams({ modal, petId: event.pet_id });
+  if (event.label) params.set('itemName', event.label);
+  if (destination === 'purchase') params.set('buy', '1');
+  return `/home?${params}`;
 }
 
 // ---------------------------------------------------------------------------
