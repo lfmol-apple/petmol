@@ -360,7 +360,16 @@ export function HealthGroomingPanel({
                       </span>
                     )}
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-gray-900 text-sm">{typeLabels[record.type]}</span>
+                       <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <span className="font-bold text-gray-900 text-sm">{typeLabels[record.type]}</span>
+                          {record.next_recommended_date && !isGroomHistory && new Date(record.next_recommended_date) < new Date() && (
+                            <div className="absolute -top-3 -left-3 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
+                              !
+                            </div>
+                          )}
+                        </div>
+                      </div>
                       {record.cost && record.cost > 0 && (
                         <span className="text-sm font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
                           R$ {record.cost.toFixed(2)}

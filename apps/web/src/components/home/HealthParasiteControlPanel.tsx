@@ -372,13 +372,20 @@ export function HealthParasiteControlPanel({
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-2xl">
-                        {control.type === 'dewormer' && '🪱'}
-                        {control.type === 'flea_tick' && '🦟'}
-                        {control.type === 'heartworm' && '❤️'}
-                        {control.type === 'collar' && '⭕'}
-                        {control.type === 'leishmaniasis' && '💉'}
-                      </span>
+                      <div className="relative">
+                        <span className="text-2xl">
+                          {control.type === 'dewormer' && '🪱'}
+                          {control.type === 'flea_tick' && '🦟'}
+                          {control.type === 'heartworm' && '❤️'}
+                          {control.type === 'collar' && '⭕'}
+                          {control.type === 'leishmaniasis' && '💉'}
+                        </span>
+                        {isOverdue && (
+                          <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
+                            !
+                          </div>
+                        )}
+                      </div>
                       <div>
                         <div className="font-bold text-gray-800">{control.product_name}</div>
                         <div className="text-xs text-gray-500">

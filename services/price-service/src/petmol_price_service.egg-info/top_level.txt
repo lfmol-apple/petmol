@@ -32,6 +32,7 @@ providers
 rate_limit
 rg
 search
+serialization
 services
 services_old
 storage

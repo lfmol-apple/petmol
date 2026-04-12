@@ -41,12 +41,8 @@ export function QuickAddVaccineModal({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm flex items-end justify-center sm:items-center sm:p-4 z-[90] animate-fadeIn">
-      <div className="bg-slate-50 native-bottom-sheet rounded-[32px] shadow-2xl w-full max-w-md flex flex-col max-h-[96dvh] animate-slideUp overflow-hidden">
-        {/* Drag Handle for iOS feel */}
-        <div className="w-full flex justify-center pt-3 pb-1 bg-white sm:hidden rounded-t-[24px]">
-          <div className="w-12 h-1.5 bg-slate-200 rounded-full"></div>
-        </div>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[90] animate-fadeIn">
+      <div className="bg-slate-50 rounded-[32px] shadow-2xl w-full max-w-md flex flex-col max-h-[96dvh] animate-scaleIn overflow-hidden">
 
         <div className="flex items-center justify-between px-5 pt-2 pb-4 border-b border-slate-100 bg-white sticky top-0 z-10">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2 tracking-tight">⚡ {t('quick_add.title')}</h3>

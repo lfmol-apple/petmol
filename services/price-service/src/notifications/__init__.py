@@ -128,7 +128,9 @@ def send_checkin_pushes() -> None:
                     "title": "Lembrete mensal PETMOL",
                     "body": f"Hora de registrar a saude dos seus pets, {name}!",
                     "icon": "/icons/icon-192x192.png",
-                    "badge": "/icons/icon-96x96.png",
+                    "badge": "/icons/badge-mono.png",
+
+                    "image": "/brand/notification-banner.png",
                     "tag": "petmol-monthly-checkin",
                     "data": {"url": "/home?checkin=1"},
                     "requireInteraction": True,
@@ -292,7 +294,9 @@ def send_medication_pushes() -> None:
                             f"{offset_min} min para aplicar em {slot}" if offset_min > 0 else f"Hora de aplicar ({slot})"
                         ),
                         "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/icon-96x96.png",
+                        "badge": "/icons/badge-mono.png",
+
+                        "image": "/brand/notification-banner.png",
                         "tag": f"petmol-med-{event.id}-{today.isoformat()}-{slot}",
                         "data": {"url": f"/home?modal=medication&petId={event.pet_id}&eventId={event.id}&itemName={item_name_encoded}"},
                         "requireInteraction": True,
@@ -357,12 +361,14 @@ def send_care_pushes() -> None:
                 payloads: list[dict] = []
 
                 # ── Vacinas: latest por grupo canônico ────────────────────────────────
-                # Fire when: overdue OR today. Vaccine model has no advance-reminder config.
+                # Fire when: overdue OR today OR exactly 10 days before due.
+                # 10-day advance is fixed (no per-vaccine config needed).
                 #
                 # Dedup key priority:
                 #   1. vaccine_code (canonical e.g. "DOG_RABIES") — avoids name-variant splits
                 #   2. Normalised vaccine_name — strips "(Múltipla)", "anual", etc. so
                 #      "V10", "V10 (Múltipla)", "V10 anual" collapse to the same group.
+                _VACCINE_ADVANCE_DAYS = 10
                 import re as _re_v, unicodedata as _ud_v
 
                 def _vgroup_key(vr) -> str:
@@ -390,19 +396,27 @@ def send_care_pushes() -> None:
                         continue
                     due = v.next_dose_date.astimezone(brt).date() if hasattr(v.next_dose_date, "astimezone") else v.next_dose_date.date()
                     days_left = (due - today).days
-                    if days_left > 0:
-                        continue  # not yet due — no push
+                    # Skip if future AND not the exact 10-day advance window
+                    if days_left > 0 and days_left != _VACCINE_ADVANCE_DAYS:
+                        continue
                     if days_left < 0:
+                        title = f"💉 {pet.name} — vacina atrasada"
                         body = f"Vacina {v.vaccine_name} venceu há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
-                    else:
+                    elif days_left == 0:
+                        title = f"💉 {pet.name} — vacina vence hoje"
                         body = f"Hoje vence a vacina {v.vaccine_name}"
+                    else:
+                        title = f"💉 {pet.name} — reforço de vacina em breve"
+                        body = f"Vacina {v.vaccine_name} vence em {days_left} dias — agende o reforço"
                     from urllib.parse import quote as _quote
-                    _vname = quote(_quote(v.vaccine_name or ""))
+                    _vname = _quote(v.vaccine_name or "")
                     payloads.append({
-                        "title": f"💉 {pet.name} — vacina atrasada",
+                        "title": title,
                         "body": body,
                         "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/icon-96x96.png",
+                        "badge": "/icons/badge-mono.png",
+
+                        "image": "/brand/notification-banner.png",
                         "tag": f"petmol-care-vaccine-{pet.id}-{key}-{today_str}",
                         "data": {"url": f"/home?modal=vaccines&petId={pet.id}&itemName={_vname}&buy=1"},
                         "requireInteraction": True,
@@ -450,7 +464,9 @@ def send_care_pushes() -> None:
                         "title": f"🛡️ {pet.name}" + (" — atrasado" if days_left < 0 else ""),
                         "body": body,
                         "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/icon-96x96.png",
+                        "badge": "/icons/badge-mono.png",
+
+                        "image": "/brand/notification-banner.png",
                         "tag": f"petmol-care-parasite-{pet.id}-{key}-{today_str}",
                         "data": {"url": f"/home?modal=parasites&petId={pet.id}&itemName={_plabel}&buy=1"},
                         "requireInteraction": True,
@@ -497,7 +513,9 @@ def send_care_pushes() -> None:
                         "title": f"🛁 {pet.name}" + (" — atrasado" if days_left < 0 else ""),
                         "body": body,
                         "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/icon-96x96.png",
+                        "badge": "/icons/badge-mono.png",
+
+                        "image": "/brand/notification-banner.png",
                         "tag": f"petmol-care-grooming-{pet.id}-{key}-{today_str}",
                         "data": {"url": f"/home?modal=grooming&petId={pet.id}&itemName={_glabel}"},
                         "requireInteraction": False,
@@ -566,7 +584,9 @@ async def send_test_notification(current_user: User = Depends(get_current_user))
         "title": "Teste PETMOL",
         "body": "Push funcionando! Clique para abrir os lembretes.",
         "icon": "/icons/icon-192x192.png",
-        "badge": "/icons/icon-96x96.png",
+        "badge": "/icons/badge-mono.png",
+
+        "image": "/brand/notification-banner.png",
         "tag": "petmol-test",
         "data": {"url": "/home"},
         "requireInteraction": False,
@@ -594,7 +614,9 @@ async def send_notification(
         "title": request.title,
         "body": request.body,
         "icon": request.icon or "/icons/icon-192x192.png",
-        "badge": "/icons/icon-96x96.png",
+        "badge": "/icons/badge-mono.png",
+
+        "image": "/brand/notification-banner.png",
         "tag": request.tag or "petmol",
         "data": {"url": request.url or "/home"},
         "requireInteraction": True,
@@ -605,3 +627,197 @@ async def send_notification(
         subscriptions.pop(str(current_user.id), None)
         _save_subscriptions(subscriptions)
     return {"success": ok}
+
+
+@router.post("/send-on-open")
+async def send_on_open(current_user: User = Depends(get_current_user)):
+    """Chamado quando o usuário abre o app. Envia push para cada item VENCIDO (não apenas hoje).
+    Cooldown de 1 hora por usuário para evitar spam.
+    Retorna {"sent": N} com quantos pushs foram disparados."""
+    from datetime import timezone
+    import re as _re
+    import unicodedata as _ud
+
+    subscriptions = _load_subscriptions()
+    sub = subscriptions.get(str(current_user.id))
+    if not sub:
+        return {"sent": 0, "reason": "no_subscription"}
+
+    # ── Cooldown: 1 h entre chamadas do mesmo usuário ────────────────────────
+    cooldown_key = f"_on_open_last_{current_user.id}"
+    subs_meta = _load_subscriptions()
+    last_str = subs_meta.get(cooldown_key)
+    brt = timezone(timedelta(hours=-3))
+    now = datetime.now(brt)
+    if last_str:
+        try:
+            last_dt = datetime.fromisoformat(last_str)
+            if (now - last_dt).total_seconds() < 3600:
+                return {"sent": 0, "reason": "cooldown"}
+        except Exception:
+            pass
+    # NÃO salvar cooldown ainda — só salva se realmente enviar
+
+    today = now.date()
+    payloads: list[dict] = []
+
+    try:
+        db = SessionLocal()
+        try:
+            from ..pets.models import Pet
+            from ..pets.vaccine_models import VaccineRecord
+            from ..pets.parasite_models import ParasiteControlRecord
+            from ..pets.grooming_models import GroomingRecord
+
+            pets = db.query(Pet).filter(Pet.user_id == current_user.id).all()
+
+            for pet in pets:
+                # ── Vacinas vencidas ──────────────────────────────────────────
+                def _vkey(vr) -> str:
+                    if getattr(vr, "vaccine_code", None):
+                        return vr.vaccine_code
+                    n = (getattr(vr, "vaccine_name", None) or getattr(vr, "vaccine_type", None) or "").lower().strip()
+                    n = "".join(c for c in _ud.normalize("NFD", n) if _ud.category(c) != "Mn")
+                    n = _re.sub(r"\(.*?\)", "", n)
+                    n = _re.sub(r"\b(anual|annual|booster|reforco|dose\s*\d+|\d+[a]\s*dose)\b", "", n)
+                    n = _re.sub(r"[-\u2013\u2014]", " ", n)
+                    return _re.sub(r"\s+", " ", n).strip()
+
+                vaccines = db.query(VaccineRecord).filter(
+                    VaccineRecord.pet_id == pet.id,
+                    VaccineRecord.deleted == False,
+                ).all()
+                _latest_v: dict = {}
+                for v in vaccines:
+                    k = _vkey(v)
+                    prev = _latest_v.get(k)
+                    if not prev or v.applied_date > prev.applied_date:
+                        _latest_v[k] = v
+                for k, v in _latest_v.items():
+                    if not v.next_dose_date:
+                        continue
+                    due = v.next_dose_date.astimezone(brt).date() if hasattr(v.next_dose_date, "astimezone") else v.next_dose_date.date()
+                    days_late = (today - due).days
+                    if days_late <= 0:
+                        continue  # não vencido
+                    from urllib.parse import quote as _q
+                    payloads.append({
+                        "title": f"💉 {pet.name} — vacina em atraso",
+                        "body": f"{v.vaccine_name} venceu há {days_late} dia{'s' if days_late != 1 else ''}",
+                        "icon": "/icons/icon-192x192.png",
+                        "badge": "/icons/badge-mono.png",
+
+                        "image": "/brand/notification-banner.png",
+                        "tag": f"petmol-open-vaccine-{pet.id}-{k}",
+                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}&itemName={_q(v.vaccine_name or '')}"},
+                        "requireInteraction": True,
+                        "autoCloseMs": 0,
+                    })
+
+                # ── Antiparasitários vencidos ─────────────────────────────────
+                parasite_labels = {
+                    "flea_tick": "Antipulgas",
+                    "dewormer": "Vermífugo",
+                    "collar": "Coleira antiparasitária",
+                    "heartworm": "Antiparasitário cardíaco",
+                    "leishmaniasis": "Leishmaniose",
+                }
+                parasites = db.query(ParasiteControlRecord).filter(
+                    ParasiteControlRecord.pet_id == pet.id,
+                    ParasiteControlRecord.deleted == False,
+                ).all()
+                _latest_p: dict = {}
+                for c in parasites:
+                    k = (c.type or "").lower().strip()
+                    prev = _latest_p.get(k)
+                    if not prev or c.date_applied > prev.date_applied:
+                        _latest_p[k] = c
+                for k, c in _latest_p.items():
+                    if not c.next_due_date:
+                        continue
+                    due = c.next_due_date.astimezone(brt).date() if hasattr(c.next_due_date, "astimezone") else c.next_due_date.date()
+                    days_late = (today - due).days
+                    if days_late <= 0:
+                        continue
+                    label = parasite_labels.get(k) or c.product_name or k
+                    from urllib.parse import quote as _q2
+                    payloads.append({
+                        "title": f"🛡️ {pet.name} — {label.lower()} em atraso",
+                        "body": f"Venceu há {days_late} dia{'s' if days_late != 1 else ''}",
+                        "icon": "/icons/icon-192x192.png",
+                        "badge": "/icons/badge-mono.png",
+
+                        "image": "/brand/notification-banner.png",
+                        "tag": f"petmol-open-parasite-{pet.id}-{k}",
+                        "data": {"url": f"/home?modal=parasites&petId={pet.id}&itemName={_q2(label)}"},
+                        "requireInteraction": True,
+                        "autoCloseMs": 0,
+                    })
+
+                # ── Grooming vencido ──────────────────────────────────────────
+                groom_labels = {
+                    "bath": "Banho",
+                    "grooming": "Tosa",
+                    "bath_grooming": "Banho & Tosa",
+                }
+                groomings = db.query(GroomingRecord).filter(
+                    GroomingRecord.pet_id == pet.id,
+                    GroomingRecord.deleted == False,
+                    GroomingRecord.reminder_enabled == True,
+                ).all()
+                _latest_g: dict = {}
+                for r in groomings:
+                    gk = (r.type or "").lower().strip()
+                    prev = _latest_g.get(gk)
+                    if not prev or r.date > prev.date:
+                        _latest_g[gk] = r
+                for gk, r in _latest_g.items():
+                    if not r.next_recommended_date:
+                        continue
+                    due = r.next_recommended_date.astimezone(brt).date() if hasattr(r.next_recommended_date, "astimezone") else r.next_recommended_date.date()
+                    days_late = (today - due).days
+                    if days_late <= 0:
+                        continue
+                    label = groom_labels.get(gk, gk)
+                    from urllib.parse import quote as _q3
+                    payloads.append({
+                        "title": f"🛁 {pet.name} — {label.lower()} em atraso",
+                        "body": f"Está em atraso há {days_late} dia{'s' if days_late != 1 else ''}",
+                        "icon": "/icons/icon-192x192.png",
+                        "badge": "/icons/badge-mono.png",
+                        "image": "/brand/notification-banner.png",
+                        "tag": f"petmol-open-grooming-{pet.id}-{gk}",
+                        "data": {"url": f"/home?modal=grooming&petId={pet.id}&itemName={_q3(label)}"},
+                        "requireInteraction": True,
+                        "autoCloseMs": 0,
+                    })
+
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"send_on_open erro: {e}")
+        return {"sent": 0, "reason": "error"}
+
+    if not payloads:
+        return {"sent": 0, "reason": "nothing_overdue", "overdue": []}
+
+    overdue_items = [
+        {"title": p["title"], "body": p["body"], "url": p["data"]["url"]}
+        for p in payloads
+    ]
+
+    sent = 0
+    for payload in payloads:
+        ok = _send_push(sub, payload)
+        if not ok:
+            subscriptions.pop(str(current_user.id), None)
+            _save_subscriptions(subscriptions)
+            break
+        sent += 1
+        logger.warning(f"[on_open] Push enviado: {payload['tag']}")
+
+    # Salva cooldown só se processou (com ou sem pushes enviados)
+    subs_meta[cooldown_key] = now.isoformat()
+    _save_subscriptions(subs_meta)
+
+    return {"sent": sent, "overdue": overdue_items}

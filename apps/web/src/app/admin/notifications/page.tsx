@@ -1,44 +1,160 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence } from "framer-motion";
 import { PremiumScreenShell } from "@/components/premium";
-import { useMasterInteractionRules } from "@/features/interactions/useMasterInteractionRules";
 import { useNotificationPermissionController } from "@/features/interactions/useNotificationPermissionController";
-import { NotificationControlCard } from "@/components/NotificationControlCard";
-import { NotificationControlDrawer } from "@/components/NotificationControlDrawer";
-import type { CareInteractionPolicy, MasterInteractionRules } from "@/features/interactions/types";
 
-type CareKey =
-  | "food"
-  | "flea_tick"
-  | "dewormer"
-  | "collar"
-  | "vaccines"
-  | "medication"
-  | "grooming"
-  | "documents"
-  | "emergency";
+export default function AdminNotificationsPage() {
+  const {
+    isSupported,
+    isSubscribed,
+    permission,
+    requestPermission,
+    subscribeToPush,
+    unsubscribe,
+    sendTestNotification,
+  } = useNotificationPermissionController();
 
-interface CareDef {
-  key: CareKey;
-  icon: string;
-  label: string;
-  description: string;
-  isEmergency?: boolean;
+  const [loading, setLoading] = useState<"activate" | "deactivate" | "test" | null>(null);
+  const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const withLoading = async (
+    key: "activate" | "deactivate" | "test",
+    fn: () => Promise<unknown>
+  ) => {
+    setLoading(key);
+    setFeedback(null);
+    try {
+      await fn();
+      const msgs = {
+        activate: "Push ativado. Você receberá notificações mesmo com o app fechado.",
+        deactivate: "Push desativado.",
+        test: "Notificação de teste enviada! Verifique seu dispositivo.",
+      };
+      setFeedback({ ok: true, msg: msgs[key] });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido.";
+      setFeedback({ ok: false, msg });
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleActivate = () =>
+    withLoading("activate", async () => {
+      const granted = permission === "granted" ? true : await requestPermission();
+      if (!granted) throw new Error("Permissão negada pelo navegador.");
+      const sub = await subscribeToPush();
+      if (!sub) throw new Error("Não foi possível criar subscription.");
+    });
+
+  const handleDeactivate = () => withLoading("deactivate", unsubscribe);
+  const handleTest = () => withLoading("test", sendTestNotification);
+
+  const permissionLabel: Record<NotificationPermission, string> = {
+    granted: "Permitido",
+    denied: "Bloqueado pelo navegador",
+    default: "Não solicitado",
+  };
+
+  return (
+    <PremiumScreenShell
+      title="Notificações Push"
+      subtitle="Lembretes de vacinas, medicação e cuidados — chegam mesmo com o app fechado"
+      backHref="/admin/dashboard"
+    >
+      <div className="px-4 py-6 max-w-md mx-auto space-y-6 pb-20">
+
+        {/* Status */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-900">Status deste dispositivo</h2>
+
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">Suporte a push</p>
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isSupported ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+                {isSupported ? "Suportado" : "Não suportado"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">Permissão</p>
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${permission === "granted" ? "bg-blue-50 text-blue-700" : permission === "denied" ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-400"}`}>
+                {permissionLabel[permission]}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">Inscrito</p>
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${isSubscribed ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400"}`}>
+                {isSubscribed ? "Sim — notificações ativas" : "Não"}
+              </span>
+            </div>
+          </div>
+
+          {permission === "denied" && (
+            <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-xl">
+              O navegador bloqueou as notificações. Abra as configurações do site e permita manualmente.
+            </p>
+          )}
+        </div>
+
+        {/* Feedback */}
+        {feedback && (
+          <p className={`text-sm font-medium px-4 py-3 rounded-2xl ${feedback.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+            {feedback.msg}
+          </p>
+        )}
+
+        {/* Ações */}
+        {isSupported && (
+          <div className="space-y-3">
+            {!isSubscribed ? (
+              <button
+                type="button"
+                disabled={loading === "activate" || permission === "denied"}
+                onClick={handleActivate}
+                className="w-full py-3.5 rounded-2xl bg-[#0056D2] text-white text-sm font-semibold disabled:opacity-50 active:opacity-80 transition-opacity"
+              >
+                {loading === "activate" ? "Ativando…" : "Ativar notificações push"}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={loading === "test"}
+                  onClick={handleTest}
+                  className="w-full py-3.5 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 active:opacity-80 transition-opacity"
+                >
+                  {loading === "test" ? "Enviando…" : "Enviar notificação de teste"}
+                </button>
+                <button
+                  type="button"
+                  disabled={loading === "deactivate"}
+                  onClick={handleDeactivate}
+                  className="w-full py-3 rounded-2xl bg-slate-100 text-slate-500 text-sm font-medium disabled:opacity-50 active:opacity-80 transition-opacity"
+                >
+                  {loading === "deactivate" ? "Desativando…" : "Desativar push"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* O que você vai receber */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">O que você recebe</h2>
+          <ul className="space-y-2 text-sm text-slate-600">
+            <li className="flex items-start gap-2"><span>💊</span><span>Lembretes de medicação — no horário configurado no tratamento</span></li>
+            <li className="flex items-start gap-2"><span>💉</span><span>Vacinas vencidas ou vencendo hoje — diariamente às 9h</span></li>
+            <li className="flex items-start gap-2"><span>🛡️</span><span>Vermífugo, antipulgas e coleira — vencidos ou no dia configurado</span></li>
+            <li className="flex items-start gap-2"><span>📅</span><span>Check-in mensal — no dia e hora que você configurou</span></li>
+          </ul>
+        </div>
+
+      </div>
+    </PremiumScreenShell>
+  );
 }
 
-const CARE_DEFS: CareDef[] = [
-  { key: "emergency", icon: "🚨", label: "Emergência", description: "Eventos críticos e orientações imediatas.", isEmergency: true },
-  { key: "vaccines", icon: "💉", label: "Vacinas", description: "Carteira vacinal e reforços obrigatórios." },
-  { key: "medication", icon: "💊", label: "Medicação", description: "Tratamentos contínuos e doses programadas." },
-  { key: "dewormer", icon: "🪱", label: "Vermífugo", description: "Protocolos de vermifugação." },
-  { key: "flea_tick", icon: "🐜", label: "Antipulgas", description: "Controle de pulgas e carrapatos." },
-  { key: "collar", icon: "📿", label: "Coleira", description: "Coleira antiparasitária." },
-  { key: "food", icon: "🍖", label: "Alimentação", description: "Reabastecimento e rotina alimentar." },
-  { key: "grooming", icon: "🧼", label: "Banho e tosa", description: "Higiene e rotina estética." },
-  { key: "documents", icon: "📄", label: "Documentos", description: "Certidões, laudos e documentos." },
-];
 
 function ToggleSwitch({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
   return (
@@ -204,196 +320,5 @@ function PushControlSection() {
         )}
       </div>
     </section>
-  );
-}
-
-export default function AdminNotificationsPage() {
-  const { rules, updateRules, getCarePolicy } = useMasterInteractionRules();
-  const [selectedKey, setSelectedKey] = useState<CareKey | null>(null);
-
-  const selectedDef = CARE_DEFS.find((d) => d.key === selectedKey) ?? null;
-  const selectedPolicy = selectedKey ? getCarePolicy(selectedKey) : null;
-
-  const handlePolicyChange = (key: CareKey, next: CareInteractionPolicy) => {
-    updateRules({ ...rules, carePolicies: { ...rules.carePolicies, [key]: next } });
-  };
-
-  const ch = rules.channels;
-  const toggleChannel = (channel: keyof typeof ch) =>
-    updateRules({ ...rules, channels: { ...ch, [channel]: { ...ch[channel], enabled: !ch[channel].enabled } } });
-
-  return (
-    <PremiumScreenShell
-      title="Painel de Notificações"
-      subtitle="Controle quando o PETMOL avisa, como aparece e para onde o tutor vai depois"
-      backHref="/admin/dashboard"
-    >
-      <div className="px-4 py-5 max-w-2xl mx-auto space-y-8 pb-20">
-
-        {/* RESUMO GLOBAL */}
-        <div className="flex flex-wrap gap-2">
-          {[
-            { active: ch.homePanel.enabled, on: "Home ativa", off: "Home desativada" },
-            { active: ch.internalCenter.enabled, on: "Central ativa", off: "Central desativada" },
-            { active: rules.multipet.grouping !== "none", on: "Multipet ativo", off: "Multipet livre" },
-          ].map(({ active, on, off }) => (
-            <span
-              key={on}
-              className={`text-[11px] font-medium px-3 py-1 rounded-full ring-1 ${
-                active
-                  ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                  : "bg-slate-100 text-slate-500 ring-slate-200"
-              }`}
-            >
-              {active ? on : off}
-            </span>
-          ))}
-          <span
-            className={`text-[11px] font-medium px-3 py-1 rounded-full ring-1 ${
-              rules.externalChannels.pushNotifications.active
-                ? "bg-blue-50 text-blue-700 ring-blue-200"
-                : "bg-slate-100 text-slate-500 ring-slate-200"
-            }`}
-          >
-            {rules.externalChannels.pushNotifications.active ? "Push ativo" : "Push inativo"}
-          </span>
-          <span className="text-[11px] font-medium px-3 py-1 rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200">Browser desligado</span>
-        </div>
-
-        {/* CUIDADOS */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Cuidados</h2>
-          <p className="text-xs text-slate-400">
-            Toque em “Configurar” para ajustar disparo, duração, aparência, ação e conversão.
-          </p>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {CARE_DEFS.map((def) => {
-              const policy = getCarePolicy(def.key);
-              if (!policy) return null;
-              return (
-                <NotificationControlCard
-                  key={def.key}
-                  icon={def.icon}
-                  label={def.label}
-                  policy={policy}
-                  onConfigure={() => setSelectedKey(def.key)}
-                />
-              );
-            })}
-          </div>
-        </section>
-
-        {/* CANAIS GLOBAIS */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Canais globais</h2>
-          <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100 overflow-hidden">
-            {[
-              { key: "homePanel" as const, label: "Home", desc: "Cards de cuidado na tela inicial." },
-              { key: "internalCenter" as const, label: "Central interna", desc: "Fila principal de interações." },
-              { key: "homeBadge" as const, label: "Badges", desc: "Indicadores visuais de pendências." },
-            ].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-center justify-between gap-3 px-4 py-3.5">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">{label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{desc}</p>
-                </div>
-                <ToggleSwitch checked={ch[key].enabled} onToggle={() => toggleChannel(key)} />
-              </div>
-            ))}
-            {/* Push — canal ativo e controlável */}
-            <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-              <div>
-                <p className="text-sm font-medium text-slate-800">Push no celular</p>
-                <p className="text-xs text-slate-400 mt-0.5">Notificação mesmo com o app fechado.</p>
-              </div>
-              <ToggleSwitch
-                checked={rules.externalChannels.pushNotifications.active}
-                onToggle={() =>
-                  updateRules({
-                    ...rules,
-                    externalChannels: {
-                      ...rules.externalChannels,
-                      pushNotifications: {
-                        ...rules.externalChannels.pushNotifications,
-                        active: !rules.externalChannels.pushNotifications.active,
-                      },
-                    },
-                  })
-                }
-              />
-            </div>
-            {/* Browser — opcional, desligado por padrão */}
-            <div className="flex items-center justify-between gap-3 px-4 py-3.5 opacity-40">
-              <div>
-                <p className="text-sm font-medium text-slate-800">Browser notifications</p>
-                <p className="text-xs text-slate-400 mt-0.5">Desligado por padrão — sem pedido automático.</p>
-              </div>
-              <div className="relative h-6 w-11 shrink-0 rounded-full bg-slate-200">
-                <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm" />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* PUSH */}
-        <PushControlSection />
-
-        {/* MULTIPET */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Multi-pet</h2>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-400 block">Quando há muitos cuidados pendentes</label>
-              <select
-                value={rules.multipet.multiplePendingBehavior}
-                onChange={(e) =>
-                  updateRules({
-                    ...rules,
-                    multipet: {
-                      ...rules.multipet,
-                      multiplePendingBehavior: e.target.value as MasterInteractionRules["multipet"]["multiplePendingBehavior"],
-                    },
-                  })
-                }
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-              >
-                <option value="summarize">Resumir — máximo por pet</option>
-                <option value="stack">Mostrar tudo</option>
-                <option value="highest-only">Só o mais urgente</option>
-              </select>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-800">Vencidos primeiro</p>
-                <p className="text-xs text-slate-400 mt-0.5">Interações em atraso sobem ao topo.</p>
-              </div>
-              <ToggleSwitch
-                checked={rules.multipet.showOverdueFirst}
-                onToggle={() =>
-                  updateRules({ ...rules, multipet: { ...rules.multipet, showOverdueFirst: !rules.multipet.showOverdueFirst } })
-                }
-              />
-            </div>
-          </div>
-        </section>
-
-      </div>
-
-      {/* DRAWER */}
-      <AnimatePresence>
-        {selectedKey && selectedDef && selectedPolicy && (
-          <NotificationControlDrawer
-            key={selectedKey}
-            icon={selectedDef.icon}
-            label={selectedDef.label}
-            description={selectedDef.description}
-            policy={selectedPolicy}
-            isEmergency={selectedDef.isEmergency}
-            onChange={(next) => handlePolicyChange(selectedKey, next)}
-            onClose={() => setSelectedKey(null)}
-          />
-        )}
-      </AnimatePresence>
-    </PremiumScreenShell>
   );
 }

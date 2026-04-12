@@ -1,264 +1,189 @@
 'use client';
 
 import { useState } from 'react';
+import { useI18n } from '@/lib/I18nContext';
 import { HomeShoppingSheet } from '@/features/commerce/HomeShoppingSheet';
 import { HomeEmergencySheet } from '@/components/home/HomeEmergencySheet';
 import { type HomeInactiveEligibleControlId } from '@/lib/homeControlPreferences';
 
-// ── Props ─────────────────────────────────────────────────────────────────────
+// ── Props H1 logic preserved ──────────────────────────────────────────────────
 interface AppleControlButtonsProps {
-  onVacinasClick: () => void;
-  onVermifugoClick: () => void;
-  onAntipulgasClick: () => void;
-  onColeiraClick: () => void;
+  onHealthClick: () => void;
   onDocumentosClick: () => void;
-  // Operational domain callbacks
   onAlimentacaoClick?: () => void;
   onBanhoTosaClick?: () => void;
   onMedicacaoClick?: () => void;
-  // Alert overrides from engine
-  alertVacinas?: boolean;
-  colorVacinas?: 'neutral' | 'ok' | 'warning' | 'critical';
-  alertVermifugo?: boolean;
-  colorVermifugo?: 'neutral' | 'ok' | 'warning' | 'critical';
-  alertAntipulgas?: boolean;
-  colorAntipulgas?: 'neutral' | 'ok' | 'warning' | 'critical';
-  alertColeira?: boolean;
-  colorColeira?: 'neutral' | 'ok' | 'warning' | 'critical';
+  onFamilyClick?: () => void; // Added from reference pattern
+  
+  // Alert overrides from engine H1
+  alertHealth?: boolean;
   alertGrooming?: boolean;
-  colorGrooming?: 'neutral' | 'ok' | 'warning' | 'critical';
   alertFood?: boolean;
-  colorFood?: 'neutral' | 'ok' | 'warning' | 'critical';
   alertMedicacao?: boolean;
+  alertShopping?: boolean;
+  
+  colorHealth?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorGrooming?: 'neutral' | 'ok' | 'warning' | 'critical';
+  colorFood?: 'neutral' | 'ok' | 'warning' | 'critical';
   colorMedicacao?: 'neutral' | 'ok' | 'warning' | 'critical';
+  
   inactiveControls?: HomeInactiveEligibleControlId[];
   onDeactivateControl?: (controlId: HomeInactiveEligibleControlId) => void;
 }
 
+function AlertBadge() {
+  return (
+    <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 shadow-md ring-2 ring-white animate-pulse">
+      <span className="text-white font-black leading-none" style={{ fontSize: '10px' }}>!</span>
+    </span>
+  );
+}
+
 export function AppleControlButtons({
-  onVacinasClick,
-  onVermifugoClick,
-  onAntipulgasClick,
-  onColeiraClick,
+  onHealthClick,
   onDocumentosClick,
   onAlimentacaoClick,
   onBanhoTosaClick,
-  onMedicacaoClick,
-  alertVacinas,
-  colorVacinas,
-  alertVermifugo,
-  colorVermifugo,
-  alertAntipulgas,
-  colorAntipulgas,
-  alertColeira,
-  colorColeira,
+  onFamilyClick,
+  alertHealth,
   alertGrooming,
-  colorGrooming,
   alertFood,
+  alertShopping,
+  colorHealth,
+  colorGrooming,
   colorFood,
-  alertMedicacao,
-  colorMedicacao,
   inactiveControls = [],
-  onDeactivateControl,
 }: AppleControlButtonsProps) {
-
+  const { t } = useI18n();
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
   const [showEmergencySheet, setShowEmergencySheet] = useState(false);
+  const [showTrainingSheet, setShowTrainingSheet] = useState(false);
+  const [showHealthPlanSheet, setShowHealthPlanSheet] = useState(false);
 
-  const cardBaseClass = 'group relative overflow-hidden rounded-2xl px-3.5 py-3 h-[86px] border transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30';
-  const iconWrapClass = 'absolute top-2.5 right-2.5 w-8.5 h-8.5 rounded-xl bg-white/95 ring-1 ring-slate-200/80 shadow-sm flex items-center justify-center pointer-events-none';
-  const emojiIconClass = 'text-[22px] leading-none';
-  const titleClass = 'text-[15px] font-bold font-outfit text-slate-900 leading-tight tracking-tight truncate';
-  const descBaseClass = 'text-[11.5px] sm:text-[12.5px] mt-1 leading-[1.2] font-medium';
-  const alertCardClass = 'bg-gradient-to-br from-rose-100 via-red-50 to-white border-red-300 border-l-4 border-l-red-600 shadow-[0_6px_16px_rgba(220,38,38,0.15)]';
-  const okCardClass = 'bg-emerald-50/50 border-emerald-200 border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md hover:border-emerald-300';
-  const warningCardClass = 'bg-amber-50/60 border-amber-200 border-l-4 border-l-amber-500 shadow-sm hover:shadow-md hover:border-amber-300';
-  const neutralCardClass = 'bg-white border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 hover:bg-slate-50/40';
-  const bluePremiumClass = 'bg-blue-100/70 border-blue-200 border-l-4 border-l-blue-600 shadow-sm hover:shadow-md hover:border-blue-300';
-  const pardaPremiumClass = 'bg-amber-100/40 border-amber-200 border-l-4 border-l-amber-600/60 shadow-sm hover:shadow-md hover:border-amber-300';
-  const inactiveSet = new Set<HomeInactiveEligibleControlId>(inactiveControls);
-  const isEmptyCard = (color: typeof colorVacinas) => !color || color === 'neutral';
-
-  const toneByStatus = (status: 'neutral' | 'ok' | 'warning' | 'critical' | undefined) => {
-    if (status === 'critical') return alertCardClass;
-    if (status === 'warning') return warningCardClass;
-    if (status === 'ok') return okCardClass;
-    return neutralCardClass;
-  };
-
-  const renderAlertBadge = (show?: boolean) => show ? (
-    <span className="absolute left-2.5 top-2.5 z-[1] flex h-4 w-4 items-center justify-center">
-      <span className="absolute inset-0 rounded-full bg-red-500/55 animate-ping motion-reduce:hidden" />
-      <span className="relative flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white shadow-[0_3px_8px_rgba(220,38,38,0.28)] ring-1 ring-white animate-pulse motion-reduce:animate-none">
-        !
-      </span>
-    </span>
-  ) : null;
-
-  const healthCards = [
-    {
-      id: 'vaccines' as const,
-      title: 'Vacinas',
-      description: isEmptyCard(colorVacinas) ? 'Sem registro' : 'Carteirinha Pet',
-      isEmpty: isEmptyCard(colorVacinas),
-      icon: '💉',
-      onClick: onVacinasClick,
-      alert: alertVacinas,
-      toneClass: toneByStatus(colorVacinas),
-    },
-    {
-      id: 'dewormer' as const,
-      title: 'Vermífugo',
-      description: isEmptyCard(colorVermifugo) ? 'Sem controle' : 'Vermes e Parasit.',
-      isEmpty: isEmptyCard(colorVermifugo),
-      icon: '🪱',
-      onClick: onVermifugoClick,
-      alert: alertVermifugo,
-      toneClass: toneByStatus(colorVermifugo),
-    },
-    {
-      id: 'flea_tick' as const,
-      title: 'Antipulgas',
-      description: isEmptyCard(colorAntipulgas) ? 'Sem controle' : 'Pulgas e Carr.',
-      isEmpty: isEmptyCard(colorAntipulgas),
-      icon: '🛡️',
-      onClick: onAntipulgasClick,
-      alert: alertAntipulgas,
-      toneClass: toneByStatus(colorAntipulgas),
-    },
-    {
-      id: 'collar' as const,
-      title: 'Coleira',
-      description: isEmptyCard(colorColeira) ? 'Sem controle' : 'Leish e Parasit.',
-      isEmpty: isEmptyCard(colorColeira),
-      icon: '📿',
-      onClick: onColeiraClick,
-      alert: alertColeira,
-      toneClass: toneByStatus(colorColeira),
-    },
-    {
-      id: 'medication' as const,
-      title: 'Medicação',
-      description: isEmptyCard(colorMedicacao) ? 'Sem tratamento' : colorMedicacao === 'ok' ? 'Em dia' : 'Pendente',
-      isEmpty: isEmptyCard(colorMedicacao),
-      icon: '💊',
-      onClick: onMedicacaoClick ?? (() => {}),
-      alert: alertMedicacao,
-      toneClass: toneByStatus(colorMedicacao),
-    },
-    {
-      id: 'food' as const,
-      title: 'Alimentação',
-      description: isEmptyCard(colorFood) ? 'Sem registro' : 'Ração e Compras',
-      isEmpty: isEmptyCard(colorFood),
-      icon: '🥣',
-      onClick: onAlimentacaoClick ?? (() => {}),
-      alert: alertFood,
-      toneClass: toneByStatus(colorFood),
-    },
-  ];
-
-  const utilityCards = [
-    {
-      id: 'documents' as const,
-      title: 'Documentos',
-      description: 'Guardar arquivos',
-      isEmpty: false,
-      icon: '📄',
-      onClick: onDocumentosClick,
-      toneClass: pardaPremiumClass,
-    },
-    {
-      id: 'shopping' as const,
-      title: 'Shopping',
-      description: 'Petlove · Petz · Amazon',
-      isEmpty: false,
-      icon: '🛒',
-      onClick: () => setShowShoppingSheet(true),
-      toneClass: bluePremiumClass,
-    },
-  ];
-
-  const activeHealthCards = healthCards.filter((card) => !inactiveSet.has(card.id as any));
-  const activeUtilityCards = utilityCards.filter((card) => !inactiveSet.has(card.id as any));
-
-  const renderHealthCard = (card: typeof healthCards[number]) => (
-    <button
-      key={card.id}
-      onClick={card.onClick}
-      onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.(card.id as any); }}
-      onDoubleClick={() => onDeactivateControl?.(card.id as any)}
-      className={`${cardBaseClass} ${card.toneClass}`}
-    >
-      {renderAlertBadge(card.alert)}
-      <span className={iconWrapClass}><span className={emojiIconClass}>{card.icon}</span></span>
-      <div className={`flex flex-col justify-center h-full pr-11 text-left ${card.alert ? 'pt-3' : ''}`}>
-        <h3 className={titleClass}>{card.title}</h3>
-        <p className={`${descBaseClass} ${card.alert ? 'text-red-700' : card.isEmpty ? 'text-slate-400' : 'text-slate-500'}`}>{card.description}</p>
-      </div>
-    </button>
-  );
-
-  const renderUtilityCard = (card: any) => (
-    <button
-      key={card.id}
-      onClick={card.onClick}
-      onContextMenu={(e) => { e.preventDefault(); onDeactivateControl?.(card.id as any); }}
-      onDoubleClick={() => onDeactivateControl?.(card.id as any)}
-      className={`${cardBaseClass} ${card.toneClass || neutralCardClass}`}
-    >
-      {renderAlertBadge(card.alert)}
-      <span className={iconWrapClass}>
-        <span className={emojiIconClass}>{card.icon}</span>
-      </span>
-      <div className={`flex flex-col justify-center h-full pr-11 text-left ${card.alert ? 'pt-3' : ''}`}>
-        <h3 className={titleClass}>{card.title}</h3>
-        <p className={`${descBaseClass} ${card.alert ? 'text-red-700' : card.isEmpty ? 'text-slate-400' : 'text-slate-500'} font-medium truncate`}>{card.description}</p>
-      </div>
-    </button>
-  );
 
   return (
     <>
-      <div className="mb-4">
-        <div className="flex items-center gap-2 px-1 mb-3.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-          <h4 className="text-[13px] font-black text-slate-900 uppercase tracking-wider">Saúde e Prevenção</h4>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {activeHealthCards.map(renderHealthCard)}
+      {/* 4 Botões Principais - Grid 2x2 (Visual Simplificado Baby) */}
+      <div className="relative">
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* 1. SAÚDE - Azul Vacina (Mais Vivo) / Fixo */}
+          <button
+            onClick={onHealthClick}
+            className="group relative overflow-hidden bg-gradient-to-br from-blue-100 to-blue-200 border-blue-300 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 border rounded-xl p-3 h-[82px]"
+          >
+            {alertHealth && <AlertBadge />}
+            <span className="absolute top-2 right-2 text-2xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
+            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
+              <h3 className="text-base font-semibold leading-tight truncate text-sky-900">
+                {t('home.health.title')}
+              </h3>
+              <p className="text-[10px] text-sky-700 opacity-70 truncate mt-0.5 leading-tight">{t('home.health.vaccines')}</p>
+            </div>
+          </button>
+
+          {/* 2. HIGIENE - Verde Vibrante (Original) */}
+          <button
+            onClick={onBanhoTosaClick}
+            className="group relative overflow-hidden bg-gradient-to-br from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 border border-green-300 rounded-xl p-3 h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
+          >
+            {alertGrooming && <AlertBadge />}
+            <span className="absolute top-2 right-2 text-2xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
+            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
+              <h3 className="text-base font-semibold text-green-900 leading-tight truncate">
+                {t('home.hygiene')}
+              </h3>
+              <p className="text-[10px] text-green-700 opacity-70 truncate mt-0.5 leading-tight">{t('home.hygiene.desc')}</p>
+            </div>
+          </button>
+
+          {/* 3. ALIMENTAÇÃO - Laranja Vibrante (Original) */}
+          <button
+            onClick={onAlimentacaoClick}
+            className="group relative overflow-hidden bg-gradient-to-br from-orange-100 to-amber-200 hover:from-orange-200 hover:to-amber-300 border border-orange-200 rounded-xl p-3 h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
+          >
+            {alertFood && <AlertBadge />}
+            <span className="absolute top-2 right-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
+              <span className="text-2xl">🥣</span>
+            </span>
+            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
+              <h3 className="text-base font-bold text-amber-950 leading-tight truncate">{t('home.food.title')}</h3>
+              <p className="text-[10px] text-amber-800 truncate mt-0.5 leading-tight">{t('home.food.desc')}</p>
+            </div>
+          </button>
+
+          {/* 4. SHOPPING - Azul Marca (Original) */}
+          <button
+            onClick={() => setShowShoppingSheet(true)}
+            className="group relative overflow-hidden bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] hover:from-[#1d4ed8] hover:to-[#6d28d9] rounded-xl p-3 h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
+          >
+            {alertShopping && <AlertBadge />}
+            <span className="absolute top-2 right-2 text-2xl pointer-events-none transition-transform group-hover:scale-110" style={{ filter: 'brightness(0) invert(1)' }}>🛒</span>
+            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
+              <h3 className="text-base font-bold text-white leading-tight truncate drop-shadow-sm">{t('home.shopping.title')}</h3>
+              <p className="text-[10px] text-white/80 truncate mt-0.5 leading-tight">{t('home.shopping.desc')}</p>
+            </div>
+          </button>
         </div>
       </div>
 
-      <div className="mb-4">
-        <div className="flex items-center gap-2 px-1 mb-3.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
-          <h4 className="text-[13px] font-black text-slate-900 uppercase tracking-wider">Mais Recursos</h4>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {activeUtilityCards.map(renderUtilityCard)}
-        </div>
-      </div>
-
-      {/* ── Emergência Vet ── */}
+      {/* EMERGÊNCIA VETERINÁRIA - Full Width (Visual Referência) */}
       <button
         onClick={() => setShowEmergencySheet(true)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 h-[56px] rounded-2xl border border-red-200/80 bg-gradient-to-r from-red-50 to-rose-50/60 hover:from-red-100/70 hover:to-rose-100/60 active:scale-[0.99] transition-all duration-200 shadow-sm hover:shadow-md text-left mb-3"
+        className="group relative w-full overflow-hidden bg-gradient-to-r from-red-600 via-red-500 to-rose-500 hover:from-red-700 hover:via-red-600 hover:to-rose-600 rounded-xl p-3 h-[56px] mt-3 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] shadow-red-200 shadow-md mb-4"
       >
-        <div className="w-8 h-8 rounded-xl bg-white/95 ring-1 ring-red-200 shadow-sm flex items-center justify-center flex-shrink-0">
-          <span className="text-[18px] leading-none">🚨</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+          <span className="absolute w-8 h-8 rounded-full bg-white/20 animate-ping"></span>
+          <span className="relative text-xl">🚨</span>
+        </span>
+        <div className="flex flex-col justify-center h-full pl-10 pr-12 text-left">
+          <h3 className="text-sm font-bold text-white leading-tight tracking-wide drop-shadow">Emergência Veterinária</h3>
+          <p className="text-[10px] text-white/80 mt-0.5 leading-tight">Clínicas e hospitais abertos <span className="font-bold text-yellow-200">24h</span> perto de você</p>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-red-900 leading-tight tracking-[-0.01em]">Emergência Vet</p>
-          <p className="text-[12px] text-red-500 font-medium mt-0.5 leading-tight">Clínicas/Hosp 24h</p>
-        </div>
-        <svg className="w-4 h-4 text-red-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-        </svg>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 text-lg transition-transform group-hover:translate-x-1">›</span>
       </button>
+
+      {/* Botões inferiores: Histórico (Ref Pattern) */}
+      <div className="mt-3">
+        {/* GUARDAR DOCUMENTOS (Antigo Histórico) */}
+        <button
+          onClick={onDocumentosClick}
+          className="group relative w-full overflow-hidden bg-gradient-to-r from-slate-700 to-slate-800 rounded-2xl p-2.5 h-[60px] flex items-center gap-3 hover:shadow-xl active:scale-[0.98] transition-all duration-300 border border-slate-600/50"
+        >
+          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
+            <span className="text-xl pointer-events-none">📁</span>
+          </div>
+          <div className="flex flex-col text-left">
+            <h3 className="text-sm font-bold text-white leading-tight">Guardar Documentos</h3>
+            <p className="text-[10px] text-slate-300 font-bold opacity-80 mt-0.5">Seu cofre digital de saúde pet</p>
+          </div>
+          <span className="ml-auto text-white/30 text-xl group-hover:translate-x-1 transition-transform">›</span>
+        </button>
+      </div>
 
       <HomeShoppingSheet open={showShoppingSheet} onClose={() => setShowShoppingSheet(false)} />
       <HomeEmergencySheet open={showEmergencySheet} onClose={() => setShowEmergencySheet(false)} />
+      
+      {/* Informação sobre itens indisponíveis no MVP H1 mas presentes no visual */}
+      {(showTrainingSheet || showHealthPlanSheet) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => { setShowTrainingSheet(false); setShowHealthPlanSheet(false); }}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">{showTrainingSheet ? '🐾' : '🩺'}</span>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Em breve</h2>
+            <p className="text-gray-500 text-sm mb-6">
+              Esta funcionalidade está sendo preparada para o PETMOL. Continue usando os recursos de Saúde e Higiene disponíveis!
+            </p>
+            <button 
+              onClick={() => { setShowTrainingSheet(false); setShowHealthPlanSheet(false); }}
+              className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

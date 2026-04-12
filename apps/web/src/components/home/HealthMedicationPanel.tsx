@@ -438,7 +438,24 @@ export function HealthMedicationPanel({
                 return (
                   <div key={ev.id} className="bg-white rounded-xl border border-gray-200 p-3">
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl leading-none flex-shrink-0 mt-0.5">💊</span>
+                      <div className="relative flex-shrink-0 mt-0.5">
+                        <span className="text-2xl leading-none">💊</span>
+                        {(() => {
+                          const todayStr = localTodayISO();
+                          const eventDateStr = (ev.scheduled_at || '').split('T')[0] || (ev.scheduled_at || '').split(' ')[0];
+                          const isToday = eventDateStr === todayStr;
+                          const isNotDone = badgeTxt !== 'Concluído' && badgeTxt !== 'Feito';
+                          
+                          if (isToday && isNotDone) {
+                            return (
+                              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
+                                !
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{ev.title}</p>
                         <p className="text-xs text-gray-500">

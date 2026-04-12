@@ -57,7 +57,12 @@ export function HealthVaccinesPanel({
             <div className="text-brand-DEFAULT font-bold text-2xl sm:text-3xl drop-shadow-sm">{upcomingCount}</div>
             <div className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">{t('health.upcoming')}</div>
           </div>
-          <div className="bg-white p-3 sm:p-4 rounded-2xl text-center shadow-premium border border-slate-100">
+          <div className="relative bg-white p-3 sm:p-4 rounded-2xl text-center shadow-premium border border-slate-100">
+            {overdueCount > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
+                !
+              </div>
+            )}
             <div className="text-rose-500 font-bold text-2xl sm:text-3xl drop-shadow-sm">{overdueCount}</div>
             <div className="text-[11px] sm:text-xs font-semibold text-slate-500 mt-1 uppercase tracking-wider">{t('health.overdue')}</div>
           </div>

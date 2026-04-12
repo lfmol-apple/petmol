@@ -123,6 +123,10 @@ export function useHomeSurfaceActions({
     setShowVermifugoSheet,
   ]);
 
+  const openHealth = useCallback(() => {
+    setShowHealthOptionsModal(true);
+  }, [setShowHealthOptionsModal]);
+
   return {
     applyHomeSurfaceResolution,
     openVaccines,
@@ -134,5 +138,6 @@ export function useHomeSurfaceActions({
     openMedication,
     openFood,
     openEvents,
+    openHealth,
   };
 }

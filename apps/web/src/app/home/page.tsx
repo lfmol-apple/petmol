@@ -23,6 +23,7 @@ import { ParasiteItemSheet } from '@/components/home/ParasiteItemSheet';
 import { VaccineItemSheet } from '@/components/home/VaccineItemSheet';
 import { MedicationItemSheet } from '@/components/home/MedicationItemSheet';
 import { FoodItemSheet } from '@/components/home/FoodItemSheet';
+import { GroomingItemSheet } from '@/components/home/GroomingItemSheet';
 import { useMultipetInteractions } from '@/features/interactions/useMultipetInteractions';
 import type { PetInteractionItem } from '@/features/interactions/types';
 import { openHomeContextualCommerce, resolvePushActionSheetCommerceIntent } from '@/features/commerce/homeContextualCommerce';
@@ -501,6 +502,15 @@ export default function HomePage() {
               const meData = await meRes.json();
               setTutorName(meData.name || '');
               if (meData.id) setLoggedUserId(meData.id);
+              // fire-and-forget: dispara push para itens vencidos ao abrir o app
+              const _tok = getToken();
+              if (_tok) {
+                fetch(`${API_BASE_URL}/notifications/send-on-open`, {
+                  method: 'POST',
+                  credentials: 'include',
+                  headers: { 'Authorization': `Bearer ${_tok}` },
+                }).catch(() => {});
+              }
               if (typeof meData.monthly_checkin_day === 'number') {
                 setTutorCheckinDay(meData.monthly_checkin_day);
               }
@@ -2950,6 +2960,7 @@ export default function HomePage() {
     openMedication: handleOpenMedication,
     openFood: handleOpenFood,
     openEvents: handleOpenEvents,
+    openHealth: handleOpenHealth,
   } = useHomeSurfaceActions({
     setShowVaccineSheet,
     setShowVermifugoSheet,
@@ -3125,6 +3136,7 @@ export default function HomePage() {
 
   const alertVaccinesValue = selectedPetCardAlerts.vacinas;
   const alertParasitesValue = selectedPetCardAlerts.vermifugo || selectedPetCardAlerts.antipulgas || selectedPetCardAlerts.coleira;
+  const alertMedicationValue = medicationCardStatus.alert;
 
   // Retorno automático ao check-up quando o modal fecha
   useEffect(() => {
@@ -3314,40 +3326,30 @@ export default function HomePage() {
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
           <>
-          {checkupBanner && (
-            <div className="mb-3 flex items-center gap-3 rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-blue-900 leading-snug">
-                  Faltam {checkupBanner.pendingCount} {checkupBanner.pendingCount === 1 ? 'passo' : 'passos'} para colocar {checkupBanner.petName} em dia
-                </p>
+            {checkupBanner && (
+              <div className="mb-3 flex items-center gap-3 rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-blue-900 leading-snug">
+                    Faltam {checkupBanner.pendingCount} {checkupBanner.pendingCount === 1 ? 'passo' : 'passos'} para colocar {checkupBanner.petName} em dia
+                  </p>
+                </div>
+                <button
+                  onClick={() => router.push('/check-up')}
+                  className="flex-shrink-0 text-xs font-semibold text-[#0056D2] bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                >
+                  Continuar
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('petmol_checkup_dismissed', '1');
+                    setCheckupBanner(null);
+                  }}
+                  className="flex-shrink-0 text-gray-300 text-sm leading-none"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                onClick={() => router.push('/check-up')}
-                className="flex-shrink-0 text-xs font-semibold text-[#0056D2] bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
-              >
-                Continuar
-              </button>
-              <button
-                onClick={() => {
-                  localStorage.setItem('petmol_checkup_dismissed', '1');
-                  setCheckupBanner(null);
-                }}
-                className="flex-shrink-0 text-gray-300 text-sm leading-none"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-          <PetTabs
-            pets={pets.map(p => ({
-              id: p.pet_id,
-              name: p.pet_name,
-              photo: p.photo,
-              species: p.species
-            }))}
-            selectedPetId={selectedPetId!}
-            onPetChange={(petId) => setSelectedPetId(String(petId))}
-          >
+            )}
             {(() => {
               const currentPet = pets.find(p => p.pet_id === selectedPetId);
               if (!currentPet) return null;
@@ -3401,18 +3403,15 @@ export default function HomePage() {
                     quickMarkToast={quickMarkToast}
                     setQuickMarkToast={setQuickMarkToast}
                     fetchPetEvents={fetchPetEvents}
-                    onOpenVaccines={handleOpenVaccines}
-                    onOpenVermifugo={handleOpenVermifugo}
-                    onOpenAntipulgas={handleOpenAntipulgas}
-                    onOpenColeira={handleOpenColeira}
+                    onOpenHealth={handleOpenHealth}
                     onOpenDocuments={handleOpenDocuments}
                     alertVacinas={selectedPetCardAlerts.vacinas}
                     colorVacinas={selectedPetCardColors.vacinas}
-                    alertVermifugo={selectedPetCardAlerts.vermifugo || parasiteAlerts.vermifugo}
+                    alertVermifugo={selectedPetCardAlerts.vermifugo || (parasiteAlerts && parasiteAlerts.vermifugo)}
                     colorVermifugo={selectedPetCardColors.vermifugo}
-                    alertAntipulgas={selectedPetCardAlerts.antipulgas || parasiteAlerts.antipulgas}
+                    alertAntipulgas={selectedPetCardAlerts.antipulgas || (parasiteAlerts && parasiteAlerts.antipulgas)}
                     colorAntipulgas={selectedPetCardColors.antipulgas}
-                    alertColeira={selectedPetCardAlerts.coleira || parasiteAlerts.coleira}
+                    alertColeira={selectedPetCardAlerts.coleira || (parasiteAlerts && parasiteAlerts.coleira)}
                     colorColeira={selectedPetCardColors.coleira}
                     alertGrooming={selectedPetCardAlerts.grooming}
                     colorGrooming={selectedPetCardColors.grooming}
@@ -3424,14 +3423,11 @@ export default function HomePage() {
                     onOpenMedication={handleOpenMedication}
                     onOpenFood={handleOpenFood}
                     onOpenEvents={handleOpenEvents}
+                    onOpenFamily={togglePetSelector}
                   />
-
-          </div>
-          );
+                </div>
+              );
             })()}
-          </PetTabs>
-
-          {/* V-L: CheckinPickerModal e MonthlyCheckinBanner removidos da superfície de lançamento */}
           </>
         ) : (
           /* No Pets - Show Simple Message */
@@ -3642,11 +3638,17 @@ export default function HomePage() {
         onCloseVetOptionsModal={closeVetOptionsModal}
         alertVaccinesValue={alertVaccinesValue}
         alertParasitesValue={alertParasitesValue}
+        alertMedicationValue={alertMedicationValue}
         onOpenHealthTab={openHealthTab}
         onStartEventRegistration={startEventRegistration}
         onOpenEditPet={openEditPetModal}
         getRecentVets={getRecentVets}
         onNavigateToSaude={navigateToSaudeFromHealthOptions}
+        onOpenVaccines={handleOpenVaccines}
+        onOpenVermifugo={handleOpenVermifugo}
+        onOpenAntipulgas={handleOpenAntipulgas}
+        onOpenColeira={handleOpenColeira}
+        onOpenMedication={handleOpenMedication}
       />
 
       {/* Add Pet Modal */}
@@ -3746,6 +3748,16 @@ export default function HomePage() {
           petEvents={petEvents}
           onClose={closeMedicationSheet}
           onRefresh={refreshMedicationHistory}
+        />
+      )}
+
+      {showBanhoTosaSheet && selectedPetId && (
+        <GroomingItemSheet
+          petId={selectedPetId}
+          petName={currentPet?.pet_name}
+          groomingRecords={groomingRecords}
+          onClose={closeGroomingSheet}
+          onRefresh={loadGroomingRecords}
         />
       )}
 

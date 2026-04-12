@@ -20,11 +20,18 @@ interface HomeNavigationModalsProps {
   onCloseVetOptionsModal: () => void;
   alertVaccinesValue: boolean;
   alertParasitesValue: boolean;
+  alertMedicationValue: boolean;
   onOpenHealthTab: (tab: string) => void;
   onStartEventRegistration: (type: string) => void;
   onOpenEditPet: () => void;
   getRecentVets: () => string[];
   onNavigateToSaude?: (tab: string) => void;
+  // Individual sheet handlers H1
+  onOpenVaccines?: () => void;
+  onOpenVermifugo?: () => void;
+  onOpenAntipulgas?: () => void;
+  onOpenColeira?: () => void;
+  onOpenMedication?: () => void;
 }
 
 export function HomeNavigationModals({
@@ -41,11 +48,17 @@ export function HomeNavigationModals({
   onCloseVetOptionsModal,
   alertVaccinesValue,
   alertParasitesValue,
+  alertMedicationValue,
   onOpenHealthTab,
   onStartEventRegistration,
   onOpenEditPet,
   getRecentVets,
   onNavigateToSaude,
+  onOpenVaccines,
+  onOpenVermifugo,
+  onOpenAntipulgas,
+  onOpenColeira,
+  onOpenMedication,
 }: HomeNavigationModalsProps) {
   const { t } = useI18n();
 
@@ -90,52 +103,93 @@ export function HomeNavigationModals({
       )}
 
       {showHealthOptionsModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 w-full max-w-sm flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-              <h3 className="text-lg font-bold flex items-center gap-2">🏥 Saúde{currentPet?.pet_name ? ` de ${currentPet.pet_name}` : ''}</h3>
-              <button onClick={onCloseHealthOptionsModal} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">✕</button>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn" onClick={onCloseHealthOptionsModal}>
+          <div 
+            className="bg-slate-50 rounded-[32px] shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-scaleIn"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Mini-Home */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200/60 bg-white/80 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-xl">🏥</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 leading-tight">Saúde</h3>
+                  <p className="text-xs text-slate-500 font-medium">{currentPet?.pet_name ? `Cuidando de ${currentPet.pet_name}` : 'Cuidados preventivos'}</p>
+                </div>
+              </div>
+              <button 
+                onClick={onCloseHealthOptionsModal} 
+                className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
             </div>
-            <div className="px-4 py-3 space-y-2.5">
-              {[
-                { icon: '💉', label: 'Vacinas', borderColor: 'border-l-blue-600', tab: 'vaccines', alert: alertVaccinesValue },
-                { icon: '🛡️', label: 'Controle Parasitário', borderColor: 'border-l-amber-600', tab: 'parasites', alert: alertParasitesValue },
-                { icon: '💊', label: 'Medicação', borderColor: 'border-l-purple-600', tab: 'medication', alert: false },
-              ].map(({ icon, label, borderColor, tab, alert }) => (
-                <button
-                  key={tab}
-                  onClick={() => {
-                    if (tab === 'eventos') {
+
+            {/* Grid de Cuidados (Mini-Home) */}
+            <div className="p-4 sm:p-6 bg-slate-50">
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                {[
+                  { icon: '💉', label: 'Vacinas', gradient: 'from-blue-100 to-blue-200 border-blue-300', tab: 'vaccines', alert: alertVaccinesValue },
+                  { icon: '🪱', label: 'Vermífugo', gradient: 'from-orange-100 to-amber-200 border-amber-300', tab: 'dewormer', alert: alertParasitesValue },
+                  { icon: '🛡️', label: 'Antipulgas', gradient: 'from-emerald-100 to-green-200 border-green-300', tab: 'flea_tick', alert: alertParasitesValue },
+                  { icon: '📿', label: 'Coleira', gradient: 'from-teal-100 to-cyan-200 border-teal-300', tab: 'collar', alert: alertParasitesValue },
+                  { icon: '💊', label: 'Medicação', gradient: 'from-purple-100 to-violet-200 border-purple-300', tab: 'medication', alert: alertMedicationValue, full: true },
+                ].map(({ icon, label, gradient, tab, alert, full }) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      if (tab === 'vaccines' && onOpenVaccines) {
+                        onCloseHealthOptionsModal();
+                        onOpenVaccines();
+                        return;
+                      }
+                      if (tab === 'dewormer' && onOpenVermifugo) {
+                        onCloseHealthOptionsModal();
+                        onOpenVermifugo();
+                        return;
+                      }
+                      if (tab === 'flea_tick' && onOpenAntipulgas) {
+                        onCloseHealthOptionsModal();
+                        onOpenAntipulgas();
+                        return;
+                      }
+                      if (tab === 'collar' && onOpenColeira) {
+                        onCloseHealthOptionsModal();
+                        onOpenColeira();
+                        return;
+                      }
+                      if (tab === 'medication' && onOpenMedication) {
+                        onCloseHealthOptionsModal();
+                        onOpenMedication();
+                        return;
+                      }
+                      
                       onCloseHealthOptionsModal();
-                      onOpenEventTypeModal();
-                      return;
-                    }
-                    if ((tab === 'vaccines' || tab === 'parasites') && onNavigateToSaude) {
-                      onNavigateToSaude(tab === 'vaccines' ? 'vacinas' : 'antiparasitario');
-                      return;
-                    }
-                    onCloseHealthOptionsModal();
-                    onOpenHealthTab(tab);
-                  }}
-                  className={`w-full h-14 bg-white hover:bg-slate-50 border border-gray-200 border-l-4 ${borderColor} rounded-xl px-5 flex items-center gap-4 shadow-sm hover:shadow-md active:scale-95 transition-all`}
-                >
-                  <span className="text-2xl leading-none flex-shrink-0">{icon}</span>
-                  <span className="flex-1 text-left text-sm font-bold text-gray-900 leading-tight">{label}</span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                      onOpenHealthTab(tab);
+                    }}
+                    className={`group relative overflow-hidden bg-gradient-to-br ${gradient} border rounded-2xl p-4 h-[94px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 text-left flex flex-col justify-end shadow-sm ${full ? 'col-span-2' : ''}`}
+                  >
                     {alert && (
-                      <span className="w-5 h-5 bg-red-500 border-2 border-white rounded-full flex items-center justify-center">
-                        <span className="text-white font-black" style={{ fontSize: '9px' }}>!</span>
-                      </span>
+                      <div className="absolute top-2.5 left-2.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 z-10">
+                        !
+                      </div>
                     )}
-                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </button>
-              ))}
+                    <span className="absolute top-2 right-2 text-2xl transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6 opacity-90">{icon}</span>
+                    <div className="relative">
+                      <span className="text-[14px] font-bold text-slate-900 leading-tight block">{label}</span>
+                      <span className="text-[9px] font-black text-slate-600/60 uppercase tracking-widest mt-0.5 block">Gerenciar</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="px-4 py-3 border-t border-gray-100 flex-shrink-0">
-              <button onClick={onCloseHealthOptionsModal} className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 font-medium">Cancelar</button>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-200/60 bg-white/50 text-center" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+              <p className="text-[11px] text-slate-400 font-medium">Toque em cada item para ver detalhes e datas</p>
             </div>
           </div>
         </div>

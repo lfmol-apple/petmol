@@ -266,8 +266,8 @@ export function EditPetModal({ pet, photoVersion, onClose, onSave, onDelete }: E
 
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 backdrop-blur-md sm:items-center sm:p-4">
-        <div className="flex max-h-[96dvh] w-full flex-col bg-gray-50 sm:max-w-sm rounded-[32px] shadow-2xl overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-fadeIn">
+        <div className="flex max-h-[96dvh] w-full flex-col bg-gray-50 sm:max-w-sm rounded-[32px] shadow-2xl overflow-hidden animate-scaleIn">
 
           {/* Header */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 py-4 bg-white border-b border-gray-100">

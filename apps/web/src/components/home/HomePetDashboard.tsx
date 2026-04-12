@@ -1,16 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { AppleControlButtons } from '@/components/AppleControlButtons';
-import { RemindersSection } from '@/components/home/RemindersSection';
-import { OverdueAlertBanner } from '@/components/home/OverdueAlertBanner';
-import { buildPetCareReminders } from '@/lib/petCareDomain';
-import {
-  HOME_CONTROL_LABELS,
-  loadInactiveHomeControls,
-  saveInactiveHomeControls,
-  type HomeInactiveEligibleControlId,
-} from '@/lib/homeControlPreferences';
 import type { PetEventRecord } from '@/lib/petEvents';
 import type { PetHealthProfile, VaccineRecord } from '@/lib/petHealth';
 import type { FeedingPlanEntry } from '@/lib/types/homeForms';
@@ -37,10 +28,7 @@ interface HomePetDashboardProps {
   quickMarkToast: string | null;
   setQuickMarkToast: (value: string | null) => void;
   fetchPetEvents: (petId: string) => Promise<void>;
-  onOpenVaccines: () => void;
-  onOpenVermifugo: () => void;
-  onOpenAntipulgas: () => void;
-  onOpenColeira: () => void;
+  onOpenHealth: () => void;
   onOpenDocuments: () => void;
   alertVacinas?: boolean;
   colorVacinas?: 'neutral' | 'ok' | 'warning' | 'critical';
@@ -60,33 +48,11 @@ interface HomePetDashboardProps {
   onOpenMedication: () => void;
   onOpenFood: () => void;
   onOpenEvents: () => void;
+  onOpenFamily?: () => void;
 }
 
 export function HomePetDashboard({
-  petEvents,
-  vaccines,
-  parasiteControls,
-  groomingRecords,
-  feedingPlan,
-  viewerPreferenceId,
-  currentPet,
-  tutorCheckinDay,
-  selectedPetId,
-  quickMarkId,
-  setQuickMarkId,
-  quickMarkDate,
-  setQuickMarkDate,
-  quickMarkNotes,
-  setQuickMarkNotes,
-  quickMarkSaving,
-  setQuickMarkSaving,
-  quickMarkToast,
-  setQuickMarkToast,
-  fetchPetEvents,
-  onOpenVaccines,
-  onOpenVermifugo,
-  onOpenAntipulgas,
-  onOpenColeira,
+  onOpenHealth,
   onOpenDocuments,
   alertVacinas,
   colorVacinas,
@@ -105,155 +71,24 @@ export function HomePetDashboard({
   onOpenGrooming,
   onOpenMedication,
   onOpenFood,
-  onOpenEvents,
+  onOpenFamily,
 }: HomePetDashboardProps) {
-  const [inactiveControls, setInactiveControls] = useState<HomeInactiveEligibleControlId[]>([]);
 
-  useEffect(() => {
-    setInactiveControls(loadInactiveHomeControls(viewerPreferenceId, currentPet.pet_id));
-  }, [viewerPreferenceId, currentPet.pet_id]);
-
-  const persistInactiveControls = (nextInactive: HomeInactiveEligibleControlId[]) => {
-    setInactiveControls(nextInactive);
-    saveInactiveHomeControls(viewerPreferenceId, currentPet.pet_id, nextInactive);
-  };
-
-  const handleDeactivateControl = (controlId: HomeInactiveEligibleControlId) => {
-    if (inactiveControls.includes(controlId)) return;
-    persistInactiveControls([...inactiveControls, controlId]);
-  };
-
-  const controlOpenHandlers: Record<HomeInactiveEligibleControlId, () => void> = {
-    vaccines: onOpenVaccines,
-    dewormer: onOpenVermifugo,
-    flea_tick: onOpenAntipulgas,
-    collar: onOpenColeira,
-    food: onOpenFood,
-    grooming: onOpenGrooming,
-    medication: onOpenMedication,
-  };
-
-  const handleReactivateControl = (controlId: HomeInactiveEligibleControlId) => {
-    persistInactiveControls(inactiveControls.filter((item) => item !== controlId));
-    controlOpenHandlers[controlId]?.();
-  };
-
-  const inactiveItems = useMemo(
-    () => inactiveControls.map((controlId) => ({ id: controlId, label: HOME_CONTROL_LABELS[controlId] })),
-    [inactiveControls]
-  );
-
-  const overdueReminders = useMemo(() => {
-    const all = buildPetCareReminders({
-      pet_id: currentPet.pet_id,
-      pet_name: currentPet.pet_name || '',
-      petEvents,
-      vaccines,
-      parasiteControls,
-      groomingRecords,
-      feedingPlan: feedingPlan[currentPet.pet_id],
-    });
-
-    return all.filter((r) => r.diff < 0);
-  }, [petEvents, vaccines, parasiteControls, groomingRecords, feedingPlan, currentPet]);
-
+  const alertHealth = alertVacinas || alertVermifugo || alertAntipulgas || alertColeira || alertMedicacao;
+  
   return (
     <div className="relative px-2 pt-0 space-y-3 -mt-6">
-      <OverdueAlertBanner
-        overdueReminders={overdueReminders}
-        onOpenVaccines={onOpenVaccines}
-        onOpenVermifugo={onOpenVermifugo}
-        onOpenAntipulgas={onOpenAntipulgas}
-        onOpenColeira={onOpenColeira}
-        onOpenGrooming={onOpenGrooming}
-        onOpenMedication={onOpenMedication}
-        onOpenFood={onOpenFood}
-        onOpenEvents={onOpenEvents}
-      />
-
       <AppleControlButtons
-        onVacinasClick={onOpenVaccines}
-        onVermifugoClick={onOpenVermifugo}
-        onAntipulgasClick={onOpenAntipulgas}
-        onColeiraClick={onOpenColeira}
+        onHealthClick={onOpenHealth}
         onDocumentosClick={onOpenDocuments}
         onAlimentacaoClick={onOpenFood}
         onBanhoTosaClick={onOpenGrooming}
         onMedicacaoClick={onOpenMedication}
-        alertVacinas={alertVacinas}
-        colorVacinas={colorVacinas}
-        alertVermifugo={alertVermifugo}
-        colorVermifugo={colorVermifugo}
-        alertAntipulgas={alertAntipulgas}
-        colorAntipulgas={colorAntipulgas}
-        alertColeira={alertColeira}
-        colorColeira={colorColeira}
+        onFamilyClick={onOpenFamily}
+        alertHealth={alertHealth}
         alertGrooming={alertGrooming}
-        colorGrooming={colorGrooming}
         alertFood={alertFood}
-        colorFood={colorFood}
         alertMedicacao={alertMedicacao}
-        colorMedicacao={colorMedicacao}
-        inactiveControls={inactiveControls}
-        onDeactivateControl={handleDeactivateControl}
-      />
-
-      {inactiveItems.length > 0 && (
-        <div className="mb-4 rounded-2xl border border-slate-300/80 bg-white/75 px-3 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-          <div className="flex items-center gap-2 text-left">
-            <span className="text-[13px] text-slate-500">⌄</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold text-slate-700">Controles inativos ({inactiveItems.length})</p>
-              <p className="text-[11px] text-slate-500 truncate">Eles ficam sem cor para incentivar o clique. Toque para reativar e abrir.</p>
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {inactiveItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleReactivateControl(item.id)}
-                className="rounded-xl border border-slate-300 bg-slate-100/90 px-3 py-2.5 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] hover:bg-white transition-colors"
-              >
-                <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Inativo</p>
-                <p className="mt-1 text-[13px] font-semibold text-slate-700 truncate">{item.label}</p>
-                <p className="mt-1 text-[11px] text-slate-500">Toque para abrir</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <RemindersSection
-        petEvents={petEvents}
-        vaccines={vaccines}
-        parasiteControls={parasiteControls}
-        groomingRecords={groomingRecords}
-        feedingPlan={feedingPlan}
-        currentPet={currentPet}
-        inactiveControls={inactiveControls}
-        tutorCheckinDay={tutorCheckinDay}
-        selectedPetId={selectedPetId}
-        quickMarkId={quickMarkId}
-        setQuickMarkId={setQuickMarkId}
-        quickMarkDate={quickMarkDate}
-        setQuickMarkDate={setQuickMarkDate}
-        quickMarkNotes={quickMarkNotes}
-        setQuickMarkNotes={setQuickMarkNotes}
-        quickMarkSaving={quickMarkSaving}
-        setQuickMarkSaving={setQuickMarkSaving}
-        quickMarkToast={quickMarkToast}
-        setQuickMarkToast={setQuickMarkToast}
-        fetchPetEvents={fetchPetEvents}
-        onOpenVaccines={onOpenVaccines}
-        onOpenVermifugo={onOpenVermifugo}
-        onOpenAntipulgas={onOpenAntipulgas}
-        onOpenColeira={onOpenColeira}
-        onOpenGrooming={onOpenGrooming}
-        onOpenMedication={onOpenMedication}
-        onOpenFood={onOpenFood}
-        onOpenEvents={onOpenEvents}
       />
     </div>
   );

@@ -234,23 +234,23 @@ export function GroomingItemSheet({
     <ModalPortal>
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden"
+        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden animate-scaleIn"
         style={{ maxHeight: '92dvh' }}
         onClick={e => e.stopPropagation()}
       >
 
         {/* Header */}
-        <div className="px-5 pt-4 pb-4 bg-sky-50 border-b border-sky-100 flex-shrink-0">
+        <div className="px-5 pt-4 pb-4 bg-emerald-50 border-b border-emerald-100 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-2xl flex-shrink-0">
               🛁
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-[17px] font-bold text-gray-900 leading-tight">Banho e Tosa</h2>
+              <h2 className="text-[17px] font-bold text-gray-900 leading-tight">Higiene e Petshop</h2>
               {petName && <p className="text-sm text-gray-500 mt-0.5">{petName}</p>}
             </div>
             <button
@@ -263,8 +263,14 @@ export function GroomingItemSheet({
           </div>
 
           {/* Status badge */}
-          <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-semibold ${status.bg} ${status.text}`}>
-            <span className={`w-2 h-2 rounded-full ${status.dot}`} />
+          <div className={`mt-3 inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-sm font-semibold ${status.bg} ${status.text}`}>
+            {status.dot === 'bg-red-500' ? (
+              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
+                !
+              </div>
+            ) : (
+              <span className={`w-2 h-2 rounded-full ${status.dot}`} />
+            )}
             {nextDate ? status.label : 'Sem agendamento'}
           </div>
         </div>
@@ -347,7 +353,14 @@ export function GroomingItemSheet({
                         {i === 0 ? '🛁' : '·'}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-800">{TYPE_LABELS[rec.type]}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-800">{TYPE_LABELS[rec.type]}</p>
+                          {diffDays(rec.next_recommended_date) !== null && diffDays(rec.next_recommended_date)! < 0 && (
+                            <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
+                              !
+                            </div>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-400">
                           {fmtDate(rec.date)}
                           {rec.cost != null ? ` · R$ ${rec.cost.toFixed(2).replace('.', ',')}` : ''}

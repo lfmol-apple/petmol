@@ -178,11 +178,11 @@ export function VaccineItemSheet({
     <ModalPortal>
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden"
+        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden animate-scaleIn"
         style={{ maxHeight: '92dvh' }}
         onClick={e => e.stopPropagation()}
       >
@@ -198,8 +198,14 @@ export function VaccineItemSheet({
                 <h2 className="text-[16px] font-bold text-gray-900 leading-tight whitespace-nowrap">Vacinas</h2>
                 {petName && <span className="text-sm text-gray-400 truncate">· {petName}</span>}
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${status.dot}`} />
+              <div className="flex items-center gap-2 mt-0.5">
+                {status.dot === 'bg-red-500' ? (
+                  <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
+                    !
+                  </div>
+                ) : (
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${status.dot}`} />
+                )}
                 <span className={`text-[13px] font-semibold ${status.text} truncate`}>{status.label}</span>
               </div>
             </div>
@@ -749,6 +755,11 @@ function VaccineRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-bold text-gray-900 truncate">{v.vaccine_name}</p>
+            {diff !== null && diff < 0 && (
+              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
+                !
+              </div>
+            )}
             {statusBadge}
             {isCurrent && !statusBadge && (
               <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">✅ Atual</span>

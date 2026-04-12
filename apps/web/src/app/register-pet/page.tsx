@@ -7,9 +7,11 @@ import { API_BASE_URL } from '@/lib/api';
 import { PetPhotoPicker } from '@/components/PetPhotoPicker';
 import { localTodayISO } from '@/lib/localDate';
 
-const G   = 'divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200';
-const ROW = 'bg-white px-4 py-3';
-const CTA = 'w-full py-3.5 bg-[#0056D2] text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed';
+import { BrandBackground, PetmolTextLogo } from '@/components/ui/BrandBackground';
+
+const G   = 'divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100 bg-white/50 backdrop-blur-sm shadow-sm';
+const ROW = 'px-4 py-4';
+const CTA = 'w-full py-4 bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-base font-bold rounded-2xl active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/10';
 
 function Switch({ on, onChange }: { on: boolean; onChange: () => void }) {
   return (
@@ -22,7 +24,7 @@ function Switch({ on, onChange }: { on: boolean; onChange: () => void }) {
 
 function Seg({ opts, val, onChange }: { opts: { l: string; v: string }[]; val: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex h-9 rounded-xl bg-gray-100 p-0.5 gap-0.5">
+    <div className="flex h-9 rounded-xl bg-gray-100 p-0.5 gap-0.5 w-full">
       {opts.map((o) => (
         <button key={o.v} type="button" onClick={() => onChange(o.v)}
           className={`flex-1 rounded-[0.6rem] text-xs font-semibold transition-all ${val === o.v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
@@ -151,120 +153,142 @@ export default function RegisterPetPage() {
   };
 
   return (
-    <div className="min-h-dvh bg-gray-50 flex flex-col items-center px-4 py-8">
-      <div className="w-full max-w-sm space-y-4 pb-10">
-
-        {/* Header */}
-        <div className="text-center pt-2 pb-1">
-          <p className="text-xl font-bold tracking-tight text-gray-900">Apresente seu pet</p>
-          <p className="text-sm text-gray-500 mt-0.5">Último passo — quase lá</p>
+    <BrandBackground showLogo={false}>
+      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-40px)] w-full px-4 py-8 animate-fadeIn">
+        <div className="w-full max-w-sm flex flex-col items-center mb-10 animate-scaleIn">
+          <PetmolTextLogo className="text-6xl drop-shadow-3xl" />
         </div>
 
-        {/* Photo + name */}
-        <div className={G}>
-          <div className={`${ROW} flex items-center gap-4`}>
-            <button type="button" onClick={() => setShowPhotoPicker(true)}
-              className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex-shrink-0 flex items-center justify-center">
-              {petPhoto ? (
-                <img src={petPhoto} alt="Pet" className="w-full h-full object-cover" />
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
-                  stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M14.5 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.5 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.5a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 9.5 4z" />
-                  <circle cx="12" cy="13" r="3" />
-                </svg>
+        <div className="bg-white/95 backdrop-blur-xl rounded-[40px] shadow-premium border border-white/60 w-full max-w-md p-8 md:p-10 animate-scaleIn overflow-hidden max-h-[85dvh] flex flex-col">
+          <div className="mb-6 flex-shrink-0">
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Apresente seu pet</h2>
+            <p className="text-sm text-slate-500 font-medium">Vamos começar cuidando do seu melhor amigo.</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1 space-y-6">
+            {error && (
+              <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-700 text-sm flex items-center gap-3 animate-shake">
+                <span className="text-lg">⚠️</span>
+                {error}
+              </div>
+            )}
+
+            {/* Photo + name */}
+            <div className="flex flex-col items-center gap-4 py-2">
+              <button type="button" onClick={() => setShowPhotoPicker(true)}
+                className="w-24 h-24 rounded-3xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-200 flex-shrink-0 flex items-center justify-center group hover:border-[#0056D2] hover:bg-white transition-all">
+                {petPhoto ? (
+                  <img src={petPhoto} alt="Pet" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center text-slate-400 group-hover:text-blue-600">
+                    <span className="text-2xl mb-1">📸</span>
+                    <span className="text-[10px] font-bold uppercase tracking-tighter">Foto</span>
+                  </div>
+                )}
+              </button>
+              <div className="w-full">
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                  placeholder="Nome do seu pet"
+                  className="w-full text-center text-xl font-bold bg-transparent outline-none placeholder:text-slate-300 text-slate-800 border-b-2 border-slate-50 focus:border-[#0056D2] transition-colors pb-2" />
+              </div>
+            </div>
+
+            {/* Species + sex */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Tipo de animal</p>
+                <Seg
+                  opts={[{ l: 'Cão', v: 'dog' }, { l: 'Gato', v: 'cat' }, { l: 'Outro', v: 'other' }]}
+                  val={speciesSeg}
+                  onChange={(v) => { setSpecies(v); setBreed(''); }}
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Sexo</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['male', 'female'] as const).map((v) => (
+                    <button key={v} type="button" onClick={() => setSex(sex === v ? '' : v)}
+                      className={`py-3.5 rounded-2xl border-2 text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                        sex === v ? 'border-[#0056D2] bg-blue-50 text-[#0047ad]' : 'border-slate-50 bg-white text-slate-400 hover:border-slate-100'
+                      }`}>
+                      <span className="text-lg">{v === 'male' ? '♂' : '♀'}</span>
+                      {v === 'male' ? 'Macho' : 'Fêmea'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Detalhes extras */}
+            <div className={G}>
+              <button type="button" onClick={() => setExtrasOpen((v) => !v)}
+                className={`${ROW} flex w-full items-center justify-between group`}>
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-tighter group-hover:text-blue-600 transition-colors">Detalhes adicionais</span>
+                <span className={`text-slate-400 text-xs transition-transform ${extrasOpen ? 'rotate-180 text-blue-600' : ''}`}>▾</span>
+              </button>
+
+              {extrasOpen && (
+                <div className="px-1 py-1 space-y-1">
+                  <div className="bg-white/30 p-4 space-y-4">
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Raça</label>
+                      <select value={breed} onChange={(e) => setBreed(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#0056D2]">
+                        <option value="">Selecionar raça</option>
+                        {breedOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Nascimento</label>
+                      <input type="date" max={today} value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#0056D2]" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Peso</label>
+                        <div className="relative">
+                          <input type="text" inputMode="decimal" value={weightValue}
+                            onChange={(e) => setWeightValue(e.target.value)} placeholder="0.0"
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#0056D2]" />
+                          <select value={weightUnit} onChange={(e) => setWeightUnit(e.target.value)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 bg-transparent outline-none">
+                            <option value="kg">kg</option>
+                            <option value="lb">lb</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Castrado?</label>
+                        <div className="flex h-[46px] items-center justify-center bg-slate-50 rounded-xl border border-slate-100">
+                          <Switch on={neutered} onChange={() => setNeutered((v) => !v)} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
+            </div>
+          </div>
+
+          <div className="mt-6 flex-shrink-0 pt-2 border-t border-slate-100 bg-white/95">
+            <button type="button" onClick={handleSubmit} disabled={loading || !canSubmit} className={CTA}>
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Salvando pet...
+                </span>
+              ) : 'Concluir cadastro'}
             </button>
-            <div className="flex-1 min-w-0">
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-                placeholder="Nome do pet"
-                className="w-full text-sm bg-transparent outline-none placeholder:text-gray-400 text-gray-900" />
-              <p className="text-xs text-gray-400 mt-0.5">Foto opcional — toque para adicionar</p>
-            </div>
           </div>
         </div>
-
-        {/* Species + sex */}
-        <div className={G}>
-          <div className={`${ROW} space-y-2`}>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo de animal</p>
-            <Seg
-              opts={[{ l: 'Cão', v: 'dog' }, { l: 'Gato', v: 'cat' }, { l: 'Outro', v: 'other' }]}
-              val={speciesSeg}
-              onChange={(v) => { setSpecies(v); setBreed(''); }}
-            />
-          </div>
-          <div className={`${ROW} space-y-2`}>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sexo</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(['male', 'female'] as const).map((v) => (
-                <button key={v} type="button" onClick={() => setSex(sex === v ? '' : v)}
-                  className={`py-2.5 rounded-xl border text-sm font-semibold transition-all ${
-                    sex === v ? 'border-[#0056D2] bg-blue-50 text-[#0047ad]' : 'border-gray-200 bg-white text-gray-600'
-                  }`}>
-                  {v === 'male' ? 'Macho' : 'Fêmea'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Detalhes extras */}
-        <div className={G}>
-          <button type="button" onClick={() => setExtrasOpen((v) => !v)}
-            className={`${ROW} flex w-full items-center justify-between`}>
-            <span className="text-sm font-medium text-gray-800">Detalhes extras</span>
-            <span className={`text-gray-400 text-xs transition-transform ${extrasOpen ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-
-          {extrasOpen && (
-            <>
-              <div className={ROW}>
-                <label className="block text-xs text-gray-500 mb-1.5">Raça</label>
-                <select value={breed} onChange={(e) => setBreed(e.target.value)}
-                  className="w-full bg-transparent text-sm outline-none text-gray-700">
-                  <option value="">Selecionar raça</option>
-                  {breedOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
-              </div>
-              <div className={ROW}>
-                <label className="block text-xs text-gray-500 mb-1.5">Data de nascimento</label>
-                <input type="date" max={today} value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
-                  className="w-full bg-transparent text-sm outline-none text-gray-700" />
-              </div>
-              <div className={`${ROW} flex items-center gap-3`}>
-                <span className="text-sm text-gray-800 flex-1">Peso</span>
-                <input type="text" inputMode="decimal" value={weightValue}
-                  onChange={(e) => setWeightValue(e.target.value)} placeholder="0.0"
-                  className="w-16 text-right text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400" />
-                <select value={weightUnit} onChange={(e) => setWeightUnit(e.target.value)}
-                  className="text-sm bg-transparent outline-none text-gray-500">
-                  <option value="kg">kg</option>
-                  <option value="lb">lb</option>
-                </select>
-              </div>
-              <div className={`${ROW} flex items-center justify-between`}>
-                <span className="text-sm text-gray-800">Castrado / Esterilizado</span>
-                <Switch on={neutered} onChange={() => setNeutered((v) => !v)} />
-              </div>
-            </>
-          )}
-        </div>
-
-        {error && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </div>
-        )}
-
-        <button type="button" onClick={handleSubmit} disabled={loading || !canSubmit} className={CTA}>
-          {loading ? 'Salvando...' : 'Entrar no app'}
-        </button>
       </div>
 
       {showPhotoPicker && (
         <PetPhotoPicker initialSrc={petPhoto || null} onConfirm={handlePhotoPickerConfirm} onCancel={() => setShowPhotoPicker(false)} />
       )}
-    </div>
+    </BrandBackground>
   );
 }

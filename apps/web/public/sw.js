@@ -1,5 +1,6 @@
 /**
  * PETMOL Service Worker — Web Push
+ * v2026.04.09c
  *
  * Recebe eventos push, exibe notificação e ao clicar abre a URL do payload.
  * Payload esperado (JSON):
@@ -29,7 +30,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icons/icon-192x192.png',
-    badge: payload.badge || '/icons/icon-96x96.png',
+    badge: payload.badge || '/icons/badge-mono.png',
     tag: payload.tag || 'petmol',
     data: payload.data || { url: '/home' },
     requireInteraction: payload.requireInteraction === true,
@@ -82,3 +83,18 @@ self.addEventListener('notificationclick', (event) => {
 // Ativa o SW imediatamente sem esperar recarregar a página
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
+
+// Nunca servir HTML do cache — sempre busca rede para garantir chunks atualizados
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  // Só interceptar requests do mesmo origin, e apenas HTML (não _next/static)
+  if (
+    url.origin === self.location.origin &&
+    !url.pathname.startsWith('/_next/') &&
+    (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html'))
+  ) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+  }
+});

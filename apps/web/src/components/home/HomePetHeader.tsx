@@ -77,60 +77,54 @@ export function HomePetHeader({
   ].filter(Boolean).join(' · ');
 
   return (
-    <>
-      <div className="px-4 pt-4">
-        <div className="relative w-full h-[180px] sm:h-[220px] bg-gradient-to-br from-brand-DEFAULT to-blue-800 group rounded-[32px] overflow-hidden shadow-premium border border-white/20 transition-all duration-500">
-        <div className="w-full h-full flex items-center justify-center">
-          <span className="text-white text-6xl sm:text-7xl transition-transform duration-500 group-hover:scale-110 opacity-50">
+    <>    <div className="px-4 pt-4 space-y-3">
+      {/* Container da Foto + Navegação Estilo Apple */}
+      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72">
+        
+        {/* Emoji de Fundo para Pets sem Foto */}
+        <div className="w-full h-full flex items-center justify-center opacity-40">
+          <span className="text-white text-6xl sm:text-7xl md:text-8xl transition-transform duration-500 group-hover:scale-110">
             {currentPet.species === 'dog' ? '🐕' : currentPet.species === 'cat' ? '🐱' : '🐾'}
           </span>
         </div>
+
+        {/* Foto Real do Pet (Se houver) */}
         {getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps) && (
           <img
             src={getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps)!}
             alt={currentPet.pet_name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
         )}
+
         {/* Overlay premium gradient na parte inferior da foto */}
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-slate-900/40 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
 
-        {selectedPetNeedsAttention && (
-          <div className={`pointer-events-none absolute inset-0 z-[1] ${selectedPetCareScore <= 35 ? 'ring-2 ring-red-500/50 animate-pulse' : 'ring-1 ring-amber-400/35'}`} />
-        )}
+        {/* Badge de Status de Saúde (PRESERVADO) */}
+        <div className="absolute top-4 left-4 z-20">
+          <button
+            onClick={topAttentionPetCount > 0 ? onOpenTopAttentionModal : undefined}
+            className={`flex items-center gap-1.5 rounded-full px-3 h-[28px] transition-all backdrop-blur-md border border-white/40 shadow-lg ${
+              topAttentionPetCount > 0
+                ? 'bg-rose-500 text-white active:scale-95'
+                : 'bg-white/20 text-white cursor-default'
+            }`}
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${topAttentionPetCount > 0 ? 'bg-white animate-pulse' : 'bg-emerald-400'}`} />
+            <span className="text-[10px] font-black uppercase tracking-widest">
+               {topAttentionPetCount === 0 ? 'Tudo OK' : `${topAttentionPetCount} Pendente${topAttentionPetCount > 1 ? 's' : ''}`}
+            </span>
+          </button>
+        </div>
 
-        {pets.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => switchPetByOffset(-1)}
-              aria-label="Pet anterior"
-              className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/45 text-white border border-white/40 shadow-[0_2px_8px_rgba(0,0,0,0.45)] items-center justify-center hover:bg-black/60 active:scale-95 transition-all"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => switchPetByOffset(1)}
-              aria-label="Próximo pet"
-              className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/45 text-white border border-white/40 shadow-[0_2px_8px_rgba(0,0,0,0.45)] items-center justify-center hover:bg-black/60 active:scale-95 transition-all"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </>
-        )}
-
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
+        {/* Botões de Ação Rápida no Canto Superior Direito */}
+        <div className="absolute top-4 right-4 flex gap-2 z-20">
           <button
             onClick={onOpenAddPetModal}
-            className="flex items-center justify-center w-10 h-10 bg-black/30 backdrop-blur-md text-white rounded-full transition-all shadow-lg hover:bg-slate-900/60 backdrop-blur-md hover:scale-105 active:scale-95 border border-white/20"
+            className="flex items-center justify-center w-9 h-9 bg-white/20 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-white/40 active:scale-90 shadow-lg"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -138,112 +132,116 @@ export function HomePetHeader({
           </button>
           <button
             onClick={onOpenEditPetModal}
-            className="flex items-center justify-center w-10 h-10 bg-white/20 backdrop-blur-md text-white rounded-full transition-all shadow-lg hover:bg-white/30 hover:scale-105 active:scale-95 border border-white/30"
+            className="flex items-center justify-center w-9 h-9 bg-white/20 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-white/40 active:scale-90 shadow-lg"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
         </div>
+
+        {/* Setas Laterais de Navegação Rápida entre Pets */}
+        {pets.length > 1 && (
+          <>
+            <button
+              onClick={() => switchPetByOffset(-1)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/10 backdrop-blur-sm text-white rounded-full transition-all border border-white/20 hover:bg-white/30 active:scale-90 z-20"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              onClick={() => switchPetByOffset(1)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-white/10 backdrop-blur-sm text-white rounded-full transition-all border border-white/20 hover:bg-white/30 active:scale-90 z-20"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        )}
       </div>
-    </div>
 
-    {/* Overlay de informações integrado na base da foto */}
-      <div className="relative mx-4 -mt-14 z-30">
-        <div className="relative rounded-[32px] bg-white/95 shadow-premium p-3.5 backdrop-blur-3xl border border-white/80 overflow-hidden">
-          {/* Status Pill Suspenso no Canto */}
+      {/* Dados de Identidade do Pet (Abaixo da Foto) */}
+      <div className="px-1.5 pb-2">
+        <div className="flex flex-col">
+          {/* Nome do Pet com Dropdown Integrado */}
           <button
-            onClick={topAttentionPetCount > 0 ? onOpenTopAttentionModal : undefined}
-            className={`absolute top-3.5 right-3.5 flex items-center justify-center gap-1.5 rounded-full px-3 h-[26px] transition-all z-10 ${
-              topAttentionPetCount > 0
-                ? 'bg-rose-500 text-white shadow-md active:scale-95'
-                : 'bg-slate-100/80 text-slate-500 cursor-default'
-            }`}
+            onClick={onTogglePetSelector}
+            className="group flex items-center gap-2 -ml-1 pl-1.5 pr-3 py-1.5 rounded-2xl hover:bg-slate-100/50 transition-all active:scale-95 text-left w-fit"
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${topAttentionPetCount > 0 ? 'bg-white animate-pulse' : 'bg-emerald-500'}`} />
-            <span className="text-[10px] font-black uppercase tracking-wider">
-               {topAttentionPetCount === 0 ? 'Tudo OK' : `${topAttentionPetCount} Pendente${topAttentionPetCount > 1 ? 's' : ''}`}
-            </span>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tighter leading-none group-hover:text-blue-600 transition-colors">
+              {currentPet.pet_name}
+            </h2>
+            <div className={`w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center transition-transform duration-300 ${showPetSelector ? 'rotate-180 bg-blue-100 text-blue-600' : 'text-slate-400'}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </button>
-
-          <div className="flex flex-col gap-0.5">
-            <div className="min-w-0 pr-20"> {/* pr-20 para não sobrepor o status suspenso */}
-              <button
-                onClick={onTogglePetSelector}
-                className="group flex items-center gap-2 transition-all active:scale-95 text-left"
-              >
-                <h2 className="text-xl sm:text-2xl font-black font-outfit text-slate-800 tracking-tighter leading-none truncate">
-                  {currentPet.pet_name}
-                </h2>
-                <div className={`w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center transition-transform duration-300 ${showPetSelector ? 'rotate-180 bg-brand-light text-brand-DEFAULT' : 'text-slate-400'}`}>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </button>
-            </div>
-            
-            <div className="flex items-center gap-1 text-[10.5px] font-bold text-slate-500 tracking-tighter uppercase whitespace-nowrap overflow-hidden">
-              <span className="flex-shrink-0">{currentPet.species === 'dog' ? '🐕' : '🐱'} {currentPet.breed}</span>
-              <span className="opacity-40 flex-shrink-0 mx-0.5">•</span>
-              <span className="truncate">{petMeta.split(' · ').slice(1).join(' · ')}</span>
-            </div>
-
-            {showPetSelector && (
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={onClosePetSelector} />
-                <div className="absolute top-full left-0 mt-3 z-[9999] w-[300px] max-w-[calc(100vw-2rem)] animate-fadeIn">
-                  <div className="bg-white rounded-[32px] shadow-2xl border border-slate-200 overflow-hidden ring-1 ring-black/5">
-                    <div className="p-2 max-h-[400px] overflow-y-auto">
-                      {pets.map((pet) => {
-                        const isActive = pet.pet_id === selectedPetId;
-                        return (
-                          <button
-                            key={pet.pet_id}
-                            onClick={() => {
-                              setSelectedPetId(pet.pet_id);
-                              onClosePetSelector();
-                            }}
-                            className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all ${
-                              isActive
-                                ? 'bg-brand-DEFAULT/5 ring-1 ring-brand-DEFAULT/20'
-                                : 'hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="relative w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 shadow-sm">
-                              {getPhotoUrl(pet.photo, pet.pet_id, photoTimestamps) ? (
-                                <img
-                                  src={getPhotoUrl(pet.photo, pet.pet_id, photoTimestamps)!}
-                                  alt={pet.pet_name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-xl">
-                                  {pet.species === 'dog' ? '🐕' : '🐱'}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 text-left min-w-0">
-                              <p className={`font-bold truncate text-sm ${isActive ? 'text-brand-DEFAULT' : 'text-slate-700'}`}>
-                                {pet.pet_name}
-                              </p>
-                              <p className="text-xs text-slate-400 truncate uppercase tracking-tighter font-semibold">
-                                {pet.breed}
-                              </p>
-                            </div>
-                            {isActive && (
-                              <div className="w-2 h-2 rounded-full bg-brand-DEFAULT"></div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+          
+          {/* Metadados em Linha (Raça · Idade · Peso · Sexo) */}
+          <div className="mt-1.5 ml-1 flex items-center gap-1.5 overflow-hidden">
+            <span className="text-[11.5px] font-bold text-slate-500 tracking-tight uppercase whitespace-nowrap">
+              {currentPet.species === 'dog' ? '🐕' : '🐱'} {currentPet.breed}
+            </span>
+            <span className="opacity-40 text-slate-400 font-black tracking-tighter mx-0.5 whitespace-nowrap">·</span>
+            <span className="text-[11.5px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap truncate">
+              {petMeta.split(' · ').slice(1).join(' · ')}
+            </span>
           </div>
         </div>
+
+        {/* Dropdown de Seleção de Pets (Premium Glassmorphism) */}
+        {showPetSelector && (
+          <div className="relative z-[100]">
+            <div className="fixed inset-0" onClick={onClosePetSelector} />
+            <div className="absolute top-2 left-0 w-full sm:w-[280px] bg-white/95 backdrop-blur-xl rounded-[28px] shadow-2xl border border-white/60 overflow-hidden py-2 animate-in fade-in zoom-in duration-200 origin-top-left ring-1 ring-black/5">
+              <div className="px-5 py-2 border-b border-slate-100 mb-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('nav.select_pet')}</span>
+              </div>
+              {pets.map((pet) => (
+                <button
+                  key={pet.pet_id}
+                  onClick={() => {
+                    setSelectedPetId(pet.pet_id);
+                    onClosePetSelector();
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors ${
+                    pet.pet_id === selectedPetId ? 'bg-blue-50/50' : ''
+                  }`}
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-400 to-purple-500 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm ring-1 ring-black/5">
+                    {getPhotoUrl(pet.photo, pet.pet_id, photoTimestamps) ? (
+                      <img
+                        src={getPhotoUrl(pet.photo, pet.pet_id, photoTimestamps)!}
+                        alt={pet.pet_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xl">
+                        {pet.species === 'dog' ? '🐕' : '🐱'}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className={`font-black truncate text-sm tracking-tight ${pet.pet_id === selectedPetId ? 'text-blue-600' : 'text-slate-800'}`}>
+                      {pet.pet_name}
+                    </p>
+                    <p className="text-[10px] text-slate-400 truncate uppercase tracking-wider font-bold">
+                      {pet.breed}
+                    </p>
+                  </div>
+                  {pet.pet_id === selectedPetId && (
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       </div>
 
       <HomeAttentionOverlays

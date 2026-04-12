@@ -7,8 +7,8 @@ import QRCode from 'qrcode';
 const APP_URL =
   (process.env.NEXT_PUBLIC_SITE_URL ? String(process.env.NEXT_PUBLIC_SITE_URL).replace(/\/$/, '') : undefined) ??
   (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'https://petmol.com.br'
-    : typeof window !== 'undefined' ? window.location.origin : 'https://petmol.com.br');
+    ? 'https://petshopbh.com'
+    : typeof window !== 'undefined' ? window.location.origin : 'https://petshopbh.com');
 
 interface MedicalShareQRProps {
   petId: string;

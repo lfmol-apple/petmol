@@ -80,9 +80,14 @@ async function postTestNotification(): Promise<void> {
 }
 
 async function getSwRegistration(): Promise<ServiceWorkerRegistration> {
+  // Ensure SW is registered first
   const existing = await navigator.serviceWorker.getRegistration('/');
-  if (existing) return existing;
-  return navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  if (!existing) {
+    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  }
+  // Always wait for the SW to reach 'active' state — PushManager.subscribe()
+  // requires an active SW; returning from register() too early causes AbortError.
+  return navigator.serviceWorker.ready;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,13 +113,15 @@ export function useNotificationPermissionController() {
 
     setPermission(Notification.permission);
 
-    // Check existing subscription
+    // Check existing subscription and re-sync to server in case it was lost
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => {
         if (sub) {
           setIsSubscribed(true);
           setSubscription(sub);
+          // Re-sync silently — server may have lost the subscription
+          postSubscription(sub).catch(() => {});
         }
       })
       .catch(() => { /* silently ignore */ });
@@ -128,7 +135,7 @@ export function useNotificationPermissionController() {
   }, [isSupported]);
 
   const subscribeToPush = useCallback(async (): Promise<PushSubscription | null> => {
-    if (!isSupported || permission !== 'granted') return null;
+    if (!isSupported || Notification.permission !== 'granted') return null;
     try {
       const vapidKey = await fetchVapidPublicKey();
       const reg = await getSwRegistration();
@@ -145,7 +152,7 @@ export function useNotificationPermissionController() {
       console.error('[push] subscribeToPush falhou', err);
       return null;
     }
-  }, [isSupported, permission]);
+  }, [isSupported]);
 
   const unsubscribe = useCallback(async (): Promise<void> => {
     if (!subscription) return;

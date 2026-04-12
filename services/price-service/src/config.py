@@ -6,12 +6,28 @@ PRODUCTION: All settings via ENV. No hardcoded domains.
 import os
 import re
 from functools import lru_cache
-from typing import Optional, List, Set
-from pydantic_settings import BaseSettings
+from pathlib import Path
+from typing import List, Optional, Set
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_CONFIG_DIR = Path(__file__).resolve().parent.parent
+_ENV_FILES = (
+    str(_CONFIG_DIR / ".secrets" / ".env"),
+    str(_CONFIG_DIR / ".env"),
+)
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILES,
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
     
     # Environment
     env: str = "dev"  # "dev" or "prod"
@@ -86,11 +102,20 @@ class Settings(BaseSettings):
     cobasi_affiliate_url: Optional[str] = None
     petlove_dog_life_url: Optional[str] = None
 
-    class Config:
-        # Prefer storing secrets in .secrets/.env (kept out of git) and fall back to .env.
-        env_file = (".secrets/.env", ".env")
-        env_file_encoding = "utf-8"
-        extra = "ignore"  # Ignore extra env vars like LOG_LEVEL
+    @field_validator("debug", "feature_reminders_push", mode="before")
+    @classmethod
+    def _coerce_bool_like(cls, value):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "y", "on", "enabled", "debug", "dev", "development"}:
+                return True
+            if normalized in {"0", "false", "no", "n", "off", "disabled", "release", "prod", "production", ""}:
+                return False
+        return value
     
     @property
     def cors_origins_list(self) -> List[str]:

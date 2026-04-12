@@ -94,6 +94,8 @@ src/providers/places.py
 src/rg/__init__.py
 src/rg/router.py
 src/rg/schemas.py
+src/serialization/__init__.py
+src/serialization/utc_instant.py
 src/services/__init__.py
 src/services/geohash.py
 src/services/models.py
