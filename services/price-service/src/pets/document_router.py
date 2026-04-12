@@ -378,6 +378,26 @@ def _extract_pdf_text(content: bytes) -> str:
         return ""
 
 
+def _extract_image_text(content: bytes) -> str:
+    """Extrai texto de imagens via Tesseract quando disponível."""
+    try:
+        from PIL import Image, ImageFilter, ImageOps
+        import pytesseract
+
+        img = Image.open(io.BytesIO(content))
+        img = ImageOps.exif_transpose(img)
+        img = img.convert("L")
+        img = ImageOps.autocontrast(img)
+        img = img.filter(ImageFilter.MedianFilter(size=3))
+        img = img.resize((img.size[0] * 2, img.size[1] * 2))
+
+        text = pytesseract.image_to_string(img, lang="por+eng", config="--psm 6")
+        return "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    except Exception as exc:
+        logger.info("[document-classify] image OCR unavailable/failed: %s", exc)
+        return ""
+
+
 def _extract_establishment_name(text: str) -> str | None:
     """
     Extrai o nome do estabelecimento do cabeçalho OU rodapé do documento.
@@ -456,6 +476,8 @@ def _classify_local(content: bytes, mime: str, filename: str) -> tuple[str, date
     text = ""
     if mime == "application/pdf" or filename.lower().endswith(".pdf"):
         text = _extract_pdf_text(content)
+    elif mime.startswith("image/") or filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic")):
+        text = _extract_image_text(content)
 
     detected_date: date_type | None = None
     establishment: str | None = None
@@ -549,21 +571,26 @@ def _classify_local(content: bytes, mime: str, filename: str) -> tuple[str, date
 # ── Gemini AI classification ──────────────────────────────────────────────────
 
 _GEMINI_PROMPT = """\
-Você é um especialista em análise de documentos veterinários. Sua tarefa é extrair três informações deste documento.
+Você é um especialista em análise de documentos veterinários. Sua tarefa é olhar a imagem/PDF inteiro e extrair três informações deste documento.
 
 Retorne APENAS JSON válido, sem markdown:
 {"categoria": "...", "data": "YYYY-MM-DD ou null", "estabelecimento": "nome ou null"}
 
 ═══ CATEGORIA ═══
-Escolha UMA das opções abaixo com base no CONTEÚDO principal:
-- "exam"         → hemograma, bioquímico, ultrassonografia, radiografia, ecocardiograma, eletrocardiograma, cultivo, antibiograma, urina, fezes, citologia
-- "vaccine"      → vacina, imunização, antirrábica, V8, V10, V4, polivalente, carteirinha de vacinação
-- "prescription" → receita médica, posologia, prescrição, medicamento a administrar
-- "report"       → laudo, diagnóstico, resultado de exame, histopatológico, patologia, anátomo-patológico, laudo ultrassonográfico, laudo radiológico, laudo ecocardiográfico, relatório médico, evolução clínica, prontuário
-- "photo"        → fotografia clínica, imagem de lesão, foto cirúrgica, antes/depois
-- "other"        → demais documentos
+Escolha UMA opção pelo CONTEXTO VISUAL e pelo texto principal, não pelo nome do arquivo:
+- "vaccine"      → carteirinha/tabela de vacinação, adesivos de vacinas, colunas de data/lote/próxima dose, V8, V10, V4, antirrábica, imunização
+- "prescription" → receita/receituário: medicamento, dose, posologia, frequência, via oral/tópica/injetável, duração, assinatura/CRMV
+- "exam"         → exame ou resultado laboratorial/imagem: hemograma, bioquímico, urina, fezes, ultrassonografia, radiografia, ecocardiograma, cultura, antibiograma, valores de referência, resultado
+- "report"       → laudo/relatório/prontuário/atestado: texto narrativo clínico, diagnóstico, conclusão, evolução, histopatológico, anátomo-patológico; também use "report" para laudo de imagem quando o foco for o texto do laudo e não uma tabela de resultados
+- "photo"        → foto clínica pura, lesão, ferida, dente, pele, cirurgia, antes/depois, sem estrutura de documento, sem cabeçalho formal e sem texto suficiente para ser exame/receita/laudo
+- "other"        → nota fiscal, recibo, orçamento, comprovante, contrato ou documento que não seja clínico
 
-Dica: laudos geralmente têm o cabeçalho da clínica/laboratório, número do paciente, data de realização e assinatura do médico veterinário.
+Regras de desempate:
+- Se a imagem parece uma folha/documento com cabeçalho, corpo textual e assinatura, NÃO classifique como "photo"; escolha exam, prescription, vaccine ou report.
+- Se houver tabela com valores e referência, prefira "exam".
+- Se houver instruções de medicamento ao tutor, prefira "prescription".
+- Se houver adesivos/selos de vacinas ou carteira de vacinação, prefira "vaccine".
+- Se houver laudo narrativo com conclusão/diagnóstico, prefira "report".
 
 ═══ DATA ═══
 Procure pela data de REALIZAÇÃO ou EMISSÃO do documento (não validade).
@@ -643,15 +670,22 @@ def _gemini_classify_sync(
         return None
 
 
+def _document_ai_classify_enabled(api_key: str | None) -> bool:
+    """IA fica ativa quando há chave, salvo desativação explícita por env."""
+    raw = os.environ.get("DOCUMENT_AI_CLASSIFY_ENABLED")
+    if raw is None:
+        return bool(api_key)
+    return raw.strip().lower() not in ("false", "0", "no", "off")
+
+
 async def _classify_from_content(
     content: bytes, mime: str, filename: str
 ) -> tuple[str, date_type | None, str | None]:
     """
     Classifica documento com Gemini (se disponível) e fallback para pypdf+regex.
     """
-    # DOCUMENT_AI_CLASSIFY_ENABLED: default false — IA só roda quando ligado explicitamente
-    ai_enabled = os.environ.get("DOCUMENT_AI_CLASSIFY_ENABLED", "false").lower() not in ("false", "0", "no")
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    ai_enabled = _document_ai_classify_enabled(api_key)
     if ai_enabled and api_key and mime in _GEMINI_SUPPORTED_MIMES:
         try:
             result = await asyncio.wait_for(
