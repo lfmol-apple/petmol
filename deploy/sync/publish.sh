@@ -50,10 +50,17 @@ zip -r "$ZIP_PATH" . \
     -x ".git/*" \
     -x ".expo/*" \
     -x "*/.expo/*" \
+    -x ".gemini/*" \
+    -x "*/.gemini/*" \
+    -x ".pytest_cache/*" \
+    -x "*/.pytest_cache/*" \
     -x "*.pyc" \
     -x ".DS_Store" \
     -x "*/.DS_Store" \
     -x "._*" \
+    -x "Captura de Tela*.png" \
+    -x "Pata 2.avif" \
+    -x "pata.png" \
     -x "*.zip" \
     -x ".env" \
     -x ".env.local" \
