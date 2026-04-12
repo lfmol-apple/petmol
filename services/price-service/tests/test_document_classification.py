@@ -30,12 +30,37 @@ def test_local_image_classification_uses_ocr_text(monkeypatch):
         lambda _content: "Receituário veterinário\nAdministrar 1 comprimido a cada 12 horas\nCRMV",
     )
 
-    category, doc_date, establishment = document_router._classify_local(
+    classification = document_router._classify_local(
         b"image-bytes",
         "image/jpeg",
         "IMG_001.jpg",
     )
 
-    assert category == "prescription"
-    assert doc_date is None
-    assert establishment == "Receituário veterinário"
+    assert classification.category == "prescription"
+    assert classification.document_date is None
+    assert classification.establishment == "Receituário veterinário"
+    assert classification.suggested_title == "Receita veterinária"
+
+
+def test_local_image_classification_identifies_ultrasound_date_and_place(monkeypatch):
+    monkeypatch.setattr(
+        document_router,
+        "_extract_image_text",
+        lambda _content: (
+            "Hospital Veterinário São Lucas\n"
+            "Laudo ultrassonográfico abdominal\n"
+            "Data do exame: 11/04/2026\n"
+            "Conclusão: alterações compatíveis com gastrite."
+        ),
+    )
+
+    classification = document_router._classify_local(
+        b"image-bytes",
+        "image/jpeg",
+        "scan.jpg",
+    )
+
+    assert classification.category == "exam"
+    assert classification.suggested_title == "Ultrassonografia"
+    assert classification.document_date.isoformat() == "2026-04-11"
+    assert classification.establishment == "Hospital Veterinário São Lucas"
