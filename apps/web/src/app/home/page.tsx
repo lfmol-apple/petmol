@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/I18nContext';
-import { PetTabs } from '@/components/PetTabs';
+
 import { EditPetModal } from '@/components/EditPetModal';
 import { AddPetModal } from '../../components/AddPetModal';
 import { VaccineCardUpload } from '@/components/VaccineCardUpload';
@@ -17,6 +17,7 @@ import { HistoryDocumentsOverlay } from '@/components/home/HistoryDocumentsOverl
 import { MedicalVaultModal } from '@/components/home/MedicalVaultModal';
 import { HomeNavigationModals } from '@/components/home/HomeNavigationModals';
 import { HomePetHeader } from '@/components/home/HomePetHeader';
+
 import { HomePetDashboard } from '@/components/home/HomePetDashboard';
 import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
 import { ParasiteItemSheet } from '@/components/home/ParasiteItemSheet';

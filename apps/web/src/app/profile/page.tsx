@@ -21,7 +21,6 @@ interface TutorData {
   name: string;
   phone: string;
   email: string;
-  whatsapp: boolean;
   monthly_checkin_day?: number;
   monthly_checkin_hour?: number;
   monthly_checkin_minute?: number;
@@ -109,7 +108,6 @@ export default function ProfilePage() {
     try {
       const token = getToken();
       const saveData = { ...tutorData };
-      saveData.whatsapp = false;
       if (saveData.phone) {
         let d = saveData.phone.replace(/\D/g, '');
         if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
