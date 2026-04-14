@@ -84,6 +84,7 @@ def _vaccine_record_to_response(record: VaccineRecord) -> VaccineResponse:
         notes=record.notes,
         source="manual",
         confirmed_by_user=True,
+        record_type=record.record_type or "confirmed_application",
     )
 
 
@@ -337,10 +338,13 @@ async def bulk_confirm_vaccines(
             next_dose_date=next_due_date,
             dose_number=vac.dose_number,
             notes=vac.notes,
+            clinic_name=vac.clinic_name,
+            veterinarian_name=vac.veterinarian,
             deleted=False,
             vaccine_code=resolved_code,
             country_code=country,
             next_due_source=next_due_source,
+            record_type=vac.record_type,
         )
 
         db.add(vaccine_record)
@@ -514,7 +518,7 @@ async def create_or_update_feeding_plan(
     )
     
     # Check if plan already exists
-    existing_plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id).first()
+    existing_plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
     
     if existing_plan:
         # Update existing plan
@@ -615,7 +619,7 @@ async def get_feeding_plan(
     pet = _check_pet_ownership(pet_id, current_user, db)
     
     # Get plan
-    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id).first()
+    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
     
     if not plan:
         raise HTTPException(
@@ -674,6 +678,26 @@ async def get_feeding_plan(
     )
 
 
+@router.delete("/pets/{pet_id}/feeding/plan", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_feeding_plan(
+    pet_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Soft delete feeding plan for quick correction."""
+    _check_pet_ownership(pet_id, current_user, db)
+    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
+    if not plan:
+      raise HTTPException(
+          status_code=status.HTTP_404_NOT_FOUND,
+          detail="Plano de alimentação não encontrado para este pet"
+      )
+    plan.deleted_at = datetime.utcnow()
+    plan.updated_at = datetime.utcnow()
+    db.commit()
+    return None
+
+
 @router.get("/pets/{pet_id}/feeding/estimate", response_model=FeedingEstimate)
 async def get_feeding_estimate(
     pet_id: str,
@@ -690,7 +714,7 @@ async def get_feeding_estimate(
     pet = _check_pet_ownership(pet_id, current_user, db)
     
     # Get plan
-    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id).first()
+    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
     
     if not plan:
         raise HTTPException(
@@ -829,4 +853,3 @@ async def get_supported_countries():
         )
 
     return CountriesResponse(status="ok", countries=country_list)
-

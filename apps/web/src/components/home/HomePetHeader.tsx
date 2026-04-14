@@ -1,4 +1,6 @@
 'use client';
+import { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PetTabs } from '@/components/PetTabs';
 
 import { useI18n } from '@/lib/I18nContext';
@@ -56,6 +58,15 @@ export function HomePetHeader({
   selectedPetCareScore,
 }: HomePetHeaderProps) {
   const { t } = useI18n();
+  const nameButtonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (showPetSelector && nameButtonRef.current) {
+      const rect = nameButtonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    }
+  }, [showPetSelector]);
 
   const petMeta = [
     currentPet.breed,
@@ -80,10 +91,7 @@ export function HomePetHeader({
   return (
     <>    <div className="px-4 pt-4 space-y-3">
       {/* Container da Foto + Navegação Estilo Apple */}
-      <div className={`relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72 ${selectedPetNeedsAttention ? 'border-2 border-rose-500' : ''}`}>
-          {selectedPetNeedsAttention && (
-            <div className="absolute top-2 right-2 w-3 h-3 bg-rose-500 rounded-full shadow-lg" />
-          )}
+      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72">
         
         {/* Emoji de Fundo para Pets sem Foto */}
         <div className="w-full h-full flex items-center justify-center opacity-40">
@@ -106,6 +114,31 @@ export function HomePetHeader({
 
         {/* Overlay premium gradient na parte inferior da foto */}
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+
+        {pets.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => switchPetByOffset(-1)}
+              aria-label="Pet anterior"
+              className="hidden sm:flex absolute left-4 top-1/2 z-20 h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-white/20 text-white shadow-lg backdrop-blur-md transition-all hover:bg-white/40 active:scale-95"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => switchPetByOffset(1)}
+              aria-label="Proximo pet"
+              className="hidden sm:flex absolute right-4 top-1/2 z-20 h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-white/20 text-white shadow-lg backdrop-blur-md transition-all hover:bg-white/40 active:scale-95"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        )}
 
         {/* Badge de Status de Saúde (PRESERVADO) */}
         
@@ -138,6 +171,7 @@ export function HomePetHeader({
         <div className="flex flex-col">
           {/* Nome do Pet com Dropdown Integrado */}
           <button
+            ref={nameButtonRef}
             onClick={onTogglePetSelector}
             className="group flex items-center gap-2 -ml-1 pl-1.5 pr-3 py-1.5 rounded-2xl hover:bg-slate-100/50 transition-all active:scale-95 text-left w-fit"
           >
@@ -161,13 +195,35 @@ export function HomePetHeader({
               {petMeta.split(' · ').slice(1).join(' · ')}
             </span>
           </div>
+
+          {/* Badge de atenção — linha separada, não sobrepõe dados */}
+          <div className="mt-1.5 ml-1">
+            <div
+              onClick={topAttentionPetCount > 0 ? onOpenTopAttentionModal : undefined}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
+                selectedPetNeedsAttention
+                  ? 'bg-rose-50 border-rose-100 text-rose-500 cursor-pointer active:scale-95'
+                  : 'bg-emerald-50 border-emerald-100 text-emerald-500 cursor-default'
+              }`}
+            >
+              <div className={`w-1 h-1 rounded-full ${selectedPetNeedsAttention ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <span className="text-[10px] font-black uppercase tracking-wider">
+                {selectedPetNeedsAttention
+                  ? `${topAttentionPetCount} ${topAttentionPetCount === 1 ? 'pet' : 'pets'} · Atenção`
+                  : 'Tudo OK'}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* Dropdown de Seleção de Pets (Premium Glassmorphism) */}
-        {showPetSelector && (
-          <div className="relative z-[100]">
-            <div className="fixed inset-0" onClick={onClosePetSelector} />
-            <div className="absolute top-2 left-0 w-full sm:w-[280px] bg-white/95 backdrop-blur-xl rounded-[28px] shadow-2xl border border-white/60 overflow-hidden py-2 animate-in fade-in zoom-in duration-200 origin-top-left ring-1 ring-black/5">
+        {/* Dropdown de Seleção de Pets via Portal (escapa overflow-hidden do PetTabs) */}
+        {showPetSelector && dropdownPos && createPortal(
+          <>
+            <div className="fixed inset-0 z-[200]" onClick={onClosePetSelector} />
+            <div
+              className="fixed z-[201] w-[280px] bg-white/95 backdrop-blur-xl rounded-[28px] shadow-2xl border border-white/60 overflow-hidden py-2 animate-in fade-in zoom-in duration-200 origin-top-left ring-1 ring-black/5"
+              style={{ top: dropdownPos.top, left: dropdownPos.left }}
+            >
               <div className="px-5 py-2 border-b border-slate-100 mb-1">
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('nav.select_pet')}</span>
               </div>
@@ -209,7 +265,8 @@ export function HomePetHeader({
                 </button>
               ))}
             </div>
-          </div>
+          </>,
+          document.body
         )}
       </div>
       </div>

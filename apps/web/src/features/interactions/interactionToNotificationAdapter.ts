@@ -1,5 +1,6 @@
 import type { InteractionDecision } from './types';
 import type { CanonicalEventActionTarget } from '@/features/events/types';
+import { resolveCanonicalActionTargetModal } from './homeModalRouting';
 
 export interface InteractionNotificationPayload {
   tag: string;
@@ -19,10 +20,8 @@ export interface InteractionNotificationPayload {
 }
 
 function buildDeepLink(decision: InteractionDecision): string {
-  const leaf = decision.action_target.includes('/')
-    ? decision.action_target.split('/')[1]
-    : decision.action_target;
-  const params = new URLSearchParams({ modal: leaf, petId: decision.pet_id });
+  const modal = resolveCanonicalActionTargetModal(decision.action_target);
+  const params = new URLSearchParams({ modal, petId: decision.pet_id });
   return `/home?${params.toString()}`;
 }
 

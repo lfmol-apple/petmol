@@ -97,6 +97,7 @@ export function VaccineItemSheet({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -140,9 +141,14 @@ export function VaccineItemSheet({
   ];
   const chips = (petSpecies === 'cat' || petSpecies === 'cats') ? catChips : dogChips;
 
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
   function handleChipClick(chip: ChipDef) {
     if (chip.disabled) {
-      alert('A vacina de Leishmaniose requer receita veterinária e está sujeita a regulamentação especial.');
+      showToast('A vacina de Leishmaniose requer receita veterinária.');
       return;
     }
     onFullFormVaccine({
@@ -153,6 +159,8 @@ export function VaccineItemSheet({
       frequency_days: 365,
       notes: chip.notes,
       veterinarian: '',
+      clinic_name: '',
+      record_type: 'confirmed_application',
     });
   }
 
@@ -220,6 +228,14 @@ export function VaccineItemSheet({
         </div>
 
         {/* Scrollable body */}
+        {/* Toast */}
+        {toast && (
+          <div className="absolute top-20 left-4 right-4 z-[60] px-4 py-3 rounded-2xl bg-amber-50 border border-amber-200 shadow-md flex items-center gap-2 animate-fadeIn">
+            <span className="text-amber-600 text-base">ℹ️</span>
+            <p className="text-xs font-semibold text-amber-800 flex-1">{toast}</p>
+            <button onClick={() => setToast(null)} className="text-[11px] font-bold text-amber-700 underline">OK</button>
+          </div>
+        )}
         <div className="overflow-y-auto flex-1 overscroll-contain">
           {mode === 'view' && (
             <div className="p-5 space-y-3 pb-8">
@@ -766,6 +782,7 @@ function VaccineRow({
             )}
           </div>
           <p className="text-xs text-gray-400 mt-0.5 truncate">
+            {v.record_type === 'estimated_control_start' ? 'Controle iniciado em ' : ''}
             {fmtDate(v.date_administered)}
             {v.next_dose_date && (
               <>
@@ -781,8 +798,15 @@ function VaccineRow({
             )}
             {v.veterinarian ? ` · ${v.veterinarian}` : ''}
           </p>
-          {(v.vaccine_code || v.country_code || v.next_due_source) && (
+          {(v.record_type || v.vaccine_code || v.country_code || v.next_due_source) && (
             <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${
+                v.record_type === 'estimated_control_start'
+                  ? 'bg-amber-100 text-amber-700 border-amber-200'
+                  : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              }`}>
+                {v.record_type === 'estimated_control_start' ? 'Estimado' : 'Confirmado'}
+              </span>
               {v.vaccine_code && (
                 <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-mono font-semibold border border-indigo-200">
                   🏷️ {v.vaccine_code}

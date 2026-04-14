@@ -70,6 +70,10 @@ class VaccineRecordUpdate(BaseModel):
     dose_number: Optional[int] = Field(None, ge=1)
     notes: Optional[str] = None
     deleted: Optional[bool] = None
+    record_type: Optional[str] = None
+    vaccine_type: Optional[str] = None
+    clinic_name: Optional[str] = None
+    veterinarian_name: Optional[str] = None
     
     @field_validator('next_dose_date')
     @classmethod
@@ -88,6 +92,8 @@ class VaccineRecordOut(VaccineRecordBase):
     created_at: UtcInstant
     updated_at: UtcInstant
     deleted: bool = False
+    deleted_at: OptionalUtcInstant = None
+    record_type: str = "confirmed_application"
     
     # Campos de catálogo (Fev 2026)
     vaccine_code: Optional[str] = None
@@ -116,6 +122,8 @@ class VaccineRecordSync(BaseModel):
     created_at: UtcInstant
     updated_at: UtcInstant
     deleted: bool = False
+    deleted_at: OptionalUtcInstant = None
+    record_type: str = "confirmed_application"
     
     # Legacy fields (deprecated, mantidos para compatibilidade)
     vaccine_type: Optional[str] = None

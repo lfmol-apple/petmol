@@ -1,4 +1,22 @@
+import type { CanonicalEventActionTarget } from '@/features/events/types';
+
 export type HomePushActionType = 'vaccines' | 'medication' | 'parasites' | 'food' | 'grooming';
+
+export const CANONICAL_ACTION_TARGET_TO_HOME_MODAL: Record<CanonicalEventActionTarget, string> = {
+  'health/vaccines': 'vaccines',
+  'health/parasites/dewormer': 'vermifugo',
+  'health/parasites/flea_tick': 'antipulgas',
+  'health/parasites/collar': 'coleira',
+  'health/parasites': 'vermifugo',
+  'health/medication': 'medication',
+  'health/grooming': 'grooming',
+  'health/food': 'food',
+  'health/eventos': 'eventos',
+};
+
+export function resolveCanonicalActionTargetModal(target: CanonicalEventActionTarget): string {
+  return CANONICAL_ACTION_TARGET_TO_HOME_MODAL[target] ?? 'health';
+}
 
 export type HomeSurfaceResolution =
   | {
@@ -20,6 +38,9 @@ export type HomeSurfaceResolution =
   | {
       kind: 'edit-pet';
       initialSection: 'food';
+    }
+  | {
+      kind: 'documents';
     };
 
 export function resolveHomeDeepLinkDestination(
@@ -93,6 +114,10 @@ export function resolveHomeDeepLinkDestination(
 
   if (modal === 'food') {
     return { kind: 'sheet', sheet: 'food' };
+  }
+
+  if (modal === 'documents') {
+    return { kind: 'documents' } as HomeSurfaceResolution;
   }
 
   return null;

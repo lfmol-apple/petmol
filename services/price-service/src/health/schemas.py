@@ -24,6 +24,9 @@ class VaccinePayload(BaseModel):
     source: str = "ocr"  # ocr | manual | vet
     confirmed_by_user: bool = True
     notes: Optional[str] = None
+    record_type: str = "confirmed_application"  # confirmed_application | estimated_control_start
+    clinic_name: Optional[str] = None
+    veterinarian: Optional[str] = None
 
 
 class BulkConfirmRequest(BaseModel):
@@ -51,6 +54,7 @@ class VaccineResponse(BaseModel):
     notes: Optional[str] = None
     source: str
     confirmed_by_user: bool
+    record_type: str = "confirmed_application"
 
 
 class AlertsSummary(BaseModel):

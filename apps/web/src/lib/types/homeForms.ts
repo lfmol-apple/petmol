@@ -18,7 +18,9 @@ export interface VaccineFormData {
   next_dose_date: string;
   frequency_days: number;
   veterinarian: string;
+  clinic_name: string;
   notes: string;
+  record_type: 'confirmed_application' | 'estimated_control_start';
   alert_days_before?: number;
   reminder_time?: string;
 }

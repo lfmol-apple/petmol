@@ -6,6 +6,8 @@ import type { GroomingRecord, GroomingType } from '@/lib/types/home';
 import { ModalPortal } from '@/components/ModalPortal';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
+import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
+import type { ScannedProduct } from '@/lib/productScanner';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function addDays(dateStr: string, days: number): string {
@@ -91,6 +93,8 @@ export function GroomingItemSheet({
     location: '',
     cost: '',
     notes: '',
+    product_name: '',
+    barcode: '',
     frequency_days: String(FREQ_DEFAULTS['bath_grooming']),
     reminder_days: '3',
     reminder_time: '09:00',
@@ -104,10 +108,31 @@ export function GroomingItemSheet({
     location: '',
     cost: '',
     notes: '',
+    product_name: '',
+    barcode: '',
     frequency_days: String(FREQ_DEFAULTS['bath_grooming']),
     reminder_days: '3',
     reminder_time: '09:00',
   });
+
+  // ── Scanner ───────────────────────────────────────────────────────────────
+  function applyScannedProductToAdd(product: ScannedProduct) {
+    setAddForm(f => ({
+      ...f,
+      product_name: [product.brand, product.name].filter(Boolean).join(' ').trim() || f.product_name,
+      barcode: product.barcode,
+    }));
+    if (!product.found) showToast('Não encontramos os dados. Preencha manualmente.');
+  }
+
+  function applyScannedProductToEdit(product: ScannedProduct) {
+    setEditForm(f => ({
+      ...f,
+      product_name: [product.brand, product.name].filter(Boolean).join(' ').trim() || f.product_name,
+      barcode: product.barcode,
+    }));
+    if (!product.found) showToast('Não encontramos os dados. Preencha manualmente.');
+  }
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   function showToast(msg: string) {
@@ -121,10 +146,16 @@ export function GroomingItemSheet({
     setSaving(true);
     try {
       const token = localStorage.getItem('petmol_token');
-      if (!token) { alert('Sessão expirada. Faça login novamente.'); return; }
+      if (!token) { showToast('⚠️ Sessão expirada. Faça login novamente.'); return; }
 
       const freq = parseInt(addForm.frequency_days, 10) || FREQ_DEFAULTS[addForm.type];
       const nextRec = addDays(addForm.date, freq);
+
+      // Build notes: prepend product info if provided
+      const productLine = addForm.product_name.trim()
+        ? `Produto: ${addForm.product_name.trim()}${addForm.barcode ? ` (EAN: ${addForm.barcode})` : ''}`
+        : '';
+      const finalNotes = [productLine, addForm.notes.trim()].filter(Boolean).join('\n') || null;
 
       const res = await fetch(`${API_BASE_URL}/pets/${petId}/grooming`, {
         method: 'POST',
@@ -134,7 +165,7 @@ export function GroomingItemSheet({
           date: addForm.date,
           location: addForm.location || null,
           cost: addForm.cost ? parseFloat(addForm.cost) : null,
-          notes: addForm.notes || null,
+          notes: finalNotes,
           next_recommended_date: nextRec,
           frequency_days: freq,
           reminder_enabled: true,
@@ -144,13 +175,25 @@ export function GroomingItemSheet({
       });
 
       if (res.ok) {
+        // Track hygiene product usage for recurring suggestions
+        const productName = addForm.product_name.trim();
+        if (productName) {
+          try {
+            const usageKey = `petmol_product_usage_${petId}_hygiene`;
+            const existing = JSON.parse(localStorage.getItem(usageKey) || '[]') as Array<{ name: string; count: number; lastUsed: string }>;
+            const found = existing.find(item => item.name.toLowerCase() === productName.toLowerCase());
+            if (found) { found.count += 1; found.lastUsed = addForm.date; }
+            else existing.push({ name: productName, count: 1, lastUsed: addForm.date });
+            existing.sort((a, b) => b.count - a.count || b.lastUsed.localeCompare(a.lastUsed));
+            localStorage.setItem(usageKey, JSON.stringify(existing));
+          } catch { /* silent */ }
+        }
         showToast('✅ Serviço registrado!');
         setMode('view');
-        // Reset form date to today for next use
-        setAddForm(f => ({ ...f, date: localTodayISO(), cost: '', notes: '', location: '' }));
+        setAddForm(f => ({ ...f, date: localTodayISO(), cost: '', notes: '', location: '', product_name: '', barcode: '' }));
         await onRefresh();
       } else {
-        alert('Erro ao salvar. Tente novamente.');
+        showToast('❌ Erro ao salvar. Tente novamente.');
       }
     } finally {
       setSaving(false);
@@ -160,12 +203,21 @@ export function GroomingItemSheet({
   // ── Edit handlers ─────────────────────────────────────────────────────────
   function startEdit(rec: GroomingRecord) {
     setEditRecord(rec);
+    // Extract product_name from notes if previously stored
+    const notesRaw = rec.notes || '';
+    const productMatch = notesRaw.match(/^Produto:\s*([^\n(]+)/);
+    const productName = productMatch ? productMatch[1].trim() : '';
+    const cleanNotes = productName
+      ? notesRaw.replace(/^Produto:[^\n]*(\n)?/, '').trim()
+      : notesRaw;
     setEditForm({
       date: rec.date,
       type: rec.type,
       location: rec.location || '',
       cost: rec.cost != null ? String(rec.cost) : '',
-      notes: rec.notes || '',
+      notes: cleanNotes,
+      product_name: productName,
+      barcode: '',
       frequency_days: String(rec.frequency_days ?? FREQ_DEFAULTS[rec.type]),
       reminder_days: String((rec as unknown as Record<string, unknown>).alert_days_before ?? 3),
       reminder_time: String((rec as unknown as Record<string, unknown>).reminder_time ?? '09:00'),
@@ -181,6 +233,11 @@ export function GroomingItemSheet({
       if (!token) return;
 
       const editFreq = parseInt(editForm.frequency_days, 10) || FREQ_DEFAULTS[editForm.type];
+      const productLine = editForm.product_name.trim()
+        ? `Produto: ${editForm.product_name.trim()}${editForm.barcode ? ` (EAN: ${editForm.barcode})` : ''}`
+        : '';
+      const finalNotes = [productLine, editForm.notes.trim()].filter(Boolean).join('\n') || null;
+
       const res = await fetch(`${API_BASE_URL}/pets/${petId}/grooming/${editRecord.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -189,7 +246,7 @@ export function GroomingItemSheet({
           type: editForm.type,
           location: editForm.location || null,
           cost: editForm.cost ? parseFloat(editForm.cost) : null,
-          notes: editForm.notes || null,
+          notes: finalNotes,
           next_recommended_date: addDays(editForm.date, editFreq),
           frequency_days: editFreq,
           reminder_enabled: true,
@@ -204,7 +261,7 @@ export function GroomingItemSheet({
         setEditRecord(null);
         await onRefresh();
       } else {
-        alert('Erro ao atualizar. Tente novamente.');
+        showToast('❌ Erro ao atualizar. Tente novamente.');
       }
     } finally {
       setSaving(false);
@@ -310,9 +367,31 @@ export function GroomingItemSheet({
                       </div>
                     )}
                   </div>
-                  {last.notes && (
-                    <p className="text-xs text-gray-500 italic border-t border-sky-100 pt-2">{last.notes}</p>
-                  )}
+                  {last.notes && (() => {
+                    const productMatch = last.notes.match(/^Produto:\s*([^\n(]+)/);
+                    const productName = productMatch ? productMatch[1].trim() : null;
+                    const restNotes = last.notes.replace(/^Produto:[^\n]*(\n)?/, '').trim();
+                    return (
+                      <>
+                        {productName && (
+                          <div className="flex items-center justify-between gap-2 border-t border-sky-100 pt-2">
+                            <p className="text-xs text-sky-700 font-semibold truncate">🧴 {productName}</p>
+                            <a
+                              href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(productName + ' pet')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-sky-600 underline whitespace-nowrap flex-shrink-0"
+                            >
+                              Recomprar
+                            </a>
+                          </div>
+                        )}
+                        {restNotes && (
+                          <p className="text-xs text-gray-500 italic border-t border-sky-100 pt-2">{restNotes}</p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center">
@@ -400,6 +479,25 @@ export function GroomingItemSheet({
                 ‹ Voltar
               </button>
               <h3 className="text-[16px] font-bold text-gray-900">Registrar serviço</h3>
+
+              <ProductBarcodeScanner
+                label="Escanear produto (shampoo, etc.)"
+                expectedCategory="hygiene"
+                petId={petId}
+                petName={petName}
+                onProductConfirmed={applyScannedProductToAdd}
+              />
+
+              <div>
+                <label className={labelCls}>Produto utilizado (opcional)</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Ex: Sanol Dog, Johnson's Baby..."
+                  value={addForm.product_name}
+                  onChange={e => setAddForm(f => ({ ...f, product_name: e.target.value }))}
+                />
+              </div>
 
               <div>
                 <label className={labelCls}>Data *</label>
@@ -495,6 +593,25 @@ export function GroomingItemSheet({
                 ‹ Voltar
               </button>
               <h3 className="text-[16px] font-bold text-gray-900">Editar registro</h3>
+
+              <ProductBarcodeScanner
+                label="Escanear produto (shampoo, etc.)"
+                expectedCategory="hygiene"
+                petId={petId}
+                petName={petName}
+                onProductConfirmed={applyScannedProductToEdit}
+              />
+
+              <div>
+                <label className={labelCls}>Produto utilizado (opcional)</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Ex: Sanol Dog, Johnson's Baby..."
+                  value={editForm.product_name}
+                  onChange={e => setEditForm(f => ({ ...f, product_name: e.target.value }))}
+                />
+              </div>
 
               <div>
                 <label className={labelCls}>Data *</label>

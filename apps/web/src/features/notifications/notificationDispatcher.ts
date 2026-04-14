@@ -17,6 +17,7 @@ import type { CanonicalPetEvent } from '@/features/events/types';
 import type { CareInteractionPolicy, MasterInteractionRules } from '@/features/interactions/types';
 import { loadMasterInteractionRules } from '@/features/interactions/preferences';
 import { resolveCarePolicyKeyFromEvent, getCarePolicyForEvent } from '@/features/interactions/interactionEngine';
+import { resolveCanonicalActionTargetModal } from '@/features/interactions/homeModalRouting';
 import { sendPush } from './pushService';
 import { localTodayISO } from '@/lib/localDate';
 
@@ -228,21 +229,8 @@ export function dispatchNotification(
   return payload;
 }
 
-// Maps canonical action_target → modal param accepted by /home?modal=<param>
-const ACTION_TARGET_TO_MODAL: Record<string, string> = {
-  'health/vaccines':           'vaccines',
-  'health/parasites/dewormer': 'vermifugo',
-  'health/parasites/flea_tick':'antipulgas',
-  'health/parasites/collar':   'coleira',
-  'health/parasites':          'vermifugo',
-  'health/medication':         'medication',
-  'health/grooming':           'grooming',
-  'health/food':               'food',
-  'health/eventos':            'eventos',
-};
-
 function buildClickUrl(destination: NotificationDestination, event: CanonicalPetEvent): string {
-  const modal = ACTION_TARGET_TO_MODAL[event.action_target] ?? 'health';
+  const modal = resolveCanonicalActionTargetModal(event.action_target);
   const params = new URLSearchParams({ modal, petId: event.pet_id });
   if (event.label) params.set('itemName', event.label);
   if (destination === 'purchase') params.set('buy', '1');

@@ -134,3 +134,72 @@ async def vision_health():
         "api_configured": bool(api_key),
         "service": "vision-ai"
     }
+
+from .document_classifier import DocumentClassifier
+
+class DocumentClassificationRequest(BaseModel):
+    image_base64: str = Field(..., description="Imagem em base64 (preferencialmente JPEG)")
+    pet_id: str = Field(..., description="ID do pet dono do documento")
+
+class ClinicInfo(BaseModel):
+    nome: Optional[str]
+    endereco: Optional[str]
+    telefone: Optional[str]
+    cnpj: Optional[str]
+
+class VetInfo(BaseModel):
+    nome: Optional[str]
+    crmv: Optional[str]
+
+class DocumentClassificationResponse(BaseModel):
+    tipo_documento: Optional[str]
+    categoria_aba: str
+    titulo_identificado: Optional[str]
+    data_documento: Optional[str]
+    clinica_laboratorio: Optional[ClinicInfo]
+    medico_veterinario: Optional[VetInfo]
+    conteudo_resumo: Optional[str]
+    contem_selo_vacina: bool = False
+    contem_assinatura: bool = False
+    confianca_leitura: float
+
+@router.post(
+    "/documents/classify",
+    response_model=DocumentClassificationResponse,
+    summary="OCR & Classificação de Documentos Pet",
+    description="Analisa a imagem (receita, laudo, exame) e extrai o que é, data, clínica, vet e contexto geral."
+)
+async def classify_document_ocr(
+    request: DocumentClassificationRequest,
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # 1. Decode base64
+        try:
+            image_data = base64.b64decode(request.image_base64)
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Imagem em formato base64 inválido.")
+        
+        # 2. Get API key
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Configuração do servidor incorreta: GOOGLE_API_KEY não definida."
+            )
+            
+        # 3. Classify Document
+        classifier = DocumentClassifier(api_key=api_key)
+        classification_result = await classifier.classify_document(image_data)
+        
+        # O resultado já vem no formato compatível com o Pydantic model
+        return classification_result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro no processamento OCR de documento: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Falha ao usar IA para classificar o documento: {str(e)}"
+        )

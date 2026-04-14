@@ -11,6 +11,7 @@ import { HealthGroomingPanel } from '@/components/home/HealthGroomingPanel';
 import { HealthMedicationPanel } from '@/components/home/HealthMedicationPanel';
 import { HealthEventPanel } from '@/components/home/HealthEventPanel';
 import { HealthVaccinesPanel } from '@/components/home/HealthVaccinesPanel';
+import { PetShareExportPanel } from '@/components/PetShareExportPanel';
 import { useHomeMedicationActions } from '@/features/interactions/useHomeMedicationActions';
 import { useHomeEventActions } from '@/features/interactions/useHomeEventActions';
 import { type PetEventRecord } from '@/lib/petEvents';
@@ -282,12 +283,24 @@ export function HealthModal({
             <div className="p-3 sm:p-5 overflow-y-auto flex-1 bg-gray-50">
               {/* Aba Vacinas */}
               {healthActiveTab === 'vaccines' && (
-                <HealthVaccinesPanel
-                  petName={currentPet?.pet_name}
-                  vaccines={vaccines}
-                  currentVaccines={currentVaccines}
-                  onOpenVaccineCenter={onOpenVaccineCenter}
-                />
+                <div className="space-y-4">
+                  <HealthVaccinesPanel
+                    petName={currentPet?.pet_name}
+                    vaccines={vaccines}
+                    currentVaccines={currentVaccines}
+                    onOpenVaccineCenter={onOpenVaccineCenter}
+                  />
+                  {currentPet && (
+                    <PetShareExportPanel
+                      pet={currentPet}
+                      vaccines={vaccines}
+                      petEvents={petEvents}
+                      documents={vetHistoryDocs}
+                      parasiteControls={parasiteControls}
+                      groomingRecords={groomingRecords}
+                    />
+                  )}
+                </div>
               )}
 
               {/* Aba Vermífugos/Antiparasitários */}

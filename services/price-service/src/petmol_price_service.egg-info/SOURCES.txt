@@ -62,6 +62,7 @@ src/health/services.py
 src/health/catalog/__init__.py
 src/health/catalog/vaccines.py
 src/notifications/__init__.py
+src/notifications/pendencies.py
 src/petmol_price_service.egg-info/PKG-INFO
 src/petmol_price_service.egg-info/SOURCES.txt
 src/petmol_price_service.egg-info/dependency_links.txt
@@ -127,8 +128,10 @@ src/vaccines/__init__.py
 src/vision/__init__.py
 src/vision/confidence_scorer.py
 src/vision/cross_validation_service.py
+src/vision/document_classifier.py
 src/vision/image_preprocessing.py
 src/vision/pipeline_utils.py
 src/vision/robust_reader.py
 src/vision/router.py
 src/vision/service.py
+tests/test_config_notifications.py

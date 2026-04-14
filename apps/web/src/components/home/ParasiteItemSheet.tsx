@@ -8,6 +8,8 @@ import { trackPartnerClicked, trackV1Metric } from '@/lib/v1Metrics';
 import { ModalPortal } from '@/components/ModalPortal';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
+import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
+import type { ProductCategory, ScannedProduct } from '@/lib/productScanner';
 
 // ── Config por tipo ──────────────────────────────────────────────────────────
 const CONFIG = {
@@ -121,7 +123,7 @@ export function ParasiteItemSheet({
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(true);
   const [historyShowAll, setHistoryShowAll] = useState(false);
 
   // Sorted most-recent-first
@@ -177,15 +179,52 @@ export function ParasiteItemSheet({
     setTimeout(() => setToast(null), 2800);
   }
 
+  function expectedCategoryForType(): ProductCategory {
+    if (type === 'dewormer') return 'dewormer';
+    if (type === 'collar') return 'collar';
+    return 'antiparasite';
+  }
+
+  function applyScannedProduct(product: ScannedProduct) {
+    setApplyForm(f => ({
+      ...f,
+      product_name: [product.brand, product.name].filter(Boolean).join(' ').trim() || f.product_name,
+      notes: [
+        f.notes,
+        product.barcode ? `EAN/GTIN: ${product.barcode}` : '',
+        product.category ? `Categoria: ${product.category}` : '',
+      ].filter(Boolean).join('\n'),
+    }));
+    if (!product.found) showToast('Não encontramos os dados. Preencha manualmente.');
+  }
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('petmol_pending_scanned_product');
+      if (!raw) return;
+      const payload = JSON.parse(raw) as { petId?: string; product?: ScannedProduct };
+      const product = payload.product;
+      if (!product || payload.petId !== petId) return;
+      const expected = expectedCategoryForType();
+      const matches =
+        product.category === expected ||
+        (type === 'flea_tick' && product.category === 'antiparasite');
+      if (!matches) return;
+      setMode('apply');
+      applyScannedProduct(product);
+      sessionStorage.removeItem('petmol_pending_scanned_product');
+    } catch { /* silent */ }
+  }, [petId, type]);
+
   async function handleApply() {
     if (!applyForm.date || !applyForm.product_name.trim()) {
-      alert('Preencha data e produto.');
+      showToast('⚠️ Preencha data e produto.');
       return;
     }
     setSaving(true);
     try {
       const token = getToken();
-      if (!token) { alert('Sessão expirada. Faça login novamente.'); return; }
+      if (!token) { showToast('⚠️ Sessão expirada. Faça login novamente.'); return; }
 
       const freq = parseInt(applyForm.frequency_days, 10) || cfg.defaultFrequency;
       const computedNext = addDays(applyForm.date, freq);
@@ -244,9 +283,22 @@ export function ParasiteItemSheet({
 
         showToast('✅ Registrado com sucesso!');
         setMode('view');
+        // Track product usage for recurring product suggestions
+        try {
+          const usageKey = `petmol_product_usage_${petId}_${type}`;
+          const existing = JSON.parse(localStorage.getItem(usageKey) || '[]') as Array<{ name: string; count: number; lastUsed: string }>;
+          const name = applyForm.product_name.trim();
+          if (name) {
+            const found = existing.find(item => item.name.toLowerCase() === name.toLowerCase());
+            if (found) { found.count += 1; found.lastUsed = applyForm.date; }
+            else existing.push({ name, count: 1, lastUsed: applyForm.date });
+            existing.sort((a, b) => b.count - a.count || b.lastUsed.localeCompare(a.lastUsed));
+            localStorage.setItem(usageKey, JSON.stringify(existing));
+          }
+        } catch { /* silent */ }
         await onRefresh();
       } else {
-        alert('Erro ao salvar. Tente novamente.');
+        showToast('❌ Erro ao salvar. Tente novamente.');
       }
     } finally {
       setSaving(false);
@@ -271,7 +323,7 @@ export function ParasiteItemSheet({
 
   async function handleSaveEdit() {
     if (!editRecord || !editForm.date_applied || !editForm.product_name.trim()) {
-      alert('Preencha data e produto.');
+      showToast('⚠️ Preencha data e produto.');
       return;
     }
     setSaving(true);
@@ -300,7 +352,7 @@ export function ParasiteItemSheet({
         setEditRecord(null);
         await onRefresh();
       } else {
-        alert('Erro ao atualizar. Tente novamente.');
+        showToast('❌ Erro ao atualizar. Tente novamente.');
       }
     } finally {
       setSaving(false);
@@ -426,6 +478,14 @@ export function ParasiteItemSheet({
                 >
                   ✏️ Editar
                 </button>
+                {current && (
+                  <button
+                    onClick={() => setConfirmDeleteId(current.id)}
+                    className="min-w-[132px] flex-1 py-3 rounded-2xl text-sm font-semibold active:opacity-70 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                  >
+                    🗑 Excluir registro
+                  </button>
+                )}
               </div>
 
               {/* Empty state — only shown when no records */}
@@ -508,6 +568,23 @@ export function ParasiteItemSheet({
               )}
 
               {/* Botão de compra suavizado ao final */}
+              {current?.product_name && (
+                <a
+                  href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(current.product_name + ' pet')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-2xl hover:bg-emerald-100 transition-all active:scale-[0.98] shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🔄</span>
+                    <div className="text-left">
+                      <p className="text-[13px] font-bold text-emerald-900">Recomprar {current.product_name}</p>
+                      <p className="text-[11px] text-emerald-700">Produto que você costuma usar · via Google Shopping</p>
+                    </div>
+                  </div>
+                  <span className="text-emerald-400 text-lg font-bold">›</span>
+                </a>
+              )}
               <button
                 onClick={() => setMode('buy')}
                 className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] mt-4 shadow-sm"
@@ -536,6 +613,14 @@ export function ParasiteItemSheet({
                 ‹ Voltar
               </button>
               <h3 className="text-[16px] font-bold text-gray-900">{cfg.ctaLabel}</h3>
+
+              <ProductBarcodeScanner
+                label="Escanear produto"
+                expectedCategory={expectedCategoryForType()}
+                petId={petId}
+                petName={petName}
+                onProductConfirmed={applyScannedProduct}
+              />
 
               <div>
                 <label className={labelCls}>Data *</label>

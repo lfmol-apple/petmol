@@ -20,6 +20,35 @@ from ..config import get_settings
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
+# ── Helper: write a pendency alongside every care push ────────────────────────
+
+def _upsert_pend(
+    *,
+    user_id: int,
+    pet_id,
+    pend_id: str,
+    type_: str,
+    title: str,
+    message: str,
+    deep_link: str,
+    priority: int = 50,
+) -> None:
+    """Best-effort pendency upsert — failures are logged but never crash the scheduler."""
+    try:
+        from .pendencies import upsert_pendency_standalone
+        upsert_pendency_standalone(
+            user_id=int(user_id),
+            pet_id=int(pet_id) if pet_id is not None else None,
+            pend_id=pend_id,
+            type_=type_,
+            title=title,
+            message=message,
+            deep_link=deep_link,
+            priority=priority,
+        )
+    except Exception as e:
+        logger.error(f"_upsert_pend error: {e}")
+
 # Subscriptions file: use env var or fall back to a local path that works in dev
 _DEFAULT_SUBS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "push_subscriptions.json")
 SUBSCRIPTIONS_FILE = os.environ.get("PUSH_SUBSCRIPTIONS_FILE", "/opt/petmol/logs/push_subscriptions.json")
@@ -541,6 +570,21 @@ def send_care_pushes() -> None:
                         break  # subscription expired — skip remaining pushes for this user
                     else:
                         logger.info(f"Push cuidado enviado: {payload['tag']}")
+                        # Mirror as in-app pendency (best-effort)
+                        tag = payload.get("tag", "")
+                        url = (payload.get("data") or {}).get("url", "/home")
+                        ptype = "vaccine" if "vaccine" in tag else "parasite" if "parasite" in tag else "grooming"
+                        prio = 75 if "atrasad" in (payload.get("body") or "").lower() else 50
+                        _upsert_pend(
+                            user_id=pet.user_id,
+                            pet_id=pet.id,
+                            pend_id=tag,
+                            type_=ptype,
+                            title=payload.get("title", "Cuidados do pet"),
+                            message=payload.get("body", ""),
+                            deep_link=url,
+                            priority=prio,
+                        )
 
         finally:
             db.close()
@@ -548,8 +592,78 @@ def send_care_pushes() -> None:
         logger.error(f"send_care_pushes erro: {e}")
 
 
+def send_monthly_docs_reminder() -> None:
+    """Send a monthly document-reminder push + pendency (1x per month per user).
+
+    Fires on day 12 of each month at 18:00 BRT.
+    Pendency ID: petmol-docs-monthly-{user_id}-{YYYY-MM}
+    → Naturally deduplicates: same ID for the whole month, so only one record.
+    """
+    from datetime import timezone as _tz
+
+    brt = _tz(timedelta(hours=-3))
+    now = datetime.now(brt)
+    if now.day != 12 or now.hour != 18 or now.minute != 0:
+        return
+
+    month_key = now.strftime("%Y-%m")
+    subscriptions = _load_subscriptions()
+    if not subscriptions:
+        return
+
+    try:
+        db = SessionLocal()
+        try:
+            from ..user_auth.models import User
+            int_ids = [int(k) for k in subscriptions.keys() if k.isdigit()]
+            if not int_ids:
+                return
+            users = db.query(User).filter(User.id.in_(int_ids)).all()
+            expired_ids = []
+            for user in users:
+                sub = subscriptions.get(str(user.id))
+                if not sub:
+                    continue
+                pend_id = f"petmol-docs-monthly-{user.id}-{month_key}"
+                # Upsert pendency first (survives even if push fails / not subscribed)
+                _upsert_pend(
+                    user_id=user.id,
+                    pet_id=None,
+                    pend_id=pend_id,
+                    type_="documents",
+                    title="📁 Documentos do pet",
+                    message="Teve consulta, exame ou intercorrência este mês? Vale guardar os documentos do seu pet.",
+                    deep_link="/home?modal=documents",
+                    priority=30,
+                )
+                payload = {
+                    "title": "📁 Documentos do pet",
+                    "body": "Teve consulta, exame ou intercorrência este mês? Vale guardar os documentos.",
+                    "icon": "/icons/icon-192x192.png",
+                    "badge": "/icons/badge-mono.png",
+                    "image": "/brand/notification-banner.png",
+                    "tag": pend_id,
+                    "data": {"url": "/home?modal=documents"},
+                    "requireInteraction": False,
+                    "autoCloseMs": 6000,
+                }
+                ok = _send_push(sub, payload)
+                if not ok:
+                    expired_ids.append(str(user.id))
+                else:
+                    logger.info(f"Push docs mensais enviado -> user {user.id}")
+            if expired_ids:
+                for uid in expired_ids:
+                    subscriptions.pop(uid, None)
+                _save_subscriptions(subscriptions)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"send_monthly_docs_reminder erro: {e}")
+
+
 @router.get("/vapid-public-key")
-def get_vapid_public_key():
+async def get_vapid_public_key():
     """Return VAPID public key for frontend push subscription."""
     settings = get_settings()
     if not settings.vapid_public_key:
@@ -826,6 +940,20 @@ async def send_on_open(current_user: User = Depends(get_current_user)):
             break
         sent += 1
         logger.warning(f"[on_open] Push enviado: {payload['tag']}")
+        # Mirror as in-app pendency (best-effort — user always sees overdue items)
+        tag = payload.get("tag", "")
+        url = (payload.get("data") or {}).get("url", "/home")
+        ptype = "vaccine" if "vaccine" in tag else "parasite" if "parasite" in tag else "grooming"
+        _upsert_pend(
+            user_id=current_user.id,
+            pet_id=None,
+            pend_id=tag,
+            type_=ptype,
+            title=payload.get("title", "Cuidado do pet"),
+            message=payload.get("body", ""),
+            deep_link=url,
+            priority=75,  # on-open = always overdue → high priority
+        )
 
     # Salva cooldown só se processou (com ou sem pushes enviados)
     subs_meta[cooldown_key] = now.isoformat()

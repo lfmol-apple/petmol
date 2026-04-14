@@ -343,6 +343,7 @@ def delete_vaccine(
     
     # Soft delete
     vaccine.deleted = True
+    vaccine.deleted_at = datetime.utcnow()
     vaccine.updated_at = datetime.utcnow()
     
     db.commit()

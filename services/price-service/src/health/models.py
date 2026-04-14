@@ -80,6 +80,7 @@ class FeedingPlan(Base):
         server_default=func.now(), 
         onupdate=func.now()
     )
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     
     # Relationships
     pet: Mapped["Pet"] = relationship("Pet", back_populates="feeding_plan")

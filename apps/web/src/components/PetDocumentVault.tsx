@@ -111,6 +111,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
     { id: 'exam',         label: t('doc.cat.exams'),         icon: '🔬' },
     { id: 'prescription', label: t('doc.cat.prescriptions'), icon: '📋' },
     { id: 'report',       label: t('doc.cat.reports'),       icon: '📄' },
+    { id: 'comprovante',  label: t('doc.cat.vouchers'),      icon: '🧾' },
     { id: 'photo',        label: t('doc.cat.photos'),        icon: '📸' },
     { id: 'other',        label: t('doc.cat.others'),        icon: '📎' },
   ];
@@ -120,6 +121,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
     { value: 'vaccine',      label: '💉 ' + t('common.vaccine') },
     { value: 'prescription', label: '📋 ' + t('upload.type_prescription') },
     { value: 'report',       label: '📄 ' + t('upload.type_report') },
+    { value: 'comprovante',  label: '🧾 ' + t('upload.type_comprovante') },
     { value: 'photo',        label: '📸 ' + t('upload.type_photo') },
     { value: 'other',        label: '📎 ' + t('upload.type_other') },
   ];
@@ -369,6 +371,12 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [cardDeleteDocId, setCardDeleteDocId] = useState<string | null>(null);
   const [fabOpen, setFabOpen] = useState(false);
+  const [vaultToast, setVaultToast] = useState<string | null>(null);
+
+  function showVaultToast(msg: string) {
+    setVaultToast(msg);
+    setTimeout(() => setVaultToast(null), 3500);
+  }
 
   // ── Fetch ──────────────────────────────────────────────────────────────
 
@@ -476,14 +484,14 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
         }
 
         if (data.errors?.length && !data.zip_extracted) {
-          alert(`⚠️ ${data.errors.join('\n')}`);
+          showVaultToast(`⚠️ ${data.errors.join(' | ')}`);
         }
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.detail || 'Erro ao enviar arquivo');
+        showVaultToast(err.detail || 'Erro ao enviar arquivo — tente novamente.');
       }
     } catch {
-      alert('Erro ao enviar arquivo');
+      showVaultToast('Erro ao enviar arquivo — verifique sua conexão.');
     } finally {
       setUploading(false);
     }
@@ -516,7 +524,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
       await handleUpload(convertedFiles);
     } catch (error) {
       console.error('[PetDocumentVault] erro ao converter foto em PDF:', error);
-      alert('Não foi possível converter a foto em PDF. Tente novamente.');
+      showVaultToast('Não foi possível converter a foto. Tente novamente.');
       setUploading(false);
     }
   };
@@ -629,10 +637,10 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
         await fetchDocs();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert(err.detail || 'Erro ao salvar link');
+        showVaultToast(err.detail || 'Erro ao salvar link. Tente novamente.');
       }
     } catch {
-      alert('Erro ao salvar link');
+      showVaultToast('Erro ao salvar link — verifique sua conexão.');
     } finally {
       setSavingLink(false);
     }
@@ -742,7 +750,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
     if (res.ok) {
       const data = await res.json();
       setDocs([]);
-      alert(`🗑️ ${data.deleted} documento(s) excluído(s).`);
+      showVaultToast(`${data.deleted} documento(s) removido(s).`);
     }
   };
 
@@ -750,7 +758,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
 
   const handleView = async (doc: PetDocument) => {
     if (doc.kind === 'link' && doc.url_masked) {
-      alert(`🔗 Link salvo:\n${doc.url_masked}\n\n(URL real ocultada por segurança)`);
+      showVaultToast(`🔗 Link: ${doc.url_masked} (URL real ocultada por segurança)`);
       return;
     }
     if (!doc.storage_key) return;
@@ -788,7 +796,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
         link.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
       } catch {
-        alert('Não foi possível baixar o arquivo.');
+        showVaultToast('Não foi possível baixar o arquivo.');
       }
       return;
     }
@@ -892,6 +900,13 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
 
   return (
     <div className="space-y-4" style={{ paddingBottom: 'calc(96px + env(safe-area-inset-bottom))' }}>
+      {/* Toast */}
+      {vaultToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[700] px-4 py-3 rounded-2xl bg-slate-800 text-white text-sm font-semibold shadow-xl max-w-sm w-[calc(100%-2rem)] flex items-center gap-2">
+          <span className="flex-1 text-[13px]">{vaultToast}</span>
+          <button onClick={() => setVaultToast(null)} className="text-xs font-bold text-slate-300 hover:text-white underline flex-shrink-0">OK</button>
+        </div>
+      )}
 
       {/* ── STANDALONE EDIT SHEET (works from card list) ── */}
       {viewerEditOpen && editingDoc && !viewerOpen && (
@@ -1034,10 +1049,11 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
               </p>
               {navigableDocs.length > 1 && viewerDocIndex >= 0 && (
                 <span style={{
-                  color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2,
+                  color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 2,
                   fontFeatureSettings: '"tnum"', userSelect: 'none',
+                  fontWeight: 600, letterSpacing: '0.04em',
                 } as React.CSSProperties}>
-                  {viewerDocIndex + 1} / {navigableDocs.length}
+                  {viewerDocIndex + 1} de {navigableDocs.length}
                 </span>
               )}
             </div>
@@ -1407,39 +1423,41 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
       <input ref={cameraInputRef} type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => e.target.files && handleCameraSelection(e.target.files)} />
 
 
-      {/* ── BATCH CONFIRM MODAL OVERLAY ──────────────────────────────── */}
+      {/* ── BATCH CONFIRM PANEL (right sidebar) ──────────────────────── */}
       {batchConfirm && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60" onClick={() => setBatchConfirm(null)} />
+        <div className="fixed top-0 right-0 bottom-0 z-[300] flex flex-col w-full max-w-sm bg-white/97 backdrop-blur-xl shadow-2xl border-l border-gray-200 overflow-hidden">
 
-          {/* Sheet */}
-          <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col max-h-[85dvh] overflow-hidden">
-
-            {/* Header */}
-            <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">📋</span>
-                <div className="flex-1">
-                  <h4 className="font-bold text-gray-900 text-base">
-                    {batchConfirm.docs.length === 1
-                      ? 'Confirmar documento'
-                      : `Confirmar ${batchConfirm.docs.length} documentos`}
-                  </h4>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {batchConfirm.detectedDate || batchConfirm.detectedEstablishment
-                      ? '✅ IA preencheu alguns campos — confirme ou corrija.'
-                      : 'Preencha data e local válidos para todos os documentos desta entrada.'}
-                  </p>
-                </div>
+          {/* Header */}
+          <div className="px-5 pt-5 pb-3 border-b border-gray-100 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📋</span>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-gray-900 text-base leading-tight">
+                  {batchConfirm.docs.length === 1
+                    ? 'Confirmar documento'
+                    : `Confirmar ${batchConfirm.docs.length} documentos`}
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                  {batchConfirm.detectedDate || batchConfirm.detectedEstablishment
+                    ? '✅ IA preencheu alguns campos — confirme ou corrija.'
+                    : 'Preencha data e local válidos para todos os documentos desta entrada.'}
+                </p>
               </div>
+              <button
+                onClick={() => setBatchConfirm(null)}
+                className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
             </div>
+          </div>
 
-            {/* Scrollable body */}
-            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          {/* Scrollable body */}
+          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
               {/* Shared date + establishment */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-700 mb-1.5 block">
                     📅 Data do atendimento
@@ -1531,10 +1549,10 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                   </div>
                 ))}
               </div>
-            </div>
+          </div>
 
-            {/* Footer actions */}
-            <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+          {/* Footer actions */}
+          <div className="px-5 py-4 border-t border-gray-100 flex gap-3 flex-shrink-0">
               <button
                 onClick={() => setBatchConfirm(null)}
                 className="px-4 py-3 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl transition-colors flex-shrink-0"
@@ -1550,7 +1568,6 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
                   ? '⏳ Salvando…'
                   : `✓ Salvar ${batchConfirm.docs.length > 1 ? 'todos os documentos' : 'documento'}`}
               </button>
-            </div>
           </div>
         </div>
       )}

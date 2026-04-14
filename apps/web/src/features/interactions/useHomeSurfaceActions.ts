@@ -110,6 +110,10 @@ export function useHomeSurfaceActions({
       setEditPetInitialSection(resolution.initialSection);
       setShowEditModal(true);
     }
+
+    if (resolution.kind === 'documents') {
+      setShowMedicalVault(true);
+    }
   }, [
     setEditPetInitialSection,
     setHealthActiveTab,
@@ -121,6 +125,7 @@ export function useHomeSurfaceActions({
     setShowFoodSheet,
     setShowHealthModal,
     setShowHealthOptionsModal,
+    setShowMedicalVault,
     setShowMedicationSheet,
     setShowVaccineSheet,
     setShowVermifugoSheet,

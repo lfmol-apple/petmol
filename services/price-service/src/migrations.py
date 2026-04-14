@@ -51,6 +51,11 @@ def run_pg_migrations(engine: Engine) -> None:
         _pg_add_column_if_missing(conn, "vaccine_records", "vaccine_code", "TEXT")
         _pg_add_column_if_missing(conn, "vaccine_records", "country_code", "TEXT")
         _pg_add_column_if_missing(conn, "vaccine_records", "next_due_source", "TEXT DEFAULT 'unknown'")
+        _pg_add_column_if_missing(conn, "vaccine_records", "deleted_at", "TIMESTAMPTZ")
+        _pg_add_column_if_missing(conn, "vaccine_records", "record_type", "TEXT DEFAULT 'confirmed_application'")
+        _pg_add_column_if_missing(conn, "events", "deleted_at", "TIMESTAMPTZ")
+        _pg_add_column_if_missing(conn, "pet_documents", "deleted_at", "TIMESTAMPTZ")
+        _pg_add_column_if_missing(conn, "feeding_plans", "deleted_at", "TIMESTAMPTZ")
 
         # users: terms / monthly-checkin
         _pg_add_column_if_missing(conn, "users", "terms_accepted", "BOOLEAN DEFAULT FALSE")
@@ -66,6 +71,29 @@ def run_pg_migrations(engine: Engine) -> None:
         _pg_add_column_if_missing(conn, "establishments", "terms_accepted_at", "TIMESTAMPTZ")
         _pg_add_column_if_missing(conn, "establishments", "terms_accepted_ip", "TEXT")
         _pg_add_column_if_missing(conn, "establishments", "terms_accepted_user_agent", "TEXT")
+
+        # notification_pendencies: persistent in-app alerts (Apr 2026)
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_pendencies (
+                id           TEXT PRIMARY KEY,
+                user_id      INTEGER NOT NULL,
+                pet_id       INTEGER,
+                type         TEXT NOT NULL,
+                event_id     TEXT,
+                title        TEXT NOT NULL,
+                message      TEXT NOT NULL,
+                deep_link    TEXT NOT NULL,
+                priority     INTEGER DEFAULT 50,
+                status       TEXT DEFAULT 'active',
+                snoozed_until TIMESTAMPTZ,
+                created_at   TIMESTAMPTZ DEFAULT NOW(),
+                expires_at   TIMESTAMPTZ,
+                updated_at   TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_notif_pend_user ON notification_pendencies (user_id)"
+        ))
 
 
 def run_sqlite_migrations(engine: Engine) -> None:
@@ -105,6 +133,11 @@ def run_sqlite_migrations(engine: Engine) -> None:
         changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "vaccine_code", "TEXT")
         changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "country_code", "TEXT")
         changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "next_due_source", "TEXT DEFAULT 'unknown'")
+        changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "deleted_at", "DATETIME")
+        changed |= _sqlite_add_column_if_missing(conn, "vaccine_records", "record_type", "TEXT DEFAULT 'confirmed_application'")
+        changed |= _sqlite_add_column_if_missing(conn, "events", "deleted_at", "DATETIME")
+        changed |= _sqlite_add_column_if_missing(conn, "pet_documents", "deleted_at", "DATETIME")
+        changed |= _sqlite_add_column_if_missing(conn, "feeding_plans", "deleted_at", "DATETIME")
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vaccine_records_code ON vaccine_records (vaccine_code)"))
 
         # ── World-health architecture (Mar 2026) ────────────────────────────
@@ -309,6 +342,29 @@ def run_sqlite_migrations(engine: Engine) -> None:
 
         # ── Seed: product_name_mappings (BR trade names) ────────────────────
         _seed_product_name_mappings(conn)
+
+        # ── notification_pendencies: persistent in-app alerts (Apr 2026) ────
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_pendencies (
+                id           TEXT PRIMARY KEY,
+                user_id      INTEGER NOT NULL,
+                pet_id       INTEGER,
+                type         TEXT NOT NULL,
+                event_id     TEXT,
+                title        TEXT NOT NULL,
+                message      TEXT NOT NULL,
+                deep_link    TEXT NOT NULL,
+                priority     INTEGER DEFAULT 50,
+                status       TEXT DEFAULT 'active',
+                snoozed_until DATETIME,
+                created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at   DATETIME,
+                updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_notif_pend_user ON notification_pendencies (user_id)"
+        ))
 
         # `changed` is intentionally unused; kept for potential logging later.
         _ = changed

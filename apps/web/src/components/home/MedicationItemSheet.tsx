@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import { parsePetEventExtraData, type PetEventRecord } from '@/lib/petEvents';
 import { ModalPortal } from '@/components/ModalPortal';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { trackPartnerClicked } from '@/lib/v1Metrics';
+import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
+import type { ScannedProduct } from '@/lib/productScanner';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,10 @@ interface MedForm {
   treatment_days: string;
   cost: string;
   notes: string;
+  manufacturer: string;
+  presentation: string;
+  concentration: string;
+  barcode: string;
 }
 
 const EMPTY_FORM: MedForm = {
@@ -69,6 +75,10 @@ const EMPTY_FORM: MedForm = {
   treatment_days: '',
   cost: '',
   notes: '',
+  manufacturer: '',
+  presentation: '',
+  concentration: '',
+  barcode: '',
 };
 
 export interface MedicationItemSheetProps {
@@ -125,6 +135,33 @@ export function MedicationItemSheet({
     setTimeout(() => setToast(null), 2800);
   }
 
+  function applyScannedProduct(product: ScannedProduct) {
+    setForm(f => ({
+      ...f,
+      title: product.name || f.title,
+      professional_name: f.professional_name,
+      manufacturer: product.manufacturer || product.brand || f.manufacturer,
+      presentation: product.presentation || product.weight || f.presentation,
+      concentration: product.concentration || f.concentration,
+      barcode: product.barcode,
+    }));
+    if (!product.found) showToast('Não encontramos os dados. Preencha manualmente.');
+  }
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('petmol_pending_scanned_product');
+      if (!raw) return;
+      const payload = JSON.parse(raw) as { petId?: string; product?: ScannedProduct };
+      if (payload.petId !== petId || !payload.product || payload.product.category !== 'medication') return;
+      setForm({ ...EMPTY_FORM, scheduled_date: localTodayISO() });
+      setEditingId(null);
+      setMode('add');
+      applyScannedProduct(payload.product);
+      sessionStorage.removeItem('petmol_pending_scanned_product');
+    } catch { /* silent */ }
+  }, [petId]);
+
   function openAdd() {
     setForm({ ...EMPTY_FORM, scheduled_date: localTodayISO() });
     setEditingId(null);
@@ -158,6 +195,10 @@ export function MedicationItemSheet({
       treatment_days: treatmentDays,
       cost: ev.cost != null ? String(ev.cost) : '',
       notes: cleanNotes,
+      manufacturer: '',
+      presentation: '',
+      concentration: '',
+      barcode: '',
     });
     setEditingId(ev.id);
     setMode('edit');
@@ -174,6 +215,10 @@ export function MedicationItemSheet({
         form.dose ? `Dose: ${form.dose}` : '',
         form.route ? `Via: ${form.route}` : '',
         form.frequency ? `Frequência: ${form.frequency.replace('_', ' ')}` : '',
+        form.manufacturer ? `Fabricante: ${form.manufacturer}` : '',
+        form.presentation ? `Apresentação: ${form.presentation}` : '',
+        form.concentration ? `Concentração: ${form.concentration}` : '',
+        form.barcode ? `EAN/GTIN: ${form.barcode}` : '',
       ].filter(Boolean).join(' | ');
       const finalNotes = medMeta + (form.notes.trim() ? '\n' + form.notes.trim() : '');
 
@@ -218,7 +263,7 @@ export function MedicationItemSheet({
         await onRefresh();
       } else {
         const err = await res.json().catch(() => ({}));
-        alert('Erro ao salvar: ' + (err.detail || res.status));
+        showToast('❌ Erro ao salvar: ' + (err.detail || res.status));
       }
     } finally {
       setSaving(false);
@@ -253,7 +298,7 @@ export function MedicationItemSheet({
         );
         await onRefresh();
       } else {
-        alert('Erro ao registrar dose');
+        showToast('❌ Erro ao registrar dose');
       }
     } finally {
       setSaving(false);
@@ -262,17 +307,18 @@ export function MedicationItemSheet({
   }
 
   async function handleDelete(evId: string) {
-    if (!confirm('Excluir este registro? Esta ação não pode ser desfeita.')) return;
+    // MedRow provides inline two-tap confirmation before calling this — no additional dialog needed
     const token = localStorage.getItem('petmol_token');
     try {
       await fetch(`${API_BASE_URL}/events/${evId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      setDeletingId(null);
       showToast('🗑️ Registro removido');
       await onRefresh();
     } catch {
-      alert('Erro ao excluir registro.');
+      showToast('❌ Erro ao excluir registro. Tente novamente.');
     }
   }
 
@@ -611,6 +657,14 @@ export function MedicationItemSheet({
           {/* ── ADD / EDIT FORM ───────────────────────────────────────────── */}
           {(mode === 'add' || mode === 'edit') && (
             <div className="p-5 pb-8 space-y-4">
+              <ProductBarcodeScanner
+                label="Ler código de barras"
+                expectedCategory="medication"
+                petId={petId}
+                petName={petName}
+                onProductConfirmed={applyScannedProduct}
+              />
+
               <div>
                 <label className={labelCls}>Nome do medicamento *</label>
                 <input
@@ -619,6 +673,40 @@ export function MedicationItemSheet({
                   placeholder="Ex: Amoxicilina, Prednisolona..."
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Fabricante</label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Ex: MSD"
+                    value={form.manufacturer}
+                    onChange={e => setForm(f => ({ ...f, manufacturer: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Apresentação</label>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="Ex: caixa, frasco 30 ml"
+                    value={form.presentation}
+                    onChange={e => setForm(f => ({ ...f, presentation: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Concentração</label>
+                <input
+                  type="text"
+                  className={inputCls}
+                  placeholder="Ex: 50 mg/ml"
+                  value={form.concentration}
+                  onChange={e => setForm(f => ({ ...f, concentration: e.target.value }))}
                 />
               </div>
 

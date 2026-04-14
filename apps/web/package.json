@@ -18,6 +18,7 @@
     "@types/qrcode": "^1.5.6",
     "browser-image-compression": "^2.0.2",
     "framer-motion": "^12.29.2",
+    "html5-qrcode": "^2.3.8",
     "idb": "^8.0.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",

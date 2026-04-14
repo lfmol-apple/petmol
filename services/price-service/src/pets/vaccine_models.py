@@ -43,6 +43,8 @@ class VaccineRecord(Base):
     
     # Soft delete (para permitir recuperação)
     deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    record_type: Mapped[str] = mapped_column(String(32), nullable=False, default="confirmed_application")
 
     # ✅ CAMPOS DE CATÁLOGO (adicionados Fev 2026 – todos nullable para não quebrar registros existentes)
     vaccine_code: Mapped[Optional[str]] = mapped_column(

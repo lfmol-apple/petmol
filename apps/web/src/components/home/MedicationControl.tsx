@@ -157,7 +157,7 @@ export function MedicationControl({ petName, petEvents, onRefreshEvents, onOpenF
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro inesperado';
-      alert(`❌ ${message}\n\nVerifique sua conexão e tente novamente.`);
+      showToast(`❌ ${message}`);
       return false;
     } finally {
       setSaving(false);
@@ -179,7 +179,7 @@ export function MedicationControl({ petName, petEvents, onRefreshEvents, onOpenF
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro inesperado';
-      alert(`❌ ${message}`);
+      showToast(`❌ ${message}`);
       return false;
     } finally {
       setSaving(false);
@@ -200,7 +200,7 @@ export function MedicationControl({ petName, petEvents, onRefreshEvents, onOpenF
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro inesperado';
-      alert(`❌ ${message}`);
+      showToast(`❌ ${message}`);
       return false;
     } finally {
       setSaving(false);

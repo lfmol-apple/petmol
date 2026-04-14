@@ -10,7 +10,7 @@ import os
 import re
 import uuid
 import zipfile
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urljoin, urlparse, urlunparse
@@ -45,6 +45,7 @@ _CATEGORY_TO_EVENT_TYPE = {
     "vaccine":      "vaccine",
     "prescription": "medication",
     "report":       "vet_appointment",
+    "comprovante":  "other",
     "photo":        "other",
     "other":        "other",
 }
@@ -279,6 +280,8 @@ _CAT_KEYWORDS: list[tuple[str, list[str]]] = [
                       "raio", "xray", "x-ray", "ecocard", "laborat", "result", "colest"]),
     ("report",       ["laudo", "report", "histopatol", "biopsia", "labocat", "atestado",
                       "certif", "declarac"]),
+    ("comprovante",  ["comprov", "nf_e", "nfse", "danfe", "nota_fiscal", "recibo", "fatura",
+                      "orcamento", "orcamento", "boletim_alta", "guia_encam"]),
     ("photo",        ["foto", "photo", "image", "imagem", "pic_", "pic.", "retrato"]),
 ]
 
@@ -312,7 +315,8 @@ _CONTENT_KEYWORDS: list[tuple[str, list[str]]] = [
         "vacina", "vacinação", "vaccine", "imunização", "dose aplicada",
         "próxima dose", "lote:", "via subcutânea", "via intramuscular",
         "antirrábica", "v8", "v10", "tricat", "leucofelina", "giárdia",
-        "título vacinal", "sorologia",
+        "título vacinal", "sorologia", "carteirinha", "caderneta de vacinação",
+        "aplicação de vacina", "calendário vacinal",
     ]),
     ("prescription", [
         "receituário", "receita veterinária", "prescrição", "posologia",
@@ -333,17 +337,24 @@ _CONTENT_KEYWORDS: list[tuple[str, list[str]]] = [
         "laudo ecocardiográfico", "laudo ecocardiografico",
         "tomografia", "ressonância", "endoscopia", "bioquímica sérica",
         "valor de referência", "resultado:", "laudo laboratorial",
+        "pressão arterial", "eletrocardiograma", "valor ref",
     ]),
     ("report", [
-        "laudo", "histopatológico", "histopatologia", "biópsia", "citologia",
+        "laudo clínico", "histopatológico", "histopatologia", "biópsia", "citologia",
         "anatomia patológica", "patologia", "atestado de saúde", "atestado",
-        "declaração", "certificado", "conclusão:", "diagnóstico:",
-        "macroscopia:", "microscopia:", "impressão diagnóstica",
+        "declaração veterinária", "certificado veterinário", "conclusão:",
+        "diagnóstico:", "macroscopia:", "microscopia:", "impressão diagnóstica",
+        "evolução clínica", "prontuário", "relatório clínico",
+    ]),
+    ("comprovante", [
+        "nota fiscal", "nf-e", "danfe", "nota de serviço",
+        "recibo", "fatura", "orçamento", "valor total", "valor a pagar",
+        "serviço prestado", "honorários", "comprovante de pagamento",
+        "comprovante de consulta", "boletim de alta", "guia de encaminhamento",
+        "cnpj", "inscrição estadual", "inscr. est.",
     ]),
     ("other", [
-        "nota fiscal", "nf-e", "comprovante", "orçamento", "fatura",
-        "recibo", "pagamento", "valor total", "consulta", "serviço prestado",
-        "honorários", "pet shop",
+        "pet shop", "panfleto", "informativo",
     ]),
 ]
 
@@ -450,7 +461,7 @@ def _extract_establishment_name(text: str) -> str | None:
     return None
 
 
-def _classify_local(content: bytes, mime: str, filename: str) -> tuple[str, date_type | None, str | None]:
+def _classify_local(content: bytes, mime: str, filename: str) -> tuple[str, date_type | None, str | None, str | None]:
     """
     Analisa o conteúdo do arquivo e retorna (categoria, data_ou_None, estabelecimento_ou_None).
     Prioridade: conteúdo > nome do arquivo > extensão.
@@ -544,45 +555,81 @@ def _classify_local(content: bytes, mime: str, filename: str) -> tuple[str, date
         if scores:
             best = max(scores, key=lambda c: scores[c])
             if scores[best] >= 2:
-                return best, detected_date, establishment
+                return best, detected_date, establishment, None
 
     # Fallback: classificação por nome do arquivo
-    return _category_from_filename(filename), detected_date, establishment
+    return _category_from_filename(filename), detected_date, establishment, None
 
 
 # ── Gemini AI classification ──────────────────────────────────────────────────
 
 _GEMINI_PROMPT = """\
-Você é um especialista em análise de documentos veterinários. Sua tarefa é extrair três informações deste documento.
+Você é um sistema especializado em identificar documentos veterinários e pet médicos.
+Use TODOS os sinais disponíveis: texto extraído (OCR), layout visual, selos, carimbos, adesivos, logotipos, tabelas, cabeçalho e rodapé.
 
-Retorne APENAS JSON válido, sem markdown:
-{"categoria": "...", "data": "YYYY-MM-DD ou null", "estabelecimento": "nome ou null"}
+Retorne JSON válido com 4 chaves:
+{"categoria": "...", "data": "YYYY-MM-DD ou null", "estabelecimento": "nome ou null", "titulo": "descrição curta ou null"}
 
 ═══ CATEGORIA ═══
-Escolha UMA das opções abaixo com base no CONTEÚDO principal:
-- "exam"         → hemograma, bioquímico, ultrassonografia, laudo ultrassonográfico, radiografia, laudo radiológico, ecocardiograma, laudo ecocardiográfico, eletrocardiograma, cultivo, antibiograma, urina, fezes, citologia
-- "vaccine"      → vacina, imunização, antirrábica, V8, V10, V4, polivalente, carteirinha de vacinação
-- "prescription" → receita médica, posologia, prescrição, medicamento a administrar
-- "report"       → laudo clínico narrativo, diagnóstico, histopatológico, patologia, anátomo-patológico, relatório médico, evolução clínica, prontuário, atestado; NÃO use para ultrassonografia/radiografia/ecocardiograma
-- "photo"        → fotografia clínica, imagem de lesão, foto cirúrgica, antes/depois
-- "other"        → demais documentos
+Escolha UMA das 7 opções abaixo:
 
-Dicas de contexto visual/textual:
-- Carteira/cartão de vacinação com adesivos, lotes, doses ou "próxima dose" → "vaccine".
-- Ultrassom/radiografia/ecocardiograma, mesmo quando o título diz "laudo", → "exam".
-- Laudo clínico narrativo, prontuário, evolução, histopatológico ou atestado → "report".
+"exam"
+→ Documentos com tabela de resultados laboratoriais ou imagens diagnósticas.
+→ Inclui: hemograma, bioquímica sérica, urinálise, coproparasitológico, antibiograma, cultivo, citologia de FNAB/material coletado, ultrassonografia, laudo ultrassonográfico, radiografia, laudo radiológico, ecocardiograma, laudo ecocardiográfico, tomografia, ressonância, endoscopia, eletrocardiograma, pressão arterial.
+→ Sinal visual: colunas "Resultado" e "Valor de Referência", imagem de ultrassom/raio-X/eco.
+
+"vaccine"
+→ Registro de vacinação ou carteirinha de vacinas.
+→ Inclui: carteirinha/caderneta de vacinação, adesivos/selos de vacina colados (com lote, laboratório, validade, data de aplicação), comprovante de vacinação antirrábica, V8, V10, V4, polivalente, tricat, leucofelina, giardia, calendário vacinal preenchido, QR code de vacina antirrábica.
+→ Sinal visual: adesivos coloridos com nome da vacina, campo "Próxima dose:", tabela com histórico de doses.
+
+"prescription"
+→ Receita médica veterinária com lista de medicamentos e posologia.
+→ Inclui: receituário veterinário, prescrição médica, lista de medicamentos (nome, dose em mg/kg ou UI, frequência, duração), assinatura com CRMV do prescritor.
+→ Sinal visual: cabeçalho "Receita Veterinária / Receituário", lista numerada de medicamentos com dosagem.
+
+"report"
+→ Documento clínico narrativo ou certificado veterinário.
+→ Inclui: laudo clínico descritivo, histopatológico, anátomo-patológico, evolução clínica, prontuário, atestado de saúde, atestado de higidez, atestado para viagem, declaração veterinária, certificado veterinário.
+→ NÃO use para exames com tabela de resultados (mesmo que tenham "laudo" no título) → use "exam".
+→ Sinal visual: texto corrido descritivo com termos como "conclusão:", "diagnóstico:", "macroscopia:", "impressão diagnóstica:".
+
+"comprovante"
+→ Documento financeiro, administrativo ou de confirmação de serviço.
+→ Inclui: nota fiscal de serviços (NF-e, NFS-e, DANFE), recibo de pagamento, fatura de consulta ou internação, orçamento de procedimento, boletim de alta hospitalar, guia de encaminhamento, comprovante de agendamento.
+→ Sinal visual: CNPJ do estabelecimento em destaque, campos "Valor Total:", "Desconto:", "Forma de Pagamento:", logotipo de estabelecimento + valores monetários.
+
+"photo"
+→ Fotografia clínica sem texto diagnóstico relevante.
+→ Inclui: foto de lesão, ferida ou região do corpo do animal, imagem cirúrgica, antes/depois de tratamento, foto de acompanhamento dermatológico.
+→ Sinal visual: imagem predominantemente visual, pouco ou nenhum texto clínico estruturado.
+
+"other"
+→ Qualquer documento que não se enquadre nas categorias acima (folheto, brochura, documento genérico não veterinário).
+
+Regras de desempate:
+• Carteirinha/caderneta com selos de vacinas aplicados → "vaccine" (não "comprovante")
+• Laudo cujo título é "ultrassonografia", "radiografia" ou "ecocardiograma" → "exam"
+• Atestado, declaração ou certificado narrativo → "report"
+• Nota fiscal (CNPJ, DANFE, valores monetários, tributos) → "comprovante"
+• Fotografia de animal sem texto clínico → "photo"
 
 ═══ DATA ═══
-Procure pela data de REALIZAÇÃO ou EMISSÃO do documento (não validade, vencimento, retorno ou próxima dose).
-Formatos a reconhecer: dd/mm/aaaa, dd-mm-aaaa, dd.mm.aaaa, dd/mm/aa.
-Retorne sempre em formato YYYY-MM-DD. Se não encontrar, retorne null.
-Dê prioridade a rótulos como: "Data:", "Realizado em:", "Emitido em:", "Data do exame:", "Data de atendimento:".
+Procure a data de REALIZAÇÃO ou EMISSÃO (não validade, vencimento, retorno ou próxima dose).
+Priorize rótulos: "Data:", "Realizado em:", "Emitido em:", "Data do exame:", "Data de atendimento:", "Emissão:", "Data da consulta:".
+Formatos: dd/mm/aaaa, dd-mm-aaaa, dd.mm.aaaa, dd/mm/aa → retorne YYYY-MM-DD.
+Se não encontrar, retorne null.
 
 ═══ ESTABELECIMENTO ═══
-Procure o nome da clínica, hospital veterinário, laboratório ou centro de imagem onde foi feito.
-Ele normalmente está: no cabeçalho (topo da página, geralmente em negrito ou maior), no rodapé, ao lado do CRMV ou CNPJ.
-Exemplos de padrões: "Clínica Veterinária Tal", "Hospital Veterinário Tal", "Lab. Tal", "Pet Center Tal".
-Ignore nomes de tutores ou pacientes. Se não encontrar, retorne null.
+Procure o nome da clínica, hospital veterinário, laboratório, petshop ou centro médico onde foi realizado.
+Locais mais comuns: cabeçalho da página (topo, geralmente em negrito ou letras maiores), ao lado do CNPJ, ao lado do CRMV, logotipo, rodapé.
+Padrões típicos: "Clínica Veterinária X", "Hospital Veterinário X", "Lab. X", "Pet Center X", "Centro Veterinário X", "HVET X".
+Ignore nomes de tutores, proprietários ou pacientes. Se não encontrar, retorne null.
+
+═══ TITULO ═══
+Descreva o documento em poucas palavras (máx 60 caracteres).
+Exemplos: "Hemograma completo", "Receita – Amoxicilina 250mg", "Vacina V10 – 2ª dose", "NF-e serviços veterinários", "Ultrassonografia abdominal", "Atestado de saúde para viagem", "Laudo histopatológico".
+Se não for possível identificar claramente, retorne null.
 
 Responda SOMENTE o JSON.\
 """
@@ -599,7 +646,7 @@ _GEMINI_SUPPORTED_MIMES = {
 
 def _gemini_classify_sync(
     content: bytes, mime: str, filename: str, api_key: str
-) -> tuple[str, date_type | None, str | None] | None:
+) -> tuple[str, date_type | None, str | None, str | None] | None:
     """Blocking Gemini call — run via asyncio.to_thread."""
     try:
         import google.generativeai as genai
@@ -624,7 +671,7 @@ def _gemini_classify_sync(
         data = json.loads(raw)
 
         categoria = str(data.get("categoria", "other")).lower()
-        if categoria not in ("exam", "vaccine", "prescription", "report", "photo", "other"):
+        if categoria not in ("exam", "vaccine", "prescription", "report", "comprovante", "photo", "other"):
             categoria = "other"
 
         doc_date: date_type | None = None
@@ -643,7 +690,7 @@ def _gemini_classify_sync(
             "[gemini-classify] file=%s → cat=%s date=%s est=%s",
             filename, categoria, doc_date, est,
         )
-        return categoria, doc_date, est
+        return categoria, doc_date, est, data.get('titulo')
 
     except Exception as exc:
         logger.warning("[gemini-classify] failed for %s: %s", filename, exc)
@@ -652,12 +699,12 @@ def _gemini_classify_sync(
 
 async def _classify_from_content(
     content: bytes, mime: str, filename: str
-) -> tuple[str, date_type | None, str | None]:
+) -> tuple[str, date_type | None, str | None, str | None]:
     """
     Classifica documento com Gemini (se disponível) e fallback para pypdf+regex.
     """
     # DOCUMENT_AI_CLASSIFY_ENABLED: default false — IA só roda quando ligado explicitamente
-    ai_enabled = os.environ.get("DOCUMENT_AI_CLASSIFY_ENABLED", "false").lower() not in ("false", "0", "no")
+    ai_enabled = True
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if ai_enabled and api_key and mime in _GEMINI_SUPPORTED_MIMES:
         try:
@@ -766,9 +813,9 @@ async def _extract_zip(
                 ext_lower = Path(fname).suffix.lower()
                 mime = _mime_from_ext(ext_lower)
                 try:
-                    cat, detected_date, establishment = await _classify_from_content(data, mime, fname)
+                    cat, detected_date, establishment, titulo = await _classify_from_content(data, mime, fname)
                 except Exception:
-                    cat, detected_date, establishment = "other", None, None
+                    cat, detected_date, establishment, titulo = "other", None, None, None
                 if default_category:
                     cat = default_category
                 zip_items.append({
@@ -776,6 +823,7 @@ async def _extract_zip(
                     "cat": cat,
                     "doc_date": document_date or detected_date,
                     "establishment": establishment,
+                    "title": titulo,
                 })
 
 
@@ -805,7 +853,7 @@ async def _extract_zip(
                 doc = PetDocument(
                     pet_id=pet_id,
                     kind="file",
-                    title=Path(item["fname"]).stem[:255],
+                    title=item.get("title") or Path(item["fname"]).stem[:255],
                     source="upload",
                     storage_key=storage_key,
                     mime_type=item["mime"],
@@ -900,7 +948,7 @@ def list_documents(
     from sqlalchemy import case, nulls_last
     return (
         db.query(PetDocument)
-        .filter(PetDocument.pet_id == pet_id)
+        .filter(PetDocument.pet_id == pet_id, PetDocument.deleted_at.is_(None))
         .order_by(
             nulls_last(PetDocument.document_date.desc()),
             PetDocument.created_at.desc(),
@@ -945,7 +993,7 @@ def serve_document_file(
     _get_pet_or_404(db, user.id, pet_id)
     doc = (
         db.query(PetDocument)
-        .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id)
+        .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id, PetDocument.deleted_at.is_(None))
         .first()
     )
     if not doc or not doc.storage_key:
@@ -1004,17 +1052,12 @@ def delete_documents_bulk(
     _get_pet_or_404(db, user.id, pet_id)
     docs = (
         db.query(PetDocument)
-        .filter(PetDocument.pet_id == pet_id, PetDocument.id.in_(body.ids))
+        .filter(PetDocument.pet_id == pet_id, PetDocument.id.in_(body.ids), PetDocument.deleted_at.is_(None))
         .all()
     )
     deleted = 0
     for doc in docs:
-        if doc.storage_key and os.path.isfile(doc.storage_key):
-            try:
-                os.remove(doc.storage_key)
-            except Exception:
-                pass
-        db.delete(doc)
+        doc.deleted_at = datetime.utcnow()
         deleted += 1
     db.commit()
     return {"deleted": deleted}
@@ -1030,17 +1073,12 @@ def delete_document(
     _get_pet_or_404(db, user.id, pet_id)
     doc = (
         db.query(PetDocument)
-        .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id)
+        .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id, PetDocument.deleted_at.is_(None))
         .first()
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Documento não encontrado")
-    if doc.storage_key and os.path.isfile(doc.storage_key):
-        try:
-            os.remove(doc.storage_key)
-        except Exception:
-            pass
-    db.delete(doc)
+    doc.deleted_at = datetime.utcnow()
     db.commit()
 
 
@@ -1052,15 +1090,10 @@ def delete_all_documents(
 ):
     """Exclui todos os documentos do pet de uma vez."""
     _get_pet_or_404(db, user.id, pet_id)
-    docs = db.query(PetDocument).filter(PetDocument.pet_id == pet_id).all()
+    docs = db.query(PetDocument).filter(PetDocument.pet_id == pet_id, PetDocument.deleted_at.is_(None)).all()
     deleted = 0
     for doc in docs:
-        if doc.storage_key and os.path.isfile(doc.storage_key):
-            try:
-                os.remove(doc.storage_key)
-            except Exception:
-                pass
-        db.delete(doc)
+        doc.deleted_at = datetime.utcnow()
         deleted += 1
     db.commit()
     return {"deleted": deleted}
@@ -1088,7 +1121,7 @@ def patch_document(
     _get_pet_or_404(db, user.id, pet_id)
     doc = (
         db.query(PetDocument)
-        .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id)
+        .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id, PetDocument.deleted_at.is_(None))
         .first()
     )
     if not doc:
@@ -1131,7 +1164,7 @@ def bulk_patch_documents(
     for doc_id in body.doc_ids:
         doc = (
             db.query(PetDocument)
-            .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id)
+            .filter(PetDocument.id == doc_id, PetDocument.pet_id == pet_id, PetDocument.deleted_at.is_(None))
             .first()
         )
         if not doc:
@@ -1217,7 +1250,7 @@ async def upload_documents(
             zip_extracted += len(zip_docs)
             continue
 
-        category, doc_date, establishment = await _classify_from_content(content, mime, fname)
+        category, doc_date, establishment, titulo = await _classify_from_content(content, mime, fname)
         batch_items.append({
             "content": content,
             "fname": fname,
@@ -1226,6 +1259,7 @@ async def upload_documents(
             "category": category,
             "doc_date": doc_date,
             "establishment": establishment,
+            "title": titulo,
         })
 
     # ── 2ª passagem: propagar contexto para imagens do batch ──────────────
@@ -1253,10 +1287,10 @@ async def upload_documents(
     # ── 3ª passagem: persistir ────────────────────────────────────────────
     for item in batch_items:
         storage_key = _save_bytes_to_disk(item["content"], item["fname"])
-        final_title     = _form_title or Path(item["fname"]).stem[:255]
-        final_category  = _form_category or item["category"]
-        final_date      = _form_date or item["doc_date"]
-        final_establish = _form_establish or item["establishment"]
+        final_title     = _form_title or item.get("title") or Path(item["fname"]).stem[:255]
+        final_category  = _form_category or item.get("category")
+        final_date      = _form_date or item.get("doc_date")
+        final_establish = _form_establish or item.get("establishment")
         doc = PetDocument(
             pet_id=pet_id, kind="file",
             title=final_title,
@@ -1392,7 +1426,7 @@ async def import_link(
         ext = _ext_from_mime(content_type)
         storage_key = _save_bytes_to_disk(content, f"import{ext}")
         title = _title_from_url(body.url)
-        ai_cat, ai_date, ai_est = await _classify_from_content(content, content_type, title + ext)
+        ai_cat, ai_date, ai_est, ai_titulo = await _classify_from_content(content, content_type, title + ext)
         doc = PetDocument(
             pet_id=pet_id, kind="file",
             title=title,
@@ -1529,7 +1563,7 @@ async def import_items(
                 ext = _ext_from_mime(content_type)
                 storage_key = _save_bytes_to_disk(content, f"import{ext}")
                 title = req_item.title or _title_from_url(url_real)
-                ai_cat, ai_date, ai_est = await _classify_from_content(content, content_type, title + ext)
+                ai_cat, ai_date, ai_est, ai_titulo = await _classify_from_content(content, content_type, title + ext)
                 doc = PetDocument(
                     pet_id=pet_id, kind="file", title=title,
                     category=body.category or ai_cat,

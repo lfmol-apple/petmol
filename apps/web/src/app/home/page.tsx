@@ -18,9 +18,9 @@ import { MedicalVaultModal } from '@/components/home/MedicalVaultModal';
 import { HomeNavigationModals } from '@/components/home/HomeNavigationModals';
 import { HomePetHeader } from '@/components/home/HomePetHeader';
 import { PetTabs } from '@/components/PetTabs';
+import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
 
 import { HomePetDashboard } from '@/components/home/HomePetDashboard';
-import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
 import { ParasiteItemSheet } from '@/components/home/ParasiteItemSheet';
 import { VaccineItemSheet } from '@/components/home/VaccineItemSheet';
 import { MedicationItemSheet } from '@/components/home/MedicationItemSheet';
@@ -43,6 +43,7 @@ import { trackV1Metric } from '@/lib/v1Metrics';
 import { getPetCareCollections } from '@/features/pets/healthCollections';
 import { usePetEventManagement } from '@/hooks/usePetEventManagement';
 import { useVaccineCardWorkflow } from '@/hooks/useVaccineCardWorkflow';
+import { usePendencies } from '@/hooks/usePendencies';
 
 import { hasCompletedOnboarding } from '@/lib/ownerProfile';
 import { API_BASE_URL } from '@/lib/api';
@@ -83,6 +84,7 @@ import {
   type VaccineType
 } from '@/lib/petHealth';
 import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
+import type { ScannedProduct } from '@/lib/productScanner';
 
 // Funções de gerenciamento de vacinas com backend
 const updateVaccine = async (petId: string, vaccineId: string, updates: Partial<VaccineRecord>): Promise<boolean> => {
@@ -96,6 +98,7 @@ const updateVaccine = async (petId: string, vaccineId: string, updates: Partial<
     if (updates.date_administered) payload.applied_date = updates.date_administered;
     if (updates.next_dose_date !== undefined) payload.next_dose_date = updates.next_dose_date || null;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
+    if (updates.record_type) payload.record_type = updates.record_type;
 
     const response = await fetch(`${API_BASE_URL}/vaccines/${vaccineId}`, {
       method: 'PATCH',
@@ -511,6 +514,9 @@ export default function HomePage() {
                   method: 'POST',
                   credentials: 'include',
                   headers: { 'Authorization': `Bearer ${_tok}` },
+                }).then(() => {
+                  // After send-on-open creates pendencies, give the DB a moment then refetch
+                  setTimeout(() => refetchPendencies(), 1500);
                 }).catch(() => {});
               }
               if (typeof meData.monthly_checkin_day === 'number') {
@@ -881,7 +887,9 @@ export default function HomePage() {
     next_dose_date: '',
     frequency_days: 365,
     veterinarian: '',
+    clinic_name: '',
     notes: '',
+    record_type: 'confirmed_application',
     alert_days_before: 3,
     reminder_time: '09:00',
   });
@@ -1141,6 +1149,7 @@ export default function HomePage() {
         vaccine_code?: string | null;
         country_code?: string | null;
         next_due_source?: string | null;
+        record_type?: 'confirmed_application' | 'estimated_control_start' | null;
       }> = await res.json();
       const mapped: VaccineRecord[] = data
         .filter(v => !v.deleted)
@@ -1162,6 +1171,7 @@ export default function HomePage() {
             vaccine_code: v.vaccine_code || undefined,
             country_code: v.country_code || undefined,
             next_due_source: v.next_due_source || undefined,
+            record_type: v.record_type || 'confirmed_application',
           };
         })
         .sort((a, b) =>
@@ -1872,7 +1882,9 @@ export default function HomePage() {
       next_dose_date: '',
       frequency_days: 365,
       veterinarian: '',
+      clinic_name: '',
       notes: '',
+      record_type: 'confirmed_application',
       alert_days_before: 3,
       reminder_time: '09:00',
     });
@@ -1898,9 +1910,10 @@ export default function HomePage() {
           date_administered: vaccineFormData.date_administered,
           next_dose_date: vaccineFormData.next_dose_date || undefined,
           veterinarian: vaccineFormData.veterinarian,
-          clinic_name: '',
+          clinic_name: vaccineFormData.clinic_name || '',
           batch_number: undefined,
           notes: vaccineFormData.notes || undefined,
+          record_type: vaccineFormData.record_type,
         };
         const success = await updateVaccine(currentPet.pet_id, editingVaccine.id, updates);
         
@@ -1943,6 +1956,8 @@ export default function HomePage() {
         if (nextDoseHint) vaccinePayload.next_due_on = nextDoseHint;
         if (vaccineFormData.notes) vaccinePayload.notes = vaccineFormData.notes;
         if (vaccineFormData.veterinarian) vaccinePayload.veterinarian = vaccineFormData.veterinarian;
+        if (vaccineFormData.clinic_name) vaccinePayload.clinic_name = vaccineFormData.clinic_name;
+        vaccinePayload.record_type = vaccineFormData.record_type;
         vaccinePayload.alert_days_before = vaccineFormData.alert_days_before ?? 3;
         vaccinePayload.reminder_time = vaccineFormData.reminder_time ?? '09:00';
 
@@ -1977,6 +1992,7 @@ export default function HomePage() {
           veterinarian: vaccineFormData.veterinarian,
           clinic_name: '',
           notes: saved.notes || vaccineFormData.notes || undefined,
+          record_type: saved.record_type || vaccineFormData.record_type,
           vaccine_code: saved.vaccine_code || undefined,
           country_code: saved.country_code || undefined,
           next_due_source: saved.next_due_source || 'unknown',
@@ -2027,7 +2043,9 @@ export default function HomePage() {
       next_dose_date: vaccine.next_dose_date || '',
       frequency_days: 365,
       veterinarian: vaccine.veterinarian,
+      clinic_name: vaccine.clinic_name || '',
       notes: vaccine.notes || '',
+      record_type: vaccine.record_type || 'confirmed_application',
       alert_days_before: (vaccine as unknown as Record<string, unknown>).alert_days_before as number ?? 3,
       reminder_time: (vaccine as unknown as Record<string, unknown>).reminder_time as string ?? '09:00',
     });
@@ -2036,7 +2054,7 @@ export default function HomePage() {
 
   // Excluir vacina
   const handleDeleteVaccine = async (vaccine: VaccineRecord) => {
-    if (requestUserConfirmation(t('health.vaccines.delete_confirm', { name: vaccine.vaccine_name }))) {
+    if (requestUserConfirmation('Excluir este registro? Essa ação remove o item do histórico.')) {
       try {
         const success = await deleteVaccine(currentPet.pet_id, vaccine.id);
         if (success) {
@@ -2249,6 +2267,7 @@ export default function HomePage() {
             source: 'quick_add',
             confirmed_by_user: true,
             notes: t('health.added_via_quick'),
+            record_type: 'confirmed_application',
           }],
         }),
       });
@@ -2267,6 +2286,7 @@ export default function HomePage() {
         veterinarian: '',
         clinic_name: '',
         notes: saved.notes || t('health.added_via_quick'),
+        record_type: saved.record_type || 'confirmed_application',
         vaccine_code: saved.vaccine_code || undefined,
         country_code: saved.country_code || undefined,
         next_due_source: saved.next_due_source || 'unknown',
@@ -2496,6 +2516,7 @@ export default function HomePage() {
             veterinarian: detected.veterinario_responsavel || '',
             clinic_name: '',
             notes: saved.notes || ocrNotes,
+            record_type: saved.record_type || 'confirmed_application',
             vaccine_code: saved.vaccine_code || undefined,
             country_code: saved.country_code || undefined,
             next_due_source: saved.next_due_source || 'unknown',
@@ -2549,6 +2570,7 @@ export default function HomePage() {
               veterinarian: detected.veterinario_responsavel || '',
               clinic_name: '',
               notes: saved.notes || ocrNotes,
+              record_type: 'confirmed_application',
             });
             importedCount++;
           } else if (res.status === 401 || res.status === 403) {
@@ -2688,6 +2710,9 @@ export default function HomePage() {
   // ── Notification dispatcher — conecta eventos reais às policies ──
   const { rules: masterRules } = useMasterInteractionRules();
   useHomeNotificationBridge(multipetInteractions.canonicalEvents, masterRules);
+
+  // ── Pendências persistentes (in-app) — complementam o push ──
+  const { pendencies, act: actPendency, refetch: refetchPendencies } = usePendencies();
 
   const homePreferenceScopeId = useMemo(
     () => String(loggedUserId || tutor?.id || currentPet?.owner_user_id || 'petmol-home'),
@@ -2933,10 +2958,15 @@ export default function HomePage() {
       case 'health/food':
         setShowFoodSheet(true);
         break;
+      case 'health/eventos':
+        setHealthModalMode('health');
+        setHealthActiveTab('eventos');
+        setShowHealthModal(true);
+        break;
       default:
         break;
     }
-  }, [setSelectedPetId, setShowVaccineSheet, setShowVermifugoSheet, setShowAntipulgasSheet, setShowColeiraSheet, setShowMedicationSheet, setShowBanhoTosaSheet, setShowFoodSheet]);
+  }, [setSelectedPetId, setShowVaccineSheet, setShowVermifugoSheet, setShowAntipulgasSheet, setShowColeiraSheet, setShowMedicationSheet, setShowBanhoTosaSheet, setShowFoodSheet, setHealthModalMode, setHealthActiveTab, setShowHealthModal]);
 
   const {
     applyHomeSurfaceResolution,
@@ -3103,6 +3133,41 @@ export default function HomePage() {
       openParasiteSheet: handleOpenVermifugo,
     });
   }, [currentPet, handleOpenFood, handleOpenVermifugo, pushActionSheet]);
+
+  const handleGlobalProductScan = useCallback((product: ScannedProduct) => {
+    if (!currentPet) return;
+
+    try {
+      sessionStorage.setItem('petmol_pending_scanned_product', JSON.stringify({
+        petId: currentPet.pet_id,
+        product,
+      }));
+    } catch {}
+
+    if (product.category === 'food') {
+      setShowFoodSheet(true);
+      return;
+    }
+    if (product.category === 'medication') {
+      setShowMedicationSheet(true);
+      return;
+    }
+    if (product.category === 'dewormer') {
+      setShowVermifugoSheet(true);
+      return;
+    }
+    if (product.category === 'collar') {
+      setShowColeiraSheet(true);
+      return;
+    }
+    if (product.category === 'antiparasite') {
+      setShowAntipulgasSheet(true);
+      return;
+    }
+
+    setShowHealthOptionsModal(true);
+    showBlockingNotice('Não encontramos os dados. Preencha manualmente.');
+  }, [currentPet]);
 
   const handleSaveCheckinPreference = useCallback(async () => {
     setCheckinPickerSaving(true);
@@ -3315,6 +3380,77 @@ export default function HomePage() {
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
           <>
+            {/* Atenção agora — API pendencies (primary) or inline alerts (fallback) */}
+            {(() => {
+              const topPend = pendencies[0];
+              if (topPend) {
+                const isHigh = topPend.priority >= 75;
+                return (
+                  <div className={`mb-3 rounded-2xl border px-4 py-3 space-y-2 ${isHigh ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl flex-shrink-0">{isHigh ? '🚨' : '⚠️'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-bold leading-snug ${isHigh ? 'text-red-900' : 'text-amber-900'}`}>
+                          {topPend.title}
+                        </p>
+                        <p className={`text-xs leading-snug mt-0.5 ${isHigh ? 'text-red-700' : 'text-amber-700'}`}>
+                          {topPend.message}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 pt-0.5">
+                      <button
+                        onClick={() => { router.push(topPend.deep_link); void actPendency(topPend.id, 'resolve'); }}
+                        className={`flex-1 py-2 rounded-xl text-white text-xs font-bold active:scale-95 transition-all ${isHigh ? 'bg-red-600' : 'bg-amber-500'}`}
+                      >
+                        Resolver agora
+                      </button>
+                      <button
+                        onClick={() => void actPendency(topPend.id, 'snooze', 24)}
+                        className={`flex-1 py-2 rounded-xl border text-xs font-semibold active:scale-95 transition-all ${isHigh ? 'border-red-200 text-red-700' : 'border-amber-200 text-amber-700'}`}
+                      >
+                        Lembrar depois
+                      </button>
+                      <button
+                        onClick={() => void actPendency(topPend.id, 'dismiss')}
+                        className="px-3 py-2 rounded-xl border border-gray-200 text-gray-400 text-xs font-semibold active:scale-95 transition-all"
+                      >
+                        Já resolvi
+                      </button>
+                    </div>
+                    {pendencies.length > 1 && (
+                      <p className="text-[10px] text-gray-400 text-center">
+                        +{pendencies.length - 1} {pendencies.length - 1 === 1 ? 'outro item' : 'outros itens'} pendentes
+                      </p>
+                    )}
+                  </div>
+                );
+              }
+              // Fallback: inline computed alerts (before first send-on-open response)
+              const currentPetName = pets.find(p => p.pet_id === selectedPetId)?.pet_name || 'seu pet';
+              let label: string | null = null;
+              let action: (() => void) | null = null;
+              if (alertParasitesValue) {
+                label = `${currentPetName} está com antiparasitário atrasado`;
+                action = handleOpenVermifugo;
+              } else if (alertVaccinesValue) {
+                label = `${currentPetName} tem vacina em atraso`;
+                action = handleOpenVaccines;
+              }
+              if (!label || !action) return null;
+              return (
+                <div className="mb-3 flex items-center gap-3 rounded-2xl bg-red-50 border border-red-200 px-4 py-3">
+                  <span className="text-xl flex-shrink-0">🚨</span>
+                  <p className="flex-1 text-sm font-bold text-red-900 leading-snug">{label}</p>
+                  <button
+                    onClick={action}
+                    className="flex-shrink-0 text-xs font-semibold text-red-700 bg-red-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform whitespace-nowrap"
+                  >
+                    Ver agora
+                  </button>
+                </div>
+              );
+            })()}
             {checkupBanner && (
               <div className="mb-3 flex items-center gap-3 rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3">
                 <div className="flex-1 min-w-0">

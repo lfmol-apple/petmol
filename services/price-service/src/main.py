@@ -307,6 +307,7 @@ def start_push_scheduler():
             send_checkin_pushes,
             send_medication_pushes,
             send_care_pushes,
+            send_monthly_docs_reminder,
         )
 
         scheduler = BackgroundScheduler()
@@ -315,6 +316,8 @@ def start_push_scheduler():
         scheduler.add_job(send_medication_pushes, "interval", minutes=1, id="medication_pushes")
         # Cuidados diários (vacinas, vermífugos, etc) - rotina às 9h é tratada dentro da função
         scheduler.add_job(send_care_pushes, "interval", minutes=1, id="care_pushes")
+        # Lembrete mensal de documentos — dia 12, 18h BRT; filtro interno na função
+        scheduler.add_job(send_monthly_docs_reminder, "interval", minutes=1, id="monthly_docs_reminder")
         scheduler.start()
         logger = __import__("logging").getLogger(__name__)
         logger.info("[PETMOL] Push scheduler iniciado (verifica a cada minuto)")
@@ -336,6 +339,11 @@ from .notifications import router as notifications_router
 app.include_router(notifications_router)
 # Some deployments forward /api/* without stripping the prefix (direct access).
 app.include_router(notifications_router, prefix="/api")
+
+# Include notification pendencies router (persistent in-app alerts)
+from .notifications.pendencies import router as pendencies_router
+app.include_router(pendencies_router)
+app.include_router(pendencies_router, prefix="/api")
 
 # Family sharing router — SILENCIADO: desativar compartilhamento entre contas.
 # Para reativar: descomentar as 3 linhas abaixo.
