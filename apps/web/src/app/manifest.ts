@@ -6,8 +6,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'PETMOL - Carteirinha Digital do Seu Pet',
     short_name: 'PETMOL',
     description: 'Carteirinha digital, vacinas, saúde e agenda completa para seu pet',
-    start_url: '/?src=pwa',
-    display: 'standalone',
+    start_url: '/login',
+    display: 'browser',
     background_color: '#0A5CF5',
     theme_color: '#0A5CF5',
     orientation: 'portrait',
@@ -27,13 +27,6 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     categories: ['health', 'lifestyle', 'pets'],
     lang: 'pt-BR',
-    shortcuts: [
-      {
-        name: 'Início',
-        url: '/',
-        description: 'Ir para início',
-      },
-    ],
   };
 }
 

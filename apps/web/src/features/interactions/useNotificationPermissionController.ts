@@ -14,7 +14,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
-import { PWA_ASSET_VERSION } from '@/lib/pwaVersion';
+
+const PUSH_REGISTRATION_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,13 +82,10 @@ async function postTestNotification(): Promise<void> {
 }
 
 async function getSwRegistration(): Promise<ServiceWorkerRegistration> {
-  // Ensure SW is registered first
-  const existing = await navigator.serviceWorker.getRegistration('/');
-  if (!existing) {
-    await navigator.serviceWorker.register(`/sw.js?v=${PWA_ASSET_VERSION}`, { scope: '/' });
+  if (!PUSH_REGISTRATION_ENABLED) {
+    throw new Error('Push notifications temporarily disabled');
   }
-  // Always wait for the SW to reach 'active' state — PushManager.subscribe()
-  // requires an active SW; returning from register() too early causes AbortError.
+
   return navigator.serviceWorker.ready;
 }
 
@@ -105,6 +103,7 @@ export function useNotificationPermissionController() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const supported =
+      PUSH_REGISTRATION_ENABLED &&
       'serviceWorker' in navigator &&
       'PushManager' in window &&
       'Notification' in window;

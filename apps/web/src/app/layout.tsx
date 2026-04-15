@@ -17,7 +17,6 @@ import { OfflineIndicator, ConnectivityStatus } from '@/components/OfflineIndica
 import { 
   isEventNudgeEnabled
 } from '@/lib/featureFlags';
-import { PWA_ASSET_VERSION } from '@/lib/pwaVersion';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
@@ -37,7 +36,6 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'PETMOL - Carteirinha Digital e Gestão Completa do Seu Pet',
   description: 'Carteirinha digital, controle de vacinas, histórico de saúde e agenda completa. O melhor app para cuidar do seu pet, tudo em um só lugar.',
-  manifest: `/manifest.webmanifest?v=${PWA_ASSET_VERSION}`,
   keywords: ['pet', 'cachorro', 'gato', 'carteirinha digital', 'vacinas', 'saúde pet', 'agenda pet'],
   icons: {
     icon: [
@@ -48,14 +46,6 @@ export const metadata: Metadata = {
       { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
     ],
     shortcut: '/favicon.svg',
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'PETMOL',
-  },
-  other: {
-    'mobile-web-app-capable': 'yes',
   },
   openGraph: {
     title: 'PETMOL - Cuidados do Seu Pet',
