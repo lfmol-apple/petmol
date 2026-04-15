@@ -77,6 +77,58 @@ const ZXING_FORMATS = [
   BarcodeFormat.ITF,
 ];
 
+function resolveScannerErrorCode(error: unknown): string {
+  if (error && typeof error === 'object' && 'name' in error && typeof (error as { name?: unknown }).name === 'string') {
+    const name = (error as { name: string }).name;
+    if (name === 'NotAllowedError') return 'permission_denied';
+    if (name === 'NotFoundError') return 'camera_not_found';
+    if (name === 'NotReadableError') return 'camera_busy';
+    if (name === 'OverconstrainedError') return 'rear_camera_unavailable';
+    if (name === 'SecurityError') return 'camera_security_blocked';
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'camera_error';
+}
+
+function describeScannerError(errorCode: string | null): string | null {
+  if (!errorCode) return null;
+
+  switch (errorCode) {
+    case 'permission_denied':
+      return 'A permissão da câmera foi negada. Você ainda pode tirar uma foto da embalagem ou digitar o código.';
+    case 'camera_not_found':
+      return 'Nenhuma câmera disponível foi encontrada neste dispositivo.';
+    case 'camera_busy':
+      return 'A câmera parece estar em uso por outro app. Feche outros apps e tente novamente.';
+    case 'rear_camera_unavailable':
+      return 'A câmera traseira não ficou disponível. Vamos seguir com foto ou código manual.';
+    case 'camera_unavailable':
+      return 'Este navegador não expôs acesso à câmera.';
+    case 'camera_element_missing':
+      return 'Não conseguimos iniciar a área da câmera. Você pode continuar por foto ou código.';
+    case 'video_dimensions_timeout':
+      return 'A câmera abriu, mas não entregou imagem a tempo. Tente novamente ou use outro caminho.';
+    case 'video_play_timeout':
+      return 'A câmera demorou demais para começar a reproduzir.';
+    case 'camera_security_blocked':
+      return 'O navegador bloqueou o acesso à câmera por segurança.';
+    case 'manual_invalid_barcode':
+      return 'Digite um EAN/GTIN válido com 8 a 14 números.';
+    case 'lookup_timeout':
+      return 'A busca demorou demais. Você pode continuar pelo código, foto ou nome do produto.';
+    case 'product_not_found':
+      return 'O código foi lido, mas ainda não encontramos o produto. Continue sem travar pela foto, código ou nome.';
+    case 'photo_barcode_not_found':
+      return 'Não localizamos um código de barras na foto. Tente outra imagem ou digite o código.';
+    default:
+      return 'Não foi possível usar a câmera agora. Você pode continuar por foto, código manual ou nome do produto.';
+  }
+}
+
 export interface ProductDetectionSheetProps {
   petId: string;
   petName?: string;
@@ -116,6 +168,7 @@ export function ProductDetectionSheetGold({
   const [scanSuccess, setScanSuccess] = useState(false);
   const [detectedBarcode, setDetectedBarcode] = useState('');
   const [scannerError, setScannerError] = useState<string | null>(null);
+  const [manualBarcode, setManualBarcode] = useState('');
 
   useEffect(() => {
     setHistory(loadScanHistory(petId, hint).slice(0, 5));
@@ -259,17 +312,27 @@ export function ProductDetectionSheetGold({
     void stopScanner();
   }, [clearPlayTimeout, clearResolveTimeout, stopScanner]);
 
+  useEffect(() => {
+    if (!photoUrl) return;
+
+    return () => {
+      URL.revokeObjectURL(photoUrl);
+    };
+  }, [photoUrl]);
+
   const resolveDetectedBarcode = useCallback(async (barcode: string) => {
     const resolveId = ++activeResolveRef.current;
 
     clearResolveTimeout();
     setDetectedBarcode(barcode);
+    setManualBarcode(barcode);
     setStep('resolving');
 
     resolveTimeoutRef.current = setTimeout(() => {
       if (activeResolveRef.current !== resolveId) return;
       activeResolveRef.current += 1;
       setConfirmed({ barcode, name: '', category: hint ?? 'other', found: false });
+      setScannerError('lookup_timeout');
       setStep('manual');
     }, 6000);
 
@@ -285,6 +348,7 @@ export function ProductDetectionSheetGold({
     if (final.found) {
       setFromHistory(false);
       setConfirmed(final);
+      setScannerError(null);
       setStep('confirm');
       return;
     }
@@ -298,13 +362,26 @@ export function ProductDetectionSheetGold({
         queued: true,
         queueMessage: final.queueMessage,
       });
+      setScannerError(null);
       setStep('not-found');
       return;
     }
 
     setConfirmed({ barcode, name: '', category: hint ?? 'other', found: false });
+    setScannerError('product_not_found');
     setStep('manual');
   }, [clearResolveTimeout, hint]);
+
+  const handleManualBarcodeLookup = useCallback(async () => {
+    const barcode = manualBarcode.replace(/\D/g, '');
+    if (!/^\d{8,14}$/.test(barcode)) {
+      setScannerError('manual_invalid_barcode');
+      return;
+    }
+
+    setScannerError(null);
+    await resolveDetectedBarcode(barcode);
+  }, [manualBarcode, resolveDetectedBarcode]);
 
   const handleDetectedBarcode = useCallback(async (rawBarcode: string) => {
     const barcode = rawBarcode.replace(/\D/g, '');
@@ -396,7 +473,7 @@ export function ProductDetectionSheetGold({
     } catch (error) {
       await stopScanner();
       setCameraFailed(true);
-      setScannerError(error instanceof Error ? error.message : 'camera_error');
+      setScannerError(resolveScannerErrorCode(error));
       setStep('photo-capture');
       scannerBootingRef.current = false;
     }
@@ -414,6 +491,7 @@ export function ProductDetectionSheetGold({
     setCameraFailed(false);
     setScannerError(null);
     setDetectedBarcode('');
+    setManualBarcode('');
     cooldownRef.current = false;
   };
 
@@ -434,12 +512,15 @@ export function ProductDetectionSheetGold({
       try {
         const result = await scanner.scanFileV2(file, false);
         div.remove();
+        setScannerError(null);
         await resolveDetectedBarcode(result.decodedText);
       } catch {
         div.remove();
+        setScannerError('photo_barcode_not_found');
         setStep('manual');
       }
     } catch {
+      setScannerError('photo_processing_error');
       setStep('manual');
     }
   };
@@ -723,7 +804,7 @@ export function ProductDetectionSheetGold({
           <p className="mt-2 text-sm text-white/70">Consultando Cosmos, cache local e fontes globais.</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-          <p className="text-sm text-white/80">Se demorar mais de 2 segundos, abrimos o fallback automaticamente.</p>
+          <p className="text-sm text-white/80">Se a consulta travar, em alguns segundos abrimos o fallback automaticamente.</p>
         </div>
       </div>
     </div>
@@ -738,7 +819,7 @@ export function ProductDetectionSheetGold({
             <p className="text-sm leading-snug text-amber-800">
               A câmera não abriu. Tire uma foto da embalagem ou digite o produto.
             </p>
-            {scannerError && <p className="mt-1 text-xs text-amber-700">Motivo: {scannerError}</p>}
+            {describeScannerError(scannerError) && <p className="mt-1 text-xs text-amber-700">{describeScannerError(scannerError)}</p>}
           </div>
         </div>
       )}
@@ -820,6 +901,12 @@ export function ProductDetectionSheetGold({
         <p className="mt-1 text-xs text-gray-400">{hint ? CATEGORY_HINT[hint] : CATEGORY_HINT.other}</p>
       </div>
 
+      {(cameraFailed || scannerError === 'lookup_timeout' || scannerError === 'product_not_found' || scannerError === 'manual_invalid_barcode' || scannerError === 'photo_barcode_not_found' || scannerError === 'photo_processing_error') && describeScannerError(scannerError) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {describeScannerError(scannerError)}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={startScanner}
@@ -827,6 +914,32 @@ export function ProductDetectionSheetGold({
       >
         📷 Voltar para escanear
       </button>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Buscar por código de barras</p>
+        <div className="mt-2 flex gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={manualBarcode}
+            onChange={(event) => setManualBarcode(event.target.value.replace(/\D/g, ''))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                void handleManualBarcodeLookup();
+              }
+            }}
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm transition-colors focus:border-blue-400 focus:outline-none"
+            placeholder="Digite o EAN/GTIN"
+          />
+          <button
+            type="button"
+            onClick={() => void handleManualBarcodeLookup()}
+            className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-all active:scale-95"
+          >
+            Buscar
+          </button>
+        </div>
+      </div>
 
       <input
         type="text"

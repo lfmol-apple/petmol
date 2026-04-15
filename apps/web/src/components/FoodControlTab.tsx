@@ -8,6 +8,9 @@ import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import type { ScannedProduct } from '@/lib/productScanner';
+import { googleShoppingUrl } from '@/lib/externalShopping';
+import { resolveFoodCommerceSnapshot } from '@/features/commerce/homeContextualCommerce';
+import { requestUserDecision } from '@/features/interactions/userPromptChannel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [recurringProducts, setRecurringProducts] = useState<Array<{ name: string; count: number; lastUsed: string }>>([]);
   const [loadedExisting, setLoadedExisting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
 
   const applyScannedProduct = (product: ScannedProduct) => {
     setForm(prev => ({
@@ -161,6 +165,15 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     form.startDate && days ? addDays(form.startDate, days) : null;
   const alertDate = estimatedEndDate ? addDays(estimatedEndDate, -3) : null;
   const daysLeft = estimatedEndDate ? Math.round((new Date(estimatedEndDate + 'T00:00:00').getTime() - Date.now()) / 86400000) : null;
+  const commerceSnapshot = resolveFoodCommerceSnapshot({
+    brand: form.brand,
+    packageSizeKg: form.packageSizeKg,
+    daysLeft,
+    estimatedEndDate: estimatedEndDate ? fmtDate(estimatedEndDate) : null,
+  });
+  const foodHandoffUrl = commerceSnapshot
+    ? `/api/handoff/shopping?query=${encodeURIComponent(commerceSnapshot.searchQuery)}&fallback=${encodeURIComponent(googleShoppingUrl(commerceSnapshot.searchQuery))}`
+    : null;
 
   const set = (key: keyof SimpleFoodData, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }));
@@ -250,8 +263,18 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   };
 
   const handleDelete = async () => {
-    if (!confirm('Excluir este registro? Essa ação remove o item do histórico.')) return;
+    const accepted = await requestUserDecision(
+      'Excluir este registro de alimentação? Essa ação remove o ciclo atual e exige novo preenchimento depois.',
+      {
+        title: 'Excluir controle de alimentação',
+        tone: 'danger',
+        confirmLabel: 'Excluir registro',
+      },
+    );
+    if (!accepted) return;
+
     setSaving(true);
+    setDeleteFeedback(null);
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
@@ -263,7 +286,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       setForm({ brand: '', packageSizeKg: '', durationDays: '', startDate: localTodayISO(), dailyConsumptionG: '' });
       setHasExisting(false);
       setSavedOk(false);
-      if (!res.ok && res.status !== 404) setApiError('Registro removido localmente. Tente sincronizar depois.');
+      if (!res.ok && res.status !== 404) {
+        setApiError('Registro removido localmente. Tente sincronizar depois.');
+      } else {
+        setDeleteFeedback('Registro removido com sucesso.');
+      }
       onSaved?.();
     } catch {
       localStorage.removeItem(storageKey);
@@ -316,21 +343,28 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           </div>
 
           {/* Recomprar */}
-          {form.brand && (
+          {commerceSnapshot && foodHandoffUrl && (
             <a
-              href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(form.brand + ' ração pet')}`}
+              href={foodHandoffUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-2xl hover:bg-emerald-100 transition-all active:scale-[0.98]"
+              className={`w-full rounded-2xl border p-3 transition-all active:scale-[0.98] ${commerceSnapshot.status === 'urgent'
+                ? 'border-rose-200 bg-rose-50 hover:bg-rose-100'
+                : commerceSnapshot.status === 'attention'
+                  ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
+                  : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'}`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-base">🔄</span>
-                <div className="text-left min-w-0">
-                  <p className="text-[13px] font-bold text-emerald-900 truncate">Recomprar {form.brand}</p>
-                  <p className="text-[11px] text-emerald-700">via Google Shopping</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="text-base">🔄</span>
+                  <div className="min-w-0 text-left">
+                    <p className="truncate text-[13px] font-bold text-slate-900">{commerceSnapshot.title}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-600">{commerceSnapshot.description}</p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">Handoff de compra via parceiro / Google Shopping</p>
+                  </div>
                 </div>
+                <span className="flex-shrink-0 text-sm font-bold text-slate-700">{commerceSnapshot.ctaLabel}</span>
               </div>
-              <span className="text-emerald-400 text-lg font-bold flex-shrink-0">›</span>
             </a>
           )}
 
@@ -354,6 +388,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           {savedOk && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-800 flex items-center gap-2">
               <span>✅</span><span>Salvo!</span>
+            </div>
+          )}
+          {deleteFeedback && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 flex items-center gap-2">
+              <span>ℹ️</span><span>{deleteFeedback}</span>
             </div>
           )}
         </div>
@@ -453,6 +492,15 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
               <span>📦</span>
               <span className="text-xs font-semibold text-amber-800">
                 Término estimado: {fmtDate(estimatedEndDate)}
+              </span>
+            </div>
+          )}
+
+          {alertDate && (
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <span>⏰</span>
+              <span className="text-xs font-medium text-slate-700">
+                Janela sugerida para agir: {fmtDate(alertDate)}
               </span>
             </div>
           )}

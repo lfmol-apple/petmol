@@ -209,7 +209,10 @@ export function MedicationItemSheet({
     setSaving(true);
     try {
       const token = localStorage.getItem('petmol_token');
-      if (!token) { alert('Sessão expirada.'); return; }
+      if (!token) {
+        showToast('⚠️ Sessão expirada. Faça login novamente.');
+        return;
+      }
 
       const medMeta = [
         form.dose ? `Dose: ${form.dose}` : '',

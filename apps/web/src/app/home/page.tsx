@@ -32,7 +32,7 @@ import { openHomeContextualCommerce, resolvePushActionSheetCommerceIntent } from
 // resolveAlertAction / navigateToPetHealthTab removidos — handleTopAttentionSelect abre sheets diretamente
 import { useHomeItemSheetActions } from '@/features/interactions/useHomeItemSheetActions';
 import { useHomeHistoryActions } from '@/features/interactions/useHomeHistoryActions';
-import { resolveHomeDeepLinkDestination, resolvePushActionSheetFullDestination, type HomeSurfaceResolution } from '@/features/interactions/homeModalRouting';
+import { resolveHomeDeepLinkDestination, resolvePushActionSheetFullDestination, resolveScannedProductDestination, resolveTopAttentionDestination, type HomeSurfaceResolution } from '@/features/interactions/homeModalRouting';
 import { useHomeModalUtilityActions } from '@/features/interactions/useHomeModalUtilityActions';
 import { useHomeSurfaceActions } from '@/features/interactions/useHomeSurfaceActions';
 import { useHomeInteractionCenter } from '@/features/interactions/useHomeInteractionCenter';
@@ -2932,42 +2932,6 @@ export default function HomePage() {
     return { alert: true as const, color: 'critical' as const };
   }, [petEvents]);
 
-  const handleTopAttentionSelect = useCallback((interaction: PetInteractionItem) => {
-    if (interaction.pet_id) setSelectedPetId(interaction.pet_id);
-    setShowTopAttentionModal(false);
-    switch (interaction.action_target) {
-      case 'health/vaccines':
-        setShowVaccineSheet(true);
-        break;
-      case 'health/parasites':
-      case 'health/parasites/dewormer':
-        setShowVermifugoSheet(true);
-        break;
-      case 'health/parasites/flea_tick':
-        setShowAntipulgasSheet(true);
-        break;
-      case 'health/parasites/collar':
-        setShowColeiraSheet(true);
-        break;
-      case 'health/medication':
-        setShowMedicationSheet(true);
-        break;
-      case 'health/grooming':
-        setShowBanhoTosaSheet(true);
-        break;
-      case 'health/food':
-        setShowFoodSheet(true);
-        break;
-      case 'health/eventos':
-        setHealthModalMode('health');
-        setHealthActiveTab('eventos');
-        setShowHealthModal(true);
-        break;
-      default:
-        break;
-    }
-  }, [setSelectedPetId, setShowVaccineSheet, setShowVermifugoSheet, setShowAntipulgasSheet, setShowColeiraSheet, setShowMedicationSheet, setShowBanhoTosaSheet, setShowFoodSheet, setHealthModalMode, setHealthActiveTab, setShowHealthModal]);
-
   const {
     applyHomeSurfaceResolution,
     openVaccines: handleOpenVaccines,
@@ -2996,6 +2960,15 @@ export default function HomePage() {
     setHealthModalMode,
     setHealthActiveTab,
   });
+
+  const handleTopAttentionSelect = useCallback((interaction: PetInteractionItem) => {
+    if (interaction.pet_id) setSelectedPetId(interaction.pet_id);
+    setShowTopAttentionModal(false);
+    const destination = resolveTopAttentionDestination(interaction.action_target);
+    if (destination) {
+      applyHomeSurfaceResolution(destination);
+    }
+  }, [applyHomeSurfaceResolution, setSelectedPetId]);
 
   const {
     closeVermifugoSheet,
@@ -3152,22 +3125,17 @@ export default function HomePage() {
       setShowMedicationSheet(true);
       return;
     }
-    if (product.category === 'dewormer') {
-      setShowVermifugoSheet(true);
-      return;
-    }
-    if (product.category === 'collar') {
-      setShowColeiraSheet(true);
-      return;
-    }
-    if (product.category === 'antiparasite') {
-      setShowAntipulgasSheet(true);
+    const destination = resolveScannedProductDestination(product.category);
+    if (destination) {
+      applyHomeSurfaceResolution(destination);
       return;
     }
 
-    setShowHealthOptionsModal(true);
-    showBlockingNotice('Não encontramos os dados. Preencha manualmente.');
-  }, [currentPet]);
+    showBlockingNotice('Não encontramos os dados. Preencha manualmente.', {
+      title: 'Produto identificado parcialmente',
+      tone: 'warning',
+    });
+  }, [applyHomeSurfaceResolution, currentPet]);
 
   const handleSaveCheckinPreference = useCallback(async () => {
     setCheckinPickerSaving(true);
