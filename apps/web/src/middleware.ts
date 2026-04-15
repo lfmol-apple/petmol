@@ -32,7 +32,9 @@ export function middleware(request: NextRequest) {
 
   if (host === 'petmol.com.br') {
     const canonicalUrl = new URL(request.nextUrl.pathname + request.nextUrl.search, `${protocol}://www.petmol.com.br`);
-    return NextResponse.redirect(canonicalUrl, 308);
+    const response = NextResponse.redirect(canonicalUrl, 308);
+    response.headers.set('Clear-Site-Data', '"cache", "cookies", "storage", "executionContexts"');
+    return response;
   }
 
   // Deixa passar arquivos estáticos e rotas internas do Next.js
