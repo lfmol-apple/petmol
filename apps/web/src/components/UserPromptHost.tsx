@@ -30,14 +30,14 @@ export function UserPromptHost() {
   useEffect(() => subscribePromptChannel(() => setState(getPromptChannelState())), []);
 
   useEffect(() => {
-    if (!state.notice) return;
+    if (!state.notice || state.confirm) return;
 
     const timeout = window.setTimeout(() => {
       dismissPromptNotice();
-    }, 4200);
+    }, state.notice.durationMs);
 
     return () => window.clearTimeout(timeout);
-  }, [state.notice]);
+  }, [state.confirm, state.notice]);
 
   if (!state.notice && !state.confirm) {
     return null;
@@ -45,10 +45,10 @@ export function UserPromptHost() {
 
   return (
     <ModalPortal>
-      {state.notice && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[260] flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),16px)] sm:bottom-4">
+      {state.notice && !state.confirm && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[360] flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),16px)] sm:bottom-4">
           <div
-            className={`pointer-events-auto flex w-full max-w-xl items-start gap-3 rounded-3xl border px-4 py-4 shadow-2xl ${NOTICE_TONE_STYLES[state.notice.tone]}`}
+            className={`pointer-events-auto flex w-full ${state.notice.variant === 'toast' ? 'max-w-md rounded-2xl px-4 py-3' : 'max-w-xl rounded-3xl px-4 py-4'} items-start gap-3 border shadow-2xl ${NOTICE_TONE_STYLES[state.notice.tone]}`}
             role="status"
             aria-live="polite"
           >
@@ -59,19 +59,21 @@ export function UserPromptHost() {
               {state.notice.title && <p className="text-sm font-bold">{state.notice.title}</p>}
               <p className="whitespace-pre-line text-sm leading-relaxed">{state.notice.message}</p>
             </div>
-            <button
-              type="button"
-              onClick={dismissPromptNotice}
-              className="rounded-full px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-black/5"
-            >
-              Fechar
-            </button>
+            {state.notice.variant === 'notice' && (
+              <button
+                type="button"
+                onClick={dismissPromptNotice}
+                className="rounded-full px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-black/5"
+              >
+                Fechar
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {state.confirm && (
-        <div className="fixed inset-0 z-[270] flex items-end justify-center bg-slate-950/60 px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-10 backdrop-blur-sm sm:items-center sm:pb-4">
+        <div className="fixed inset-0 z-[370] flex items-end justify-center bg-slate-950/60 px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-10 backdrop-blur-sm sm:items-center sm:pb-4">
           <div
             className="w-full max-w-lg rounded-[28px] border border-slate-200 bg-white p-5 shadow-2xl"
             role="dialog"

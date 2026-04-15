@@ -1,5 +1,6 @@
 type PromptKind = 'info' | 'confirm';
 type PromptTone = 'neutral' | 'success' | 'warning' | 'danger';
+type PromptNoticeVariant = 'toast' | 'notice';
 
 export interface PromptRequest {
   kind: PromptKind;
@@ -9,9 +10,11 @@ export interface PromptRequest {
 export interface PromptNotice {
   id: number;
   kind: 'info';
+  variant: PromptNoticeVariant;
   message: string;
   title?: string;
   tone: PromptTone;
+  durationMs: number;
 }
 
 export interface PromptDecisionRequest {
@@ -41,11 +44,22 @@ interface BlockingNoticeOptions {
   tone?: PromptTone;
 }
 
+interface ToastOptions {
+  title?: string;
+  tone?: Exclude<PromptTone, 'danger'>;
+  durationMs?: number;
+}
+
+interface PendingDecisionRequest {
+  request: PromptDecisionRequest;
+  resolve: (value: boolean) => void;
+}
+
 let lastPrompt: PromptRequest | null = null;
 let promptSequence = 0;
 let activeNotice: PromptNotice | null = null;
 let activeConfirm: PromptDecisionRequest | null = null;
-let confirmResolver: ((value: boolean) => void) | null = null;
+const confirmQueue: PendingDecisionRequest[] = [];
 const listeners = new Set<() => void>();
 
 function emitChange() {
@@ -76,11 +90,10 @@ export function dismissPromptNotice(): void {
 }
 
 export function resolvePromptDecision(accepted: boolean): void {
-  const resolver = confirmResolver;
-  activeConfirm = null;
-  confirmResolver = null;
+  const currentRequest = confirmQueue.shift();
+  currentRequest?.resolve(accepted);
+  activeConfirm = confirmQueue[0]?.request ?? null;
   emitChange();
-  resolver?.(accepted);
 }
 
 export function getLastPrompt(): PromptRequest | null {
@@ -100,9 +113,29 @@ export function showBlockingNotice(message: string, options: BlockingNoticeOptio
   activeNotice = {
     id: nextPromptId(),
     kind: 'info',
+    variant: 'notice',
     message,
     title: options.title,
     tone: options.tone ?? 'warning',
+    durationMs: 5200,
+  };
+  emitChange();
+}
+
+export function showAppToast(message: string, options: ToastOptions = {}): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  lastPrompt = { kind: 'info', message };
+  activeNotice = {
+    id: nextPromptId(),
+    kind: 'info',
+    variant: 'toast',
+    message,
+    title: options.title,
+    tone: options.tone ?? 'success',
+    durationMs: options.durationMs ?? 2600,
   };
   emitChange();
 }
@@ -115,12 +148,8 @@ export function requestUserDecision(
     return Promise.resolve(false);
   }
 
-  if (confirmResolver) {
-    confirmResolver(false);
-  }
-
   lastPrompt = { kind: 'confirm', message };
-  activeConfirm = {
+  const request: PromptDecisionRequest = {
     id: nextPromptId(),
     kind: 'confirm',
     message,
@@ -130,17 +159,24 @@ export function requestUserDecision(
     cancelLabel: options.cancelLabel ?? 'Cancelar',
   };
 
-  emitChange();
+  activeNotice = null;
 
   return new Promise<boolean>((resolve) => {
-    confirmResolver = resolve;
+    confirmQueue.push({ request, resolve });
+    if (!activeConfirm) {
+      activeConfirm = request;
+    }
+    emitChange();
   });
 }
 
-export function requestUserConfirmation(message: string): boolean {
+export function requestUserConfirmation(
+  message: string,
+  options: PromptDecisionOptions = {},
+): Promise<boolean> {
   if (typeof window === 'undefined') {
-    return false;
+    return Promise.resolve(false);
   }
-  lastPrompt = { kind: 'confirm', message };
-  return window.confirm(message);
+
+  return requestUserDecision(message, options);
 }

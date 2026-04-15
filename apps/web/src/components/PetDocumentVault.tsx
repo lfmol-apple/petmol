@@ -19,6 +19,7 @@ import type {
 } from '@/features/documents/types';
 import { fmtBytes, fmtDate } from '@/features/documents/utils';
 import { loadImageElement, buildPdfFromJpeg, convertImageFileToPdf } from '@/features/documents/fileProcessing';
+import { requestUserDecision } from '@/features/interactions/userPromptChannel';
 
 
 // ── Establishment Input (local suggestions — sem API externa) ──────────────
@@ -740,7 +741,12 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   };
 
   const handleDeleteAll = async () => {
-    if (!confirm(`Excluir TODOS os ${docs.length} documentos? Esta ação não pode ser desfeita.`)) return;
+    const accepted = await requestUserDecision(`Excluir TODOS os ${docs.length} documentos? Esta ação não pode ser desfeita.`, {
+      title: 'Excluir todos os documentos',
+      tone: 'danger',
+      confirmLabel: 'Excluir tudo',
+    });
+    if (!accepted) return;
     const token = getToken();
     if (!token) return;
     const res = await fetch(`${API_BASE_URL}/pets/${petId}/documents`, {

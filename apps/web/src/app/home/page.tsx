@@ -38,7 +38,7 @@ import { useHomeSurfaceActions } from '@/features/interactions/useHomeSurfaceAct
 import { useHomeInteractionCenter } from '@/features/interactions/useHomeInteractionCenter';
 import { useHomeNotificationBridge } from '@/features/interactions/useHomeNotificationBridge';
 import { useMasterInteractionRules } from '@/features/interactions/useMasterInteractionRules';
-import { requestUserConfirmation, showBlockingNotice } from '@/features/interactions/userPromptChannel';
+import { requestUserConfirmation, showAppToast, showBlockingNotice } from '@/features/interactions/userPromptChannel';
 import { trackV1Metric } from '@/lib/v1Metrics';
 import { getPetCareCollections } from '@/features/pets/healthCollections';
 import { usePetEventManagement } from '@/hooks/usePetEventManagement';
@@ -1712,24 +1712,29 @@ export default function HomePage() {
       record.type === 'grooming' ? t('grooming.grooming').toLowerCase() : 
       t('grooming.bath_and_grooming');
     
-    if (requestUserConfirmation(t('grooming.delete_confirm', { type: typeText }))) {
-      try {
-        const pet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
-        if (!pet) return;
+    const accepted = await requestUserConfirmation(t('grooming.delete_confirm', { type: typeText }), {
+      title: 'Excluir registro de banho e tosa',
+      tone: 'danger',
+      confirmLabel: 'Excluir registro',
+    });
+    if (!accepted) return;
 
-        const success = await deleteGroomingRecord(pet.pet_id, record.id);
-        if (success) {
-          // Remover do estado local imediatamente
-          setGroomingRecords(prev => prev.filter(r => r.id !== record.id));
-          showBlockingNotice('✅ Registro removido!');
-          await loadGroomingRecords();
-        } else {
-          showBlockingNotice(t('grooming.error_delete'));
-        }
-      } catch (error) {
-        console.error('Erro ao excluir:', error);
+    try {
+      const pet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
+      if (!pet) return;
+
+      const success = await deleteGroomingRecord(pet.pet_id, record.id);
+      if (success) {
+        // Remover do estado local imediatamente
+        setGroomingRecords(prev => prev.filter(r => r.id !== record.id));
+        showAppToast('Registro removido.');
+        await loadGroomingRecords();
+      } else {
         showBlockingNotice(t('grooming.error_delete'));
       }
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      showBlockingNotice(t('grooming.error_delete'));
     }
   };
 
@@ -1855,21 +1860,26 @@ export default function HomePage() {
 
   // Excluir controle
   const handleDeleteParasite = async (control: ParasiteControl) => {
-    if (requestUserConfirmation(t('parasite.delete_confirm', { name: control.product_name }))) {
-      try {
-        const success = await deleteParasiteControl(currentPet.pet_id, control.id);
-        if (success) {
-          // Remover do estado local imediatamente
-          setParasiteControls(prev => prev.filter(c => c.id !== control.id));
-          showBlockingNotice('✅ Registro removido!');
-          await loadParasiteControls();
-        } else {
-          showBlockingNotice(t('parasite.error_delete'));
-        }
-      } catch (error) {
-        console.error('Erro ao excluir:', error);
+    const accepted = await requestUserConfirmation(t('parasite.delete_confirm', { name: control.product_name }), {
+      title: 'Excluir controle parasitário',
+      tone: 'danger',
+      confirmLabel: 'Excluir registro',
+    });
+    if (!accepted) return;
+
+    try {
+      const success = await deleteParasiteControl(currentPet.pet_id, control.id);
+      if (success) {
+        // Remover do estado local imediatamente
+        setParasiteControls(prev => prev.filter(c => c.id !== control.id));
+        showAppToast('Registro removido.');
+        await loadParasiteControls();
+      } else {
         showBlockingNotice(t('parasite.error_delete'));
       }
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      showBlockingNotice(t('parasite.error_delete'));
     }
   };
 
@@ -1931,7 +1941,7 @@ export default function HomePage() {
               ? { ...p, vaccines: (p.vaccines || []).map(v => v.id === editingVaccine.id ? { ...v, ...updates } : v) }
               : p
           ));
-          showBlockingNotice('✅ Vacina atualizada com sucesso!');
+          showAppToast('Vacina atualizada com sucesso.');
         } else {
           showBlockingNotice('❌ Erro ao atualizar vacina. Tente novamente.');
         }
@@ -2018,9 +2028,13 @@ export default function HomePage() {
         let statusLabel = 'Em dia';
         if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Vencendo';
         if (diff !== null && diff < 0) statusLabel = 'Atrasada';
-        let msg = `✅ Vacina registrada!\nStatus: ${statusLabel}\nLembrete ativo`;
+        let msg = `Vacina registrada.\nStatus: ${statusLabel}\nLembrete ativo`;
         if (saved.next_due_on) msg += `\nPróxima previsão: ${saved.next_due_on}`;
-        showBlockingNotice(msg);
+        showAppToast(msg, {
+          title: 'Registro salvo',
+          tone: 'success',
+          durationMs: 3600,
+        });
       }
       
       resetVaccineForm();
@@ -2054,24 +2068,29 @@ export default function HomePage() {
 
   // Excluir vacina
   const handleDeleteVaccine = async (vaccine: VaccineRecord) => {
-    if (requestUserConfirmation('Excluir este registro? Essa ação remove o item do histórico.')) {
-      try {
-        const success = await deleteVaccine(currentPet.pet_id, vaccine.id);
-        if (success) {
-          setVaccines(prev => prev.filter(v => v.id !== vaccine.id));
-          setPets(prevPets => prevPets.map(p =>
-            p.pet_id === currentPet.pet_id
-              ? { ...p, vaccines: (p.vaccines || []).filter(v => v.id !== vaccine.id) }
-              : p
-          ));
-          showBlockingNotice('✅ Vacina removida do prontuário!');
-        } else {
-          showBlockingNotice('Erro ao excluir vacina do banco de dados.');
-        }
-      } catch (error) {
-        console.error('Erro ao excluir vacina:', error);
-        showBlockingNotice(t('health.vaccines.error_delete'));
+    const accepted = await requestUserConfirmation('Excluir este registro? Essa ação remove o item do histórico.', {
+      title: 'Excluir vacina',
+      tone: 'danger',
+      confirmLabel: 'Excluir vacina',
+    });
+    if (!accepted) return;
+
+    try {
+      const success = await deleteVaccine(currentPet.pet_id, vaccine.id);
+      if (success) {
+        setVaccines(prev => prev.filter(v => v.id !== vaccine.id));
+        setPets(prevPets => prevPets.map(p =>
+          p.pet_id === currentPet.pet_id
+            ? { ...p, vaccines: (p.vaccines || []).filter(v => v.id !== vaccine.id) }
+            : p
+        ));
+        showAppToast('Vacina removida do prontuário.');
+      } else {
+        showBlockingNotice('Erro ao excluir vacina do banco de dados.');
       }
+    } catch (error) {
+      console.error('Erro ao excluir vacina:', error);
+      showBlockingNotice(t('health.vaccines.error_delete'));
     }
   };
 
@@ -2085,24 +2104,29 @@ export default function HomePage() {
       return;
     }
 
-    if (requestUserConfirmation(`⚠️ ATENÇÃO: Você está prestes a REMOVER TODAS as ${count} vacinas do prontuário!\n\nEsta ação NÃO pode ser desfeita.\n\nDeseja continuar?`)) {
-      try {
-        // OPERAÇÃO ATÔMICA: uma única chamada para limpar todas as vacinas
-        const success = await clearAllVaccines(currentPet.pet_id);
-        
-        if (success) {
-          setVaccines([]);
-          setPets(prevPets => prevPets.map(p =>
-            p.pet_id === currentPet.pet_id ? { ...p, vaccines: [] } : p
-          ));
-          showBlockingNotice(`✅ Todas as ${count} vacinas foram removidas do prontuário!`);
-        } else {
-          showBlockingNotice('❌ Erro ao limpar vacinas. Tente novamente.');
-        }
-      } catch (error) {
-        console.error('Erro ao limpar vacinas:', error);
+    const accepted = await requestUserConfirmation(`⚠️ ATENÇÃO: Você está prestes a REMOVER TODAS as ${count} vacinas do prontuário!\n\nEsta ação NÃO pode ser desfeita.\n\nDeseja continuar?`, {
+      title: 'Remover todas as vacinas',
+      tone: 'danger',
+      confirmLabel: 'Remover todas',
+    });
+    if (!accepted) return;
+
+    try {
+      // OPERAÇÃO ATÔMICA: uma única chamada para limpar todas as vacinas
+      const success = await clearAllVaccines(currentPet.pet_id);
+      
+      if (success) {
+        setVaccines([]);
+        setPets(prevPets => prevPets.map(p =>
+          p.pet_id === currentPet.pet_id ? { ...p, vaccines: [] } : p
+        ));
+        showAppToast(`Todas as ${count} vacinas foram removidas.`);
+      } else {
         showBlockingNotice('❌ Erro ao limpar vacinas. Tente novamente.');
       }
+    } catch (error) {
+      console.error('Erro ao limpar vacinas:', error);
+      showBlockingNotice('❌ Erro ao limpar vacinas. Tente novamente.');
     }
   };
 
@@ -2347,7 +2371,11 @@ export default function HomePage() {
     }
     // Aviso se a quantidade não bate, mas não bloqueia a importação
     if (reviewExpectedCount !== registrosToImport.length) {
-      const proceed = requestUserConfirmation(`⚠️ Quantidade esperada (${reviewExpectedCount}) não bate com os registros encontrados (${registrosToImport.length}).\n\nVocê pode importar assim mesmo as ${registrosToImport.length} vacina(s) encontradas.\n\nContinuar?`);
+      const proceed = await requestUserConfirmation(`⚠️ Quantidade esperada (${reviewExpectedCount}) não bate com os registros encontrados (${registrosToImport.length}).\n\nVocê pode importar assim mesmo as ${registrosToImport.length} vacina(s) encontradas.\n\nContinuar?`, {
+        title: 'Quantidade divergente no cartão',
+        tone: 'warning',
+        confirmLabel: 'Importar assim mesmo',
+      });
       if (!proceed) return;
     }
     if (registrosToImport.some((r) => !r.data_aplicacao)) {
@@ -2455,7 +2483,11 @@ export default function HomePage() {
     // Avisar sobre duplicatas encontradas
     if (duplicates.length > 0) {
       const duplicateNames = duplicates.map(d => d.nome_comercial || d.tipo_vacina).join(', ');
-      if (!requestUserConfirmation(`⚠️ Detectadas ${duplicates.length} vacina(s) que já existem no prontuário:\n\n${duplicateNames}\n\nEstas serão IGNORADAS. Apenas ${newRecords.length} nova(s) vacina(s) será(ão) importada(s).\n\nContinuar?`)) {
+      if (!await requestUserConfirmation(`⚠️ Detectadas ${duplicates.length} vacina(s) que já existem no prontuário:\n\n${duplicateNames}\n\nEstas serão IGNORADAS. Apenas ${newRecords.length} nova(s) vacina(s) será(ão) importada(s).\n\nContinuar?`, {
+        title: 'Duplicatas encontradas',
+        tone: 'warning',
+        confirmLabel: 'Continuar importação',
+      })) {
         return;
       }
     }

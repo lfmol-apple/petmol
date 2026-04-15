@@ -81,10 +81,32 @@ export function VaccineWorkflowModals({
 }: VaccineWorkflowModalsProps) {
   const { t } = useI18n();
   const [toast, setToast] = useState<string | null>(null);
+  const [customProductIndex, setCustomProductIndex] = useState<number | null>(null);
+  const [customProductName, setCustomProductName] = useState('');
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
+  }
+
+  function resetCustomProductInput() {
+    setCustomProductIndex(null);
+    setCustomProductName('');
+  }
+
+  function applyCustomProduct(index: number) {
+    const productName = customProductName.trim();
+    if (!productName) {
+      showToast('Digite o nome da vacina antes de aplicar.');
+      return;
+    }
+
+    updateReviewRegistro(index, {
+      nome_comercial: productName,
+      tipo_vacina: mapNomeComercialToTipo(productName),
+    });
+    setReviewConfirmed(false);
+    resetCustomProductInput();
   }
 
   return (
@@ -639,20 +661,47 @@ export function VaccineWorkflowModals({
                               ))}
                               <button
                                 onClick={() => {
-                                  const customProduct = prompt('Digite o nome da vacina:');
-                                  if (customProduct) {
-                                    updateReviewRegistro(index, {
-                                      nome_comercial: customProduct,
-                                      tipo_vacina: mapNomeComercialToTipo(customProduct),
-                                    });
-                                    setReviewConfirmed(false);
-                                  }
+                                  setCustomProductIndex(index);
+                                  setCustomProductName(record.nome_comercial || '');
                                 }}
                                 className="text-xs bg-gray-100 text-gray-800 hover:bg-gray-200 px-2 py-1 rounded"
                               >
                                 + Outro
                               </button>
                             </div>
+                            {customProductIndex === index && (
+                              <div className="mt-2 flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-2 sm:flex-row">
+                                <input
+                                  type="text"
+                                  value={customProductName}
+                                  onChange={(e) => setCustomProductName(e.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      applyCustomProduct(index);
+                                    }
+                                  }}
+                                  className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                  placeholder="Digite o nome da vacina"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => applyCustomProduct(index)}
+                                    className="rounded bg-slate-900 px-2 py-1 text-xs font-semibold text-white hover:bg-slate-800"
+                                  >
+                                    Aplicar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={resetCustomProductInput}
+                                    className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 

@@ -114,7 +114,12 @@ export function usePetEventManagement({
   }, []);
 
   const handleDeleteEvent = useCallback(async (eventId: string) => {
-    if (!requestUserConfirmation('Excluir este registro? Esta ação não pode ser desfeita.')) return;
+    const accepted = await requestUserConfirmation('Excluir este registro? Esta ação não pode ser desfeita.', {
+      title: 'Excluir evento de saúde',
+      tone: 'danger',
+      confirmLabel: 'Excluir registro',
+    });
+    if (!accepted) return;
     const token = localStorage.getItem('petmol_token');
     try {
       await fetch(`${API_BASE_URL}/events/${eventId}`, {
