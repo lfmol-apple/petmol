@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ProductDetectionSheet } from '@/components/ProductDetectionSheet';
+import { ProductDetectionSheetGold } from '@/components/ProductDetectionSheet';
 import type { ProductCategory, ScannedProduct } from '@/lib/productScanner';
 
 interface ProductBarcodeScannerProps {
@@ -18,7 +18,7 @@ interface ProductBarcodeScannerProps {
  * The detection sheet handles all 3 paths: scan → photo → manual.
  */
 export function ProductBarcodeScanner({
-  label = 'Adicionar produto',
+  label = 'Escanear produto',
   expectedCategory,
   petId,
   petName,
@@ -39,7 +39,7 @@ export function ProductBarcodeScanner({
       </button>
 
       {open && (
-        <ProductDetectionSheet
+        <ProductDetectionSheetGold
           petId={petId ?? ''}
           petName={petName}
           hint={expectedCategory}
@@ -53,4 +53,3 @@ export function ProductBarcodeScanner({
     </>
   );
 }
-

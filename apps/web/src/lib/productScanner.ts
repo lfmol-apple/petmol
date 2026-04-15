@@ -19,6 +19,8 @@ export interface ScannedProduct {
   presentation?: string;
   concentration?: string;
   found: boolean;
+  queued?: boolean;
+  queueMessage?: string;
 }
 
 const CATEGORY_WORDS: Record<ProductCategory, string[]> = {
@@ -163,8 +165,19 @@ export function getSearchSuggestions(query: string, category?: ProductCategory, 
 
 export async function identifyProductByBarcode(barcode: string): Promise<ScannedProduct> {
   try {
-    // Multi-source pipeline: cache → Cosmos BR → OpenFoodFacts + UPCItemDB
-    const { resolveProduct } = await import('@/features/product-detection/resolver');
+    const { resolveProduct, resolveProductLookup } = await import('@/features/product-detection/resolver');
+    const lookup = await resolveProductLookup(barcode);
+    if (lookup?.queued) {
+      return {
+        barcode: lookup.gtin || barcode,
+        name: '',
+        category: 'other',
+        found: false,
+        queued: true,
+        queueMessage: 'Produto enviado para fila de catalogação',
+      };
+    }
+
     const resolved = await resolveProduct(barcode);
     if (resolved) {
       return {
@@ -188,5 +201,6 @@ export async function identifyProductByBarcode(barcode: string): Promise<Scanned
     name: '',
     category: 'other',
     found: false,
+    queued: false,
   };
 }

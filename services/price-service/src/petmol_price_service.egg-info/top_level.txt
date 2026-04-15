@@ -15,6 +15,8 @@ family
 feedback
 feedback_system
 feeds
+gtin_client
+gtin_router
 handoff
 handoff_partner
 health
@@ -28,6 +30,7 @@ otp
 petguard
 pets
 places
+product_lookup
 providers
 rate_limit
 rg

@@ -658,7 +658,7 @@ export function MedicationItemSheet({
           {(mode === 'add' || mode === 'edit') && (
             <div className="p-5 pb-8 space-y-4">
               <ProductBarcodeScanner
-                label="Ler código de barras"
+                label="Escanear medicamento"
                 expectedCategory="medication"
                 petId={petId}
                 petName={petName}

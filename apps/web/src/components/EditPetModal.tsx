@@ -58,7 +58,7 @@ const CAT_BREEDS = [
 ];
 
 const PHOTOS_BASE_URL = process.env.NEXT_PUBLIC_PHOTOS_BASE_URL || API_BASE_URL;
-const OWN_PHOTO_HOSTS = ['petmol.app', 'petmol.com.br', 'petshopbh.com', 'petshopbh.com.br', 'localhost'];
+const OWN_PHOTO_HOSTS = ['petmol.app', 'petmol.com.br', 'localhost'];
 
 function Seg({ opts, val, onChange }: { opts: { l: string; v: string }[]; val: string; onChange: (v: string) => void }) {
   return (

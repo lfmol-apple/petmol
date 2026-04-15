@@ -22,6 +22,52 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[FAIL]${NC} $1"; }
 pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
 
+wait_for_http() {
+    local url="$1"
+    local expected_pattern="$2"
+    local attempts="${3:-15}"
+    local delay_seconds="${4:-2}"
+    local http_code=""
+
+    for ((attempt = 1; attempt <= attempts; attempt++)); do
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || true)
+        if [[ "$http_code" =~ $expected_pattern ]]; then
+            echo "$http_code"
+            return 0
+        fi
+
+        if [ "$attempt" -lt "$attempts" ]; then
+            sleep "$delay_seconds"
+        fi
+    done
+
+    echo "$http_code"
+    return 1
+}
+
+wait_for_body() {
+    local url="$1"
+    local expected_text="$2"
+    local attempts="${3:-15}"
+    local delay_seconds="${4:-2}"
+    local body=""
+
+    for ((attempt = 1; attempt <= attempts; attempt++)); do
+        body=$(curl -s "$url" 2>/dev/null || true)
+        if echo "$body" | grep -q "$expected_text"; then
+            echo "$body"
+            return 0
+        fi
+
+        if [ "$attempt" -lt "$attempts" ]; then
+            sleep "$delay_seconds"
+        fi
+    done
+
+    echo "$body"
+    return 1
+}
+
 log "============================================"
 log "Applying PETMOL update on VPS"
 log "============================================"
@@ -80,6 +126,10 @@ rsync -a --delete \
     --exclude 'services/price-service/uploads' \
     "$TEMP_DIR/" "$APP_DIR/"
 
+# Remove stale local-only frontend env so production builds don't inherit
+# old domains or developer overrides from previous deployments.
+rm -f "$APP_DIR/apps/web/.env.local"
+
 # Fix permissions
 chown -R petmol:petmol "$APP_DIR" 2>/dev/null || true
 
@@ -132,9 +182,6 @@ if [ "$RESTART_WEB" = true ]; then
     systemctl restart petmol-web
 fi
 
-# Wait for services to start
-sleep 5
-
 # ============================================
 # Step 6: Health checks
 # ============================================
@@ -143,16 +190,17 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 
 # Test 1: API health
-if curl -sf http://127.0.0.1:8000/health > /dev/null 2>&1; then
+API_HEALTH_CODE=$(wait_for_http "http://127.0.0.1:8000/health" '^200$' 20 2)
+if [ "$API_HEALTH_CODE" = "200" ]; then
     pass "API health: OK"
     ((++TESTS_PASSED))
 else
-    error "API health: FAILED"
+    error "API health: HTTP ${API_HEALTH_CODE:-000}"
     ((++TESTS_FAILED))
 fi
 
 # Test 2: API version
-API_VERSION=$(curl -s "http://127.0.0.1:8000/version" 2>/dev/null)
+API_VERSION=$(wait_for_body "http://127.0.0.1:8000/version" 'service' 10 1)
 if echo "$API_VERSION" | grep -q "service"; then
     pass "API /version: OK — $API_VERSION"
     ((++TESTS_PASSED))
@@ -172,7 +220,7 @@ else
 fi
 
 # Test 4: Frontend home
-FRONTEND_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000/")
+FRONTEND_RESPONSE=$(wait_for_http "http://127.0.0.1:3000/" '^(200|307|308)$' 20 2)
 if [ "$FRONTEND_RESPONSE" = "200" ] || [ "$FRONTEND_RESPONSE" = "307" ] || [ "$FRONTEND_RESPONSE" = "308" ]; then
     pass "Frontend: HTTP $FRONTEND_RESPONSE OK"
     ((++TESTS_PASSED))
@@ -182,7 +230,7 @@ else
 fi
 
 # Test 5: sw.js (critical for push notifications)
-SW_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:3000/sw.js")
+SW_RESPONSE=$(wait_for_http "http://127.0.0.1:3000/sw.js" '^200$' 10 1)
 if [ "$SW_RESPONSE" = "200" ]; then
     pass "sw.js: 200 OK"
     ((++TESTS_PASSED))
@@ -192,7 +240,7 @@ else
 fi
 
 # Test 6: VAPID public key endpoint
-VAPID_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:8000/notifications/vapid-public-key")
+VAPID_RESPONSE=$(wait_for_http "http://127.0.0.1:8000/notifications/vapid-public-key" '^200$' 10 1)
 if [ "$VAPID_RESPONSE" = "200" ]; then
     pass "VAPID key endpoint: 200 OK"
     ((++TESTS_PASSED))

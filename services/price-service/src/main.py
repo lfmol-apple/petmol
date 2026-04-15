@@ -48,6 +48,8 @@ from .admin.models import AdminUser
 from .user_auth.models import User
 from .user_auth.security import hash_password
 from .version import get_version_info
+from .product_lookup import router as product_lookup_router
+from .gtin_router import router as gtin_router
 
 # SLICE 1: Import new services models to register with Base
 from .services import models as _services_models
@@ -180,6 +182,10 @@ from .user_auth.users_router import router as users_router
 app.include_router(users_router)
 
 app.include_router(pets_router)
+app.include_router(product_lookup_router)
+app.include_router(product_lookup_router, prefix="/api")
+app.include_router(gtin_router)
+app.include_router(gtin_router, prefix="/api")
 
 # Pet Documents (cofre documental)
 from .pets.document_router import router as pet_documents_router

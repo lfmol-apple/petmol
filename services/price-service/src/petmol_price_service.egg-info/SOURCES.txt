@@ -6,6 +6,8 @@ src/config.py
 src/db.py
 src/email_otp.py
 src/feedback_system.py
+src/gtin_client.py
+src/gtin_router.py
 src/handoff.py
 src/handoff_partner.py
 src/i18n.py
@@ -15,6 +17,7 @@ src/migrations.py
 src/models.py
 src/otp.py
 src/petguard.py
+src/product_lookup.py
 src/rate_limit.py
 src/search.py
 src/services_old.py

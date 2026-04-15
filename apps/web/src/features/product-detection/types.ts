@@ -5,9 +5,9 @@ export type { ProductCategory };
 export type ResolveSource =
   | 'cache'
   | 'cosmos'
-  | 'openfoodfacts'
-  | 'upcitemdb'
-  | 'history';
+  | 'history'
+  | 'internal'
+  | 'petmol_db';
 
 // Full product representation produced by the resolver pipeline.
 export interface ResolvedProduct {

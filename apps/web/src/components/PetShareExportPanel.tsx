@@ -14,7 +14,7 @@ type PdfType = 'quick' | 'wallet' | 'dossier';
 
 const APP_URL =
   (process.env.NEXT_PUBLIC_SITE_URL ? String(process.env.NEXT_PUBLIC_SITE_URL).replace(/\/$/, '') : undefined) ??
-  (typeof window !== 'undefined' ? window.location.origin : 'https://petshopbh.com');
+  (typeof window !== 'undefined' ? window.location.origin : 'https://petmol.com.br');
 
 function modeLabel(mode: ShareMode) {
   if (mode === 'emergency') return 'Emergência';

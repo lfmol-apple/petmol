@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
+    frontend_url: str = "https://petmol.com.br"
     
     # CORS - Via ENV, no hardcoded domains
     cors_origins: str = "http://localhost:3000,http://localhost:8081"
@@ -90,6 +91,20 @@ class Settings(BaseSettings):
 
     # Gemini
     gemini_api_key: Optional[str] = None
+
+    # Cosmos Bluesoft API - backend only.
+    cosmos_api_base_url: str = "https://api.cosmos.bluesoft.com.br"
+    cosmos_api_token: Optional[str] = None
+
+    # RSC GTIN API - preencha usuário/senha apenas no .env/.secrets do backend.
+    gtin_api_base_url: str = "https://gtin.rscsistemas.com.br"
+    gtin_api_username: Optional[str] = None
+    gtin_api_password: Optional[str] = None
+
+    # Open Food Facts read-only API.
+    off_api_base_url: str = "https://world.openfoodfacts.org"
+    off_user_agent: Optional[str] = None
+    opf_api_base_url: str = "https://world.openproductsfacts.org"
 
     # ── Web Push Notifications (VAPID) ────────────────────────────────────
     vapid_public_key: Optional[str] = None
