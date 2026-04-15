@@ -1,24 +1,25 @@
 import { MetadataRoute } from 'next';
+import { PWA_ASSET_VERSION } from '@/lib/pwaVersion';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'PETMOL - Carteirinha Digital do Seu Pet',
     short_name: 'PETMOL',
     description: 'Carteirinha digital, vacinas, saúde e agenda completa para seu pet',
-    start_url: '/home',
+    start_url: '/?src=pwa',
     display: 'standalone',
     background_color: '#0A5CF5',
     theme_color: '#0A5CF5',
     orientation: 'portrait',
     icons: [
       {
-        src: '/icons/icon-192.png',
+        src: `/icons/icon-192.png?v=${PWA_ASSET_VERSION}`,
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable',
       },
       {
-        src: '/icons/icon-512.png',
+        src: `/icons/icon-512.png?v=${PWA_ASSET_VERSION}`,
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
@@ -29,7 +30,7 @@ export default function manifest(): MetadataRoute.Manifest {
     shortcuts: [
       {
         name: 'Início',
-        url: '/home',
+        url: '/',
         description: 'Ir para início',
       },
     ],

@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
+import { PWA_ASSET_VERSION } from '@/lib/pwaVersion';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,7 +84,7 @@ async function getSwRegistration(): Promise<ServiceWorkerRegistration> {
   // Ensure SW is registered first
   const existing = await navigator.serviceWorker.getRegistration('/');
   if (!existing) {
-    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await navigator.serviceWorker.register(`/sw.js?v=${PWA_ASSET_VERSION}`, { scope: '/' });
   }
   // Always wait for the SW to reach 'active' state — PushManager.subscribe()
   // requires an active SW; returning from register() too early causes AbortError.
