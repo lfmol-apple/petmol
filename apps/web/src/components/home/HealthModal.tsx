@@ -33,7 +33,7 @@ type VaccineCardOcrRecord = {
 };
 
 // Photo utilities (mirrored from page.tsx)
-const OWN_PHOTO_HOSTS_HM = ['petmol.app', 'petmol.com.br', 'localhost'];
+const OWN_PHOTO_HOSTS_HM = ['petmol.app', 'petmol.com.br', 'www.petmol.com.br', 'localhost'];
 const isOwnHost_hm = (url: string): boolean => {
   try { const { hostname } = new URL(url); return OWN_PHOTO_HOSTS_HM.some((h) => hostname === h || hostname.endsWith(`.${h}`)); }
   catch { return false; }

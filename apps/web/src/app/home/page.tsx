@@ -414,7 +414,7 @@ const deleteGroomingRecord = async (petId: string, recordId: string): Promise<bo
 
 // Helper para converter caminho de foto em URL com cache busting
 const PHOTOS_BASE_URL = process.env.NEXT_PUBLIC_PHOTOS_BASE_URL || API_BASE_URL;
-const OWN_PHOTO_HOSTS = ['petmol.app', 'petmol.com.br', 'localhost'];
+const OWN_PHOTO_HOSTS = ['petmol.app', 'petmol.com.br', 'www.petmol.com.br', 'localhost'];
 const isOwnHost = (url: string): boolean => {
   try {
     const { hostname } = new URL(url);

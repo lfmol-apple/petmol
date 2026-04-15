@@ -24,7 +24,7 @@ const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 const fredoka = Fredoka({ subsets: ['latin'], variable: '--font-fredoka' });
 
 // Site URL from environment (no hardcoded domain)
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.petmol.com.br';
 
 export const viewport: Viewport = {
   width: 'device-width',

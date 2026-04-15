@@ -27,6 +27,13 @@ function isPublic(pathname: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+  const protocol = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '');
+
+  if (host === 'petmol.com.br') {
+    const canonicalUrl = new URL(request.nextUrl.pathname + request.nextUrl.search, `${protocol}://www.petmol.com.br`);
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
 
   // Deixa passar arquivos estáticos e rotas internas do Next.js
   if (
@@ -54,8 +61,8 @@ export function middleware(request: NextRequest) {
 
   // Constrói a origin correta considerando proxy reverso (nginx → localhost:3000)
   // request.nextUrl.origin seria http://localhost:3000 em produção sem essa correção
-  const forwardedProto = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '');
-  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || request.nextUrl.host;
+  const forwardedProto = protocol;
+  const forwardedHost = host;
   const origin = `${forwardedProto}://${forwardedHost}`;
 
   // Trata o caminho raiz separadamente para evitar loop de redirecionamento:
