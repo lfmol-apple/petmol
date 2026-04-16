@@ -12,18 +12,18 @@ import { UserPromptHost } from '@/components/UserPromptHost';
 import { SmartSuggestionsWidget } from '@/components/SmartSuggestionsWidget';
 import { EventNudge } from '@/components/EventNudge';
 import { TravelDetectionNotification } from '@/components/TravelDetectionNotification';
-import { ClientStateRecovery } from '@/components/ClientStateRecovery';
 import { OfflineIndicator, ConnectivityStatus } from '@/components/OfflineIndicator';
 import { 
   isEventNudgeEnabled
 } from '@/lib/featureFlags';
+import Script from 'next/script';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 const fredoka = Fredoka({ subsets: ['latin'], variable: '--font-fredoka' });
 
 // Site URL from environment (no hardcoded domain)
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.petmol.com.br';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -47,6 +47,14 @@ export const metadata: Metadata = {
     ],
     shortcut: '/favicon.svg',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PETMOL',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   openGraph: {
     title: 'PETMOL - Cuidados do Seu Pet',
     description: 'Carteirinha digital, vacinas e saúde para seu pet',
@@ -65,11 +73,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+      </head>
       <body className={`${inter.className} ${outfit.variable} ${fredoka.variable} antialiased bg-slate-50`}>
         <I18nProvider>
           <AuthProvider>
             <LocationProvider>
-            <ClientStateRecovery />
             <OfflineIndicator />
             <ConnectivityStatus />
             <StorageMigrator />
