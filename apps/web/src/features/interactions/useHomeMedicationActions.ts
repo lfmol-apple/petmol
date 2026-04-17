@@ -82,13 +82,15 @@ export function useHomeMedicationActions({
         .join(' | ');
       if (medMeta) finalNotes = medMeta + (finalNotes ? '\n' + finalNotes : '');
 
+      const shouldKeepTreatmentActive = eventFormData.reminder_enabled || Boolean(eventFormData.treatment_days);
+
       const payload: Record<string, unknown> = {
         pet_id: selectedPetId,
         type: 'medicacao',
         scheduled_at: new Date(eventFormData.scheduled_at).toISOString(),
         title: eventFormData.title.trim(),
         source: 'manual',
-        status: 'completed',
+        status: shouldKeepTreatmentActive ? 'active' : 'completed',
       };
       if (eventFormData.professional_name.trim()) payload.professional_name = eventFormData.professional_name.trim();
       if (eventFormData.cost) payload.cost = parseFloat(eventFormData.cost);

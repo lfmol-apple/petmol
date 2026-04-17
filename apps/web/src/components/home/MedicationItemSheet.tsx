@@ -225,13 +225,15 @@ export function MedicationItemSheet({
       ].filter(Boolean).join(' | ');
       const finalNotes = medMeta + (form.notes.trim() ? '\n' + form.notes.trim() : '');
 
+      const shouldKeepTreatmentActive = form.reminder_enabled || Boolean(form.treatment_days);
+
       const payload: Record<string, unknown> = {
         pet_id: petId,
         type: 'medicacao',
         scheduled_at: new Date(form.scheduled_date + 'T00:00:00').toISOString(),
         title: form.title.trim(),
         source: 'manual',
-        status: 'completed',
+        status: shouldKeepTreatmentActive ? 'active' : 'completed',
       };
       if (form.professional_name.trim()) payload.professional_name = form.professional_name.trim();
       if (form.cost) payload.cost = parseFloat(form.cost);
