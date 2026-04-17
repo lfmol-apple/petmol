@@ -13,6 +13,7 @@ import { SmartSuggestionsWidget } from '@/components/SmartSuggestionsWidget';
 import { EventNudge } from '@/components/EventNudge';
 import { TravelDetectionNotification } from '@/components/TravelDetectionNotification';
 import { OfflineIndicator, ConnectivityStatus } from '@/components/OfflineIndicator';
+import { PushAutoRefresh } from '@/components/PushAutoRefresh';
 import { 
   isEventNudgeEnabled
 } from '@/lib/featureFlags';
@@ -74,7 +75,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <head>
-        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="manifest" href="/manifest.json" />
       </head>
       <body className={`${inter.className} ${outfit.variable} ${fredoka.variable} antialiased bg-slate-50`}>
         <I18nProvider>
@@ -83,6 +84,7 @@ export default function RootLayout({
             <OfflineIndicator />
             <ConnectivityStatus />
             <StorageMigrator />
+            <PushAutoRefresh />
             <TravelDetectionNotification />
             <UserPromptHost />
             {/* GlobalAutoDetector desativado — detecção por geolocalização removida */}
