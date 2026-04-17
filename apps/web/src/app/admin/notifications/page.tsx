@@ -104,40 +104,43 @@ export default function AdminNotificationsPage() {
           </p>
         )}
 
-        {/* Ações */}
-        {isSupported && (
-          <div className="space-y-3">
-            {!isSubscribed ? (
+        {/* Ações — sempre visíveis */}
+        <div className="space-y-3">
+          {!isSubscribed ? (
+            <button
+              type="button"
+              disabled={loading === "activate" || permission === "denied"}
+              onClick={handleActivate}
+              className="w-full py-3.5 rounded-2xl bg-[#0056D2] text-white text-sm font-semibold disabled:opacity-50 active:opacity-80 transition-opacity"
+            >
+              {loading === "activate" ? "Ativando…" : "Ativar notificações push"}
+            </button>
+          ) : (
+            <>
               <button
                 type="button"
-                disabled={loading === "activate" || permission === "denied"}
-                onClick={handleActivate}
-                className="w-full py-3.5 rounded-2xl bg-[#0056D2] text-white text-sm font-semibold disabled:opacity-50 active:opacity-80 transition-opacity"
+                disabled={loading === "test"}
+                onClick={handleTest}
+                className="w-full py-3.5 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 active:opacity-80 transition-opacity"
               >
-                {loading === "activate" ? "Ativando…" : "Ativar notificações push"}
+                {loading === "test" ? "Enviando…" : "Enviar notificação de teste"}
               </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  disabled={loading === "test"}
-                  onClick={handleTest}
-                  className="w-full py-3.5 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 active:opacity-80 transition-opacity"
-                >
-                  {loading === "test" ? "Enviando…" : "Enviar notificação de teste"}
-                </button>
-                <button
-                  type="button"
-                  disabled={loading === "deactivate"}
-                  onClick={handleDeactivate}
-                  className="w-full py-3 rounded-2xl bg-slate-100 text-slate-500 text-sm font-medium disabled:opacity-50 active:opacity-80 transition-opacity"
-                >
-                  {loading === "deactivate" ? "Desativando…" : "Desativar push"}
-                </button>
-              </>
-            )}
-          </div>
-        )}
+              <button
+                type="button"
+                disabled={loading === "deactivate"}
+                onClick={handleDeactivate}
+                className="w-full py-3 rounded-2xl bg-slate-100 text-slate-500 text-sm font-medium disabled:opacity-50 active:opacity-80 transition-opacity"
+              >
+                {loading === "deactivate" ? "Desativando…" : "Desativar push"}
+              </button>
+            </>
+          )}
+          {!isSupported && (
+            <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-xl">
+              Push não detectado neste contexto. Abra o app pela Tela de Início (ícone instalado) e tente novamente.
+            </p>
+          )}
+        </div>
 
         {/* O que você vai receber */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
