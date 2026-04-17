@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { API_BASE_URL } from '@/lib/api';
 import { showBlockingNotice } from '@/features/interactions/userPromptChannel';
+import { useNotificationPermissionController } from '@/features/interactions/useNotificationPermissionController';
 
 // ── Design tokens ─────────────────────────────────────────────
 import { BrandBackground, PetmolTextLogo } from '@/components/ui/BrandBackground';
@@ -15,6 +16,8 @@ const CTA = 'w-full py-4 bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white
 const DEFAULT_CHECKIN_DAY = 16;
 const DEFAULT_CHECKIN_HOUR = 9;
 const DEFAULT_CHECKIN_MINUTE = 35;
+const PROFILE_PUSH_SEEN_KEY = 'petmol-profile-push-seen-v1';
+const PROFILE_PUSH_OPT_IN_KEY = 'petmol-profile-push-opt-in-v1';
 
 interface TutorData {
   id: string;
@@ -34,9 +37,36 @@ interface TutorData {
   country?: string;
 }
 
+function PreferenceSwitch({ checked, onToggle, disabled = false }: { checked: boolean; onToggle: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-disabled={disabled}
+      onClick={onToggle}
+      disabled={disabled}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition-all ${checked ? 'bg-[#0056D2]' : 'bg-slate-200'} ${disabled ? 'opacity-50' : 'active:scale-95'}`}
+    >
+      <span
+        className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : ''}`}
+      />
+    </button>
+  );
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const apiBase = API_BASE_URL;
+  const {
+    isSupported,
+    isSubscribed,
+    permission,
+    requestPermission,
+    subscribeToPush,
+    unsubscribe,
+    sendTestNotification,
+  } = useNotificationPermissionController();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,9 +81,33 @@ export default function ProfilePage() {
   const [addrOpen, setAddrOpen] = useState(false);
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [pushOptIn, setPushOptIn] = useState(false);
+  const [pushPrefsReady, setPushPrefsReady] = useState(false);
+  const [pushLoading, setPushLoading] = useState<"activate" | "deactivate" | "test" | null>(null);
+  const [pushFeedback, setPushFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   useEffect(() => {
     loadTutorData();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedOptIn = window.localStorage.getItem(PROFILE_PUSH_OPT_IN_KEY);
+    const hasSeenPushPref = window.localStorage.getItem(PROFILE_PUSH_SEEN_KEY) === '1';
+    const nextOptIn = storedOptIn == null ? true : storedOptIn === '1';
+
+    setPushOptIn(nextOptIn);
+    if (storedOptIn == null) {
+      window.localStorage.setItem(PROFILE_PUSH_OPT_IN_KEY, '1');
+    }
+
+    if (!hasSeenPushPref) {
+      setNotifsOpen(true);
+      window.localStorage.setItem(PROFILE_PUSH_SEEN_KEY, '1');
+    }
+
+    setPushPrefsReady(true);
   }, []);
 
   useEffect(() => {
@@ -71,6 +125,21 @@ export default function ProfilePage() {
       if (normalized.length === 8) handleCepLookup();
     }
   }, [tutorData?.postal_code, editMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !pushPrefsReady) return;
+    window.localStorage.setItem(PROFILE_PUSH_OPT_IN_KEY, pushOptIn ? '1' : '0');
+  }, [pushOptIn, pushPrefsReady]);
+
+  useEffect(() => {
+    if (!pushPrefsReady || !pushOptIn || !isSupported || permission !== 'granted' || isSubscribed) return;
+    subscribeToPush().catch(() => {});
+  }, [isSubscribed, isSupported, permission, pushOptIn, pushPrefsReady, subscribeToPush]);
+
+  useEffect(() => {
+    if (!isSubscribed) return;
+    setPushOptIn(true);
+  }, [isSubscribed]);
 
   const loadTutorData = async () => {
     try {
@@ -209,6 +278,91 @@ export default function ProfilePage() {
 
   const tutorInitial = (tutorData?.name || 'T').trim().charAt(0).toUpperCase();
   const inpCls = `w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm outline-none text-slate-800 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all disabled:opacity-50 disabled:bg-transparent disabled:border-transparent disabled:px-0 placeholder:text-slate-300 font-medium`;
+  const pushPermissionLabel: Record<NotificationPermission, string> = {
+    granted: 'Permitido',
+    denied: 'Bloqueado',
+    default: 'Não solicitado',
+  };
+
+  const activatePush = async () => {
+    setPushLoading('activate');
+    setPushFeedback(null);
+    try {
+      if (!isSupported) {
+        setNotifsOpen(true);
+        setPushOptIn(true);
+        setPushFeedback({ ok: false, msg: 'Push não está disponível neste contexto. Abra o PETMOL pela Tela de Início e tente novamente.' });
+        return;
+      }
+
+      const granted = permission === 'granted' ? true : await requestPermission();
+      if (!granted) {
+        setPushOptIn(false);
+        setPushFeedback({ ok: false, msg: 'Permissão negada pelo navegador.' });
+        return;
+      }
+
+      const sub = await subscribeToPush();
+      if (!sub) {
+        setPushFeedback({ ok: false, msg: 'Não foi possível ativar as notificações neste dispositivo.' });
+        return;
+      }
+
+      setPushOptIn(true);
+      setPushFeedback({ ok: true, msg: 'Notificações no celular ativadas com sucesso.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao ativar notificações.';
+      setPushOptIn(false);
+      setPushFeedback({ ok: false, msg });
+    } finally {
+      setPushLoading(null);
+    }
+  };
+
+  const deactivatePush = async () => {
+    setPushLoading('deactivate');
+    setPushFeedback(null);
+    try {
+      await unsubscribe();
+      setPushOptIn(false);
+      setPushFeedback({ ok: true, msg: 'Notificações no celular desativadas.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao desativar notificações.';
+      setPushFeedback({ ok: false, msg });
+    } finally {
+      setPushLoading(null);
+    }
+  };
+
+  const handlePushToggle = async () => {
+    setNotifsOpen(true);
+    if (pushOptIn) {
+      if (isSubscribed) {
+        await deactivatePush();
+        return;
+      }
+      setPushOptIn(false);
+      setPushFeedback(null);
+      return;
+    }
+
+    setPushOptIn(true);
+    await activatePush();
+  };
+
+  const handlePushTest = async () => {
+    setPushLoading('test');
+    setPushFeedback(null);
+    try {
+      await sendTestNotification();
+      setPushFeedback({ ok: true, msg: 'Notificação de teste enviada. Verifique seu dispositivo.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar push de teste.';
+      setPushFeedback({ ok: false, msg });
+    } finally {
+      setPushLoading(null);
+    }
+  };
 
   // ── Loading ───────────────────────────────────────────────
   if (loading) {
@@ -419,6 +573,86 @@ export default function ProfilePage() {
 
               {notifsOpen && (
                 <div className="bg-slate-50/50 p-1 space-y-1">
+                  <div className={ROW}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 tracking-tight">Notificações no celular</p>
+                        <p className="mt-1 text-xs text-slate-500 font-medium leading-relaxed">
+                          Vacinas, medicação e cuidados chegam mesmo com o app fechado.
+                        </p>
+                      </div>
+                      <PreferenceSwitch
+                        checked={pushOptIn}
+                        onToggle={() => {
+                          void handlePushToggle();
+                        }}
+                        disabled={pushLoading === 'activate' || pushLoading === 'deactivate'}
+                      />
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${pushOptIn ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {pushOptIn ? 'Campo marcado' : 'Campo desmarcado'}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${isSubscribed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {isSubscribed ? 'Push ativo' : 'Push inativo'}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${permission === 'granted' ? 'bg-blue-50 text-blue-700' : permission === 'denied' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {pushPermissionLabel[permission]}
+                      </span>
+                    </div>
+
+                    {pushFeedback && (
+                      <div className={`mt-4 rounded-2xl px-4 py-3 text-xs font-bold ${pushFeedback.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                        {pushFeedback.msg}
+                      </div>
+                    )}
+
+                    <div className="mt-4 space-y-3">
+                      {!isSubscribed ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void activatePush();
+                          }}
+                          disabled={pushLoading === 'activate' || permission === 'denied'}
+                          className="w-full rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] py-3.5 text-xs font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-40"
+                        >
+                          {pushLoading === 'activate' ? 'Ativando...' : 'Ativar notificações no celular'}
+                        </button>
+                      ) : (
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handlePushTest();
+                            }}
+                            disabled={pushLoading === 'test'}
+                            className="flex-1 rounded-2xl bg-slate-900 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-white transition-all active:scale-[0.98] disabled:opacity-40"
+                          >
+                            {pushLoading === 'test' ? 'Enviando...' : 'Enviar teste'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void deactivatePush();
+                            }}
+                            disabled={pushLoading === 'deactivate'}
+                            className="flex-1 rounded-2xl bg-slate-100 py-3.5 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 transition-all active:scale-[0.98] disabled:opacity-40"
+                          >
+                            {pushLoading === 'deactivate' ? 'Desativando...' : 'Desativar'}
+                          </button>
+                        </div>
+                      )}
+
+                      {!isSupported && (
+                        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700 leading-relaxed">
+                          Para concluir a ativação, abra o PETMOL pela Tela de Início do celular e volte aqui.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Monthly reminder */}
                   <div className={ROW} id="checkin-config">
                     <p className="text-sm font-bold text-slate-800 tracking-tight mb-4">Agenda Mentoral de Saúde</p>
