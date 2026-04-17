@@ -99,6 +99,8 @@ const updateVaccine = async (petId: string, vaccineId: string, updates: Partial<
     if (updates.next_dose_date !== undefined) payload.next_dose_date = updates.next_dose_date || null;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.record_type) payload.record_type = updates.record_type;
+    if (updates.alert_days_before !== undefined) payload.alert_days_before = updates.alert_days_before;
+    if (updates.reminder_time !== undefined) payload.reminder_time = updates.reminder_time || null;
 
     const response = await fetch(`${API_BASE_URL}/vaccines/${vaccineId}`, {
       method: 'PATCH',
@@ -1924,6 +1926,8 @@ export default function HomePage() {
           batch_number: undefined,
           notes: vaccineFormData.notes || undefined,
           record_type: vaccineFormData.record_type,
+          alert_days_before: vaccineFormData.alert_days_before ?? 3,
+          reminder_time: vaccineFormData.reminder_time ?? '09:00',
         };
         const success = await updateVaccine(currentPet.pet_id, editingVaccine.id, updates);
         
@@ -2006,6 +2010,8 @@ export default function HomePage() {
           vaccine_code: saved.vaccine_code || undefined,
           country_code: saved.country_code || undefined,
           next_due_source: saved.next_due_source || 'unknown',
+          alert_days_before: saved.alert_days_before ?? vaccineFormData.alert_days_before ?? 3,
+          reminder_time: saved.reminder_time ?? vaccineFormData.reminder_time ?? '09:00',
         };
 
         trackV1Metric('vaccine_record_created', {

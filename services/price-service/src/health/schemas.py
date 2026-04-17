@@ -27,6 +27,8 @@ class VaccinePayload(BaseModel):
     record_type: str = "confirmed_application"  # confirmed_application | estimated_control_start
     clinic_name: Optional[str] = None
     veterinarian: Optional[str] = None
+    alert_days_before: Optional[int] = Field(None, ge=0, le=60)
+    reminder_time: Optional[str] = Field(None, max_length=5)
 
 
 class BulkConfirmRequest(BaseModel):
@@ -55,6 +57,8 @@ class VaccineResponse(BaseModel):
     source: str
     confirmed_by_user: bool
     record_type: str = "confirmed_application"
+    alert_days_before: Optional[int] = None
+    reminder_time: Optional[str] = None
 
 
 class AlertsSummary(BaseModel):

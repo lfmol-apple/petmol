@@ -56,6 +56,8 @@ export interface VaccineRecord {
   country_code?: string;      // e.g. "BR", "US"
   next_due_source?: string;   // "protocol" | "manual" | "unknown"
   record_type?: 'confirmed_application' | 'estimated_control_start';
+  alert_days_before?: number;
+  reminder_time?: string;
   deleted_at?: string;
 }
 

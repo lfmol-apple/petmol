@@ -16,15 +16,16 @@ from ..user_auth.deps import get_current_user
 from ..user_auth.models import User
 from ..events.models import Event
 from ..config import get_settings
+from ..utils.logging_utils import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__, "INFO")
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 # ── Helper: write a pendency alongside every care push ────────────────────────
 
 def _upsert_pend(
     *,
-    user_id: int,
+    user_id: str,
     pet_id,
     pend_id: str,
     type_: str,
@@ -37,8 +38,8 @@ def _upsert_pend(
     try:
         from .pendencies import upsert_pendency_standalone
         upsert_pendency_standalone(
-            user_id=int(user_id),
-            pet_id=int(pet_id) if pet_id is not None else None,
+            user_id=str(user_id),
+            pet_id=str(pet_id) if pet_id is not None else None,
             pend_id=pend_id,
             type_=type_,
             title=title,
@@ -220,6 +221,22 @@ def _expand_times(base_time: str, frequency: Optional[str]) -> List[str]:
     return [f"{m // 60:02d}:{m % 60:02d}" for m in sorted(set(slots))]
 
 
+def _matches_reminder_time(now: datetime, reminder_time: Optional[str], default_time: str = "09:00") -> bool:
+    hm = _parse_hhmm(str(reminder_time or default_time))
+    return bool(hm and hm[0] == now.hour and hm[1] == now.minute)
+
+
+def _safe_local_date(value, tzinfo) -> Optional[object]:
+    if value is None:
+        return None
+    if getattr(value, "tzinfo", None) is None:
+        return value.date() if hasattr(value, "date") else value
+    try:
+        return value.astimezone(tzinfo).date()
+    except Exception:
+        return value.date() if hasattr(value, "date") else value
+
+
 def send_medication_pushes() -> None:
     """Called every minute by APScheduler. Sends medication reminder pushes by schedule (Brasilia time)."""
     from datetime import timezone
@@ -243,9 +260,16 @@ def send_medication_pushes() -> None:
                 .filter(
                     Event.user_id.in_(user_ids),
                     Event.type.in_(["medicacao", "medication"]),
-                    Event.status != "cancelled",
+                    Event.status.in_(["active", "pending", "rescheduled"]),
                 )
                 .all()
+            )
+
+            logger.info(
+                "medication_push_tick now=%s subscriptions=%d events=%d",
+                now.isoformat(timespec="minutes"),
+                len(subscriptions),
+                len(events),
             )
 
             for event in events:
@@ -267,20 +291,18 @@ def send_medication_pushes() -> None:
                     start_date = start_dt.astimezone(brt).date() if start_dt else today
                 except Exception:
                     start_date = today
-                if today < start_date:
-                    continue
 
                 treatment_days = extra.get("treatment_days")
                 applied_dates = extra.get("applied_dates") or []
                 skipped_dates = extra.get("skipped_dates") or []
                 applied_slots = extra.get("applied_slots") or {}
                 skipped_slots = extra.get("skipped_slots") or {}
+                treatment_complete = False
                 if treatment_days is not None:
                     try:
-                        if len(applied_dates) >= int(treatment_days):
-                            continue
+                        treatment_complete = len(applied_dates) >= int(treatment_days)
                     except Exception:
-                        pass
+                        treatment_complete = False
 
                 offset_min = 0
                 try:
@@ -298,18 +320,10 @@ def send_medication_pushes() -> None:
                 if not slots:
                     continue
 
+                due_slots_now = []
                 for slot in slots:
                     hm = _parse_hhmm(slot)
                     if not hm:
-                        continue
-
-                    today_key = today.isoformat()
-                    if today_key in applied_dates or today_key in skipped_dates:
-                        continue
-
-                    day_applied_slots = [str(s) for s in (applied_slots.get(today_key) or [])]
-                    day_skipped_slots = [str(s) for s in (skipped_slots.get(today_key) or [])]
-                    if slot in day_applied_slots or slot in day_skipped_slots:
                         continue
 
                     due_dt = datetime(
@@ -321,7 +335,67 @@ def send_medication_pushes() -> None:
                         tzinfo=brt,
                     ) - timedelta(minutes=offset_min)
 
-                    if due_dt.hour != now.hour or due_dt.minute != now.minute:
+                    if due_dt.hour == now.hour and due_dt.minute == now.minute:
+                        due_slots_now.append(slot)
+
+                if not due_slots_now:
+                    continue
+
+                logger.info(
+                    "medication_due_slots event_id=%s user_id=%s pet_id=%s title=%r slots=%s start_date=%s treatment_days=%s applied_count=%d offset_min=%d",
+                    event.id,
+                    event.user_id,
+                    event.pet_id,
+                    event.title,
+                    due_slots_now,
+                    start_date.isoformat(),
+                    treatment_days,
+                    len(applied_dates),
+                    offset_min,
+                )
+
+                if today < start_date:
+                    logger.info(
+                        "medication_skip event_id=%s slot=%s reason=before_start start_date=%s today=%s",
+                        event.id,
+                        ",".join(due_slots_now),
+                        start_date.isoformat(),
+                        today.isoformat(),
+                    )
+                    continue
+
+                if treatment_complete:
+                    logger.info(
+                        "medication_skip event_id=%s slot=%s reason=treatment_complete applied_count=%d treatment_days=%s",
+                        event.id,
+                        ",".join(due_slots_now),
+                        len(applied_dates),
+                        treatment_days,
+                    )
+                    continue
+
+                for slot in due_slots_now:
+                    today_key = today.isoformat()
+                    if today_key in applied_dates or today_key in skipped_dates:
+                        logger.info(
+                            "medication_skip event_id=%s slot=%s reason=day_already_closed applied=%s skipped=%s",
+                            event.id,
+                            slot,
+                            today_key in applied_dates,
+                            today_key in skipped_dates,
+                        )
+                        continue
+
+                    day_applied_slots = [str(s) for s in (applied_slots.get(today_key) or [])]
+                    day_skipped_slots = [str(s) for s in (skipped_slots.get(today_key) or [])]
+                    if slot in day_applied_slots or slot in day_skipped_slots:
+                        logger.info(
+                            "medication_skip event_id=%s slot=%s reason=slot_already_closed applied=%s skipped=%s",
+                            event.id,
+                            slot,
+                            slot in day_applied_slots,
+                            slot in day_skipped_slots,
+                        )
                         continue
 
                     from urllib.parse import quote
@@ -342,7 +416,23 @@ def send_medication_pushes() -> None:
                     }
 
                     ok = _send_push(sub, payload)
+                    if ok:
+                        logger.info(
+                            "medication_push_sent event_id=%s user_id=%s pet_id=%s slot=%s tag=%s",
+                            event.id,
+                            event.user_id,
+                            event.pet_id,
+                            slot,
+                            payload["tag"],
+                        )
                     if not ok:
+                        logger.warning(
+                            "medication_push_expired_subscription event_id=%s user_id=%s pet_id=%s slot=%s",
+                            event.id,
+                            event.user_id,
+                            event.pet_id,
+                            slot,
+                        )
                         subscriptions.pop(str(event.user_id), None)
                         _save_subscriptions(subscriptions)
                         break
@@ -353,12 +443,12 @@ def send_medication_pushes() -> None:
 
 
 def send_care_pushes() -> None:
-    """Daily at 08:00 BRT — sends pushes ONLY when something is overdue/today OR
-    when today is exactly the tutor-configured advance reminder day.
+    """Called every minute. Sends care pushes only when the date rule matches and
+    the current BRT time equals the tutor-configured reminder time.
 
     Rules:
-    - Overdue (days_left < 0): push every day at 08:00 until resolved
-    - Today (days_left == 0): push at 08:00
+    - Overdue (days_left < 0): push every day at the configured time until resolved
+    - Today (days_left == 0): push at the configured time
     - Advance reminder (days_left > 0): push only when days_left == alert_days_before
       (or reminder_days_before for grooming). No generic X-day window.
 
@@ -369,8 +459,6 @@ def send_care_pushes() -> None:
 
     brt = timezone(timedelta(hours=-3))
     now = datetime.now(brt)
-    if now.hour != 9 or now.minute != 0:
-        return
 
     today = now.date()
     today_str = today.isoformat()
@@ -432,10 +520,14 @@ def send_care_pushes() -> None:
                 for key, v in _latest_v.items():
                     if not v.next_dose_date:
                         continue
-                    due = v.next_dose_date.astimezone(brt).date() if hasattr(v.next_dose_date, "astimezone") else v.next_dose_date.date()
+                    due = _safe_local_date(v.next_dose_date, brt)
                     days_left = (due - today).days
-                    # Skip if future AND not the exact 10-day advance window
-                    if days_left > 0 and days_left != _VACCINE_ADVANCE_DAYS:
+                    advance = getattr(v, "alert_days_before", None)
+                    if advance is None:
+                        advance = _VACCINE_ADVANCE_DAYS
+                    if days_left > 0 and days_left != advance:
+                        continue
+                    if not _matches_reminder_time(now, getattr(v, "reminder_time", None)):
                         continue
                     if days_left < 0:
                         title = f"💉 {pet.name} — vacina atrasada"
@@ -483,11 +575,12 @@ def send_care_pushes() -> None:
                 for key, c in _latest_p.items():
                     if not c.next_due_date:
                         continue
-                    due = c.next_due_date.astimezone(brt).date() if hasattr(c.next_due_date, "astimezone") else c.next_due_date.date()
+                    due = _safe_local_date(c.next_due_date, brt)
                     days_left = (due - today).days
                     advance = c.alert_days_before or c.reminder_days or 0
-                    # Fire if overdue/today OR on the exact advance-reminder day
                     if days_left > 0 and days_left != advance:
+                        continue
+                    if not _matches_reminder_time(now, getattr(c, "reminder_time", None)):
                         continue
                     label = parasite_type_labels.get(key) or c.product_name or key
                     if days_left < 0:
@@ -533,11 +626,12 @@ def send_care_pushes() -> None:
                 for key, r in _latest_g.items():
                     if not r.next_recommended_date:
                         continue
-                    due = r.next_recommended_date.astimezone(brt).date() if hasattr(r.next_recommended_date, "astimezone") else r.next_recommended_date.date()
+                    due = _safe_local_date(r.next_recommended_date, brt)
                     days_left = (due - today).days
                     advance = r.reminder_days_before or r.alert_days_before or 0
-                    # Fire if overdue/today OR on the exact advance-reminder day
                     if days_left > 0 and days_left != advance:
+                        continue
+                    if not _matches_reminder_time(now, getattr(r, "scheduled_time", None)):
                         continue
                     label = groom_type_labels.get(key, key)
                     if days_left < 0:
@@ -615,10 +709,10 @@ def send_monthly_docs_reminder() -> None:
         db = SessionLocal()
         try:
             from ..user_auth.models import User
-            int_ids = [int(k) for k in subscriptions.keys() if k.isdigit()]
-            if not int_ids:
+            str_ids = list(subscriptions.keys())
+            if not str_ids:
                 return
-            users = db.query(User).filter(User.id.in_(int_ids)).all()
+            users = db.query(User).filter(User.id.in_(str_ids)).all()
             expired_ids = []
             for user in users:
                 sub = subscriptions.get(str(user.id))

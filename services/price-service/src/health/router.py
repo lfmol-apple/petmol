@@ -85,6 +85,8 @@ def _vaccine_record_to_response(record: VaccineRecord) -> VaccineResponse:
         source="manual",
         confirmed_by_user=True,
         record_type=record.record_type or "confirmed_application",
+        alert_days_before=record.alert_days_before,
+        reminder_time=record.reminder_time,
     )
 
 
@@ -345,6 +347,8 @@ async def bulk_confirm_vaccines(
             country_code=country,
             next_due_source=next_due_source,
             record_type=vac.record_type,
+            alert_days_before=vac.alert_days_before,
+            reminder_time=vac.reminder_time,
         )
 
         db.add(vaccine_record)

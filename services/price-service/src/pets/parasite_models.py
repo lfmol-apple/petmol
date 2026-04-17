@@ -52,6 +52,7 @@ class ParasiteControlRecord(Base):
     reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     reminder_days: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     alert_days_before: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reminder_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
 
     # Notas
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
