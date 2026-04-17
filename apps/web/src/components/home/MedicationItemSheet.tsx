@@ -482,6 +482,34 @@ export function MedicationItemSheet({
                           </div>
                         )}
 
+                        <div className="mx-4 mb-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(ev)}
+                            className="flex-1 rounded-xl border border-purple-200 bg-white py-2 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 active:scale-95"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (deletingId === ev.id) {
+                                handleDelete(ev.id);
+                                setDeletingId(null);
+                                return;
+                              }
+                              setDeletingId(ev.id);
+                            }}
+                            className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors active:scale-95 ${
+                              deletingId === ev.id
+                                ? 'bg-red-600 text-white'
+                                : 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                            }`}
+                          >
+                            {deletingId === ev.id ? '✓ Confirmar exclusão' : '🗑 Excluir'}
+                          </button>
+                        </div>
+
                         {/* Expanded: day calendar */}
                         {isOpen && (
                           <div className="px-4 pb-4 pt-1 bg-white/70 border-t border-purple-100">
