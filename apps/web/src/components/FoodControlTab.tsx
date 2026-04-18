@@ -427,8 +427,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             </button>
           </div>
 
-          </div>
-
         </div>
       )}
 
