@@ -23,10 +23,11 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
   const [mode, setMode] = useState<'view' | 'buy'>('view');
   const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
   const [snoozing, setSnoozing] = useState(false);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [foodBrand, setFoodBrand] = useState<string>('');
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const handleSnooze = async () => {
+  const handleSnooze = async (days: number) => {
     setSnoozing(true);
     setSnoozeFeedback(null);
     try {
@@ -40,11 +41,11 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           credentials: 'include',
-          body: JSON.stringify({ snooze_days: 7 }),
+          body: JSON.stringify({ snooze_days: days }),
         },
       );
       if (res.ok) {
-        setSnoozeFeedback('Lembrete adiado. Você receberá um novo aviso em 7 dias.');
+        setSnoozeFeedback(`Lembrete adiado. Você receberá um novo aviso em ${days} dia${days > 1 ? 's' : ''}.`);
       } else {
         setSnoozeFeedback('Não foi possível adiar. Tente novamente.');
       }
@@ -159,22 +160,46 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                   <span className="text-blue-400 text-lg font-bold">›</span>
                 </button>
 
-                <button
-                  onClick={handleSnooze}
-                  disabled={snoozing}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
-                      ⏸️
+                {!snoozeOpen ? (
+                  <button
+                    onClick={() => setSnoozeOpen(true)}
+                    disabled={snoozing}
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                        ⏸️
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[14px] font-bold text-gray-700">Adiar lembrete</p>
+                        <p className="text-[12px] text-gray-500">Escolher por quantos dias</p>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <p className="text-[14px] font-bold text-gray-700">{snoozing ? 'Adiando...' : 'Adiar 7 dias'}</p>
-                      <p className="text-[12px] text-gray-500">Lembrar de novo em 7 dias</p>
+                    <span className="text-gray-400 text-lg font-bold">›</span>
+                  </button>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2">
+                    <p className="text-[13px] font-semibold text-gray-600 mb-1">Adiar por quantos dias?</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[1, 3, 5, 7].map((days) => (
+                        <button
+                          key={days}
+                          onClick={() => { setSnoozeOpen(false); handleSnooze(days); }}
+                          disabled={snoozing}
+                          className="py-2 rounded-xl bg-white border border-gray-200 text-[13px] font-bold text-gray-700 hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50"
+                        >
+                          {days}d
+                        </button>
+                      ))}
                     </div>
+                    <button
+                      onClick={() => setSnoozeOpen(false)}
+                      className="w-full text-center text-xs text-gray-400 pt-1 hover:text-gray-600"
+                    >
+                      Cancelar
+                    </button>
                   </div>
-                  <span className="text-gray-400 text-lg font-bold">›</span>
-                </button>
+                )}
               </div>
             </>
           ) : (

@@ -341,12 +341,12 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           <div className={`rounded-2xl border p-4 space-y-2 ${
             daysLeft !== null && daysLeft < 0 ? 'bg-red-50 border-red-200' :
             daysLeft !== null && daysLeft <= 5 ? 'bg-orange-50 border-orange-200' :
-            'bg-amber-50 border-amber-200'
+            'bg-white border-slate-200'
           }`}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-xl flex-shrink-0">🥣</span>
-                <p className="font-bold text-gray-900 text-sm truncate">{form.brand || 'Ração'}</p>
+                <p className="font-bold text-gray-900 text-sm leading-tight">{form.brand || 'Ração'}</p>
               </div>
               {daysLeft !== null && (
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${
@@ -358,38 +358,45 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-1 text-xs text-gray-600 mt-1">
+            {days != null && daysLeft !== null && (
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    daysLeft < 0 ? 'bg-red-400' :
+                    daysLeft <= 5 ? 'bg-orange-400' :
+                    'bg-green-400'
+                  }`}
+                  style={{ width: `${Math.max(4, Math.min(100, Math.round(((days - Math.max(daysLeft, 0)) / days) * 100)))}%` }}
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-1 text-xs text-gray-500 mt-0.5">
               {form.packageSizeKg && <span>📦 {form.packageSizeKg} kg</span>}
               {form.startDate && <span>📅 Início: {fmtDate(form.startDate)}</span>}
               {estimatedEndDate && (
-                <span className="col-span-2">⏳ Término: <strong>{fmtDate(estimatedEndDate)}</strong></span>
+                <span className="col-span-2">⏳ Prev. término: {fmtDate(estimatedEndDate)}</span>
               )}
             </div>
           </div>
 
-          {/* Recomprar */}
-          {commerceSnapshot && foodHandoffUrl && (
+          {/* Recomprar — exibido apenas quando há urgência ou atenção */}
+          {commerceSnapshot && foodHandoffUrl && commerceSnapshot.status !== 'steady' && (
             <a
               href={foodHandoffUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`w-full rounded-2xl border p-3 transition-all active:scale-[0.98] ${commerceSnapshot.status === 'urgent'
-                ? 'border-rose-200 bg-rose-50 hover:bg-rose-100'
-                : commerceSnapshot.status === 'attention'
-                  ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
-                  : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'}`}
+              className={`w-full flex items-center gap-3 rounded-2xl border p-3 transition-all active:scale-[0.98] ${
+                commerceSnapshot.status === 'urgent'
+                  ? 'border-rose-200 bg-rose-50 hover:bg-rose-100'
+                  : 'border-amber-200 bg-amber-50 hover:bg-amber-100'
+              }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="text-base">🔄</span>
-                  <div className="min-w-0 text-left">
-                    <p className="truncate text-[13px] font-bold text-slate-900">{commerceSnapshot.title}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-600">{commerceSnapshot.description}</p>
-                    <p className="mt-1 text-[11px] font-semibold text-slate-500">Handoff de compra via parceiro / Google Shopping</p>
-                  </div>
-                </div>
-                <span className="flex-shrink-0 text-sm font-bold text-slate-700">{commerceSnapshot.ctaLabel}</span>
+              <span className="text-xl flex-shrink-0">{commerceSnapshot.status === 'urgent' ? '🛒' : '⏰'}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-bold text-slate-900 leading-tight">{commerceSnapshot.title}</p>
+                <p className="text-[11px] text-slate-600 mt-0.5 leading-tight">{commerceSnapshot.description}</p>
               </div>
+              <span className="flex-shrink-0 text-[12px] font-bold text-slate-700 whitespace-nowrap">{commerceSnapshot.ctaLabel} ›</span>
             </a>
           )}
 

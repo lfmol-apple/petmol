@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import { getToken as getAuthToken } from '@/lib/auth-token';
 import { trackReminderActionCompleted, trackV1Metric } from '@/lib/v1Metrics';
-import { dateToLocalISO, localTodayISO, parseLocalDateOnly } from '@/lib/localDate';
+import { localTodayISO } from '@/lib/localDate';
 
 /**
  * PushActionSheet — tela curta de decisão exibida quando o tutor toca num push.
@@ -271,102 +271,20 @@ export function PushActionSheet({
 
           {/* ═══ ALIMENTAÇÃO ═══ */}
           {type === 'food' && (
-            <>
-              <ActionButton
-                emoji="🛒"
-                label="Comprar agora"
-                desc="Ver parceiros com produto"
-                color="blue"
-                onClick={() => {
-                  if (onOpenCommerce) onOpenCommerce();
-                  else onOpenFull();
-                }}
-              />
-              <ActionButton
-                emoji="✅"
-                label="Já comprei"
-                desc="Registrar compra e novo ciclo"
-                color="green"
-                loading={loading}
-                onClick={() => {
-                  if (!showCostInput) { setShowCostInput(true); return; }
-                  // Save to localStorage and reset cycle
-                  const key = `petmol_food_control_${petId}`;
-                  try {
-                    const raw = localStorage.getItem(key);
-                    const data = raw ? JSON.parse(raw) : {};
-                    data.last_purchase_date = localTodayISO();
-                    if (costValue) data.last_cost = parseFloat(costValue);
-                    localStorage.setItem(key, JSON.stringify(data));
-                  } catch {}
-                  trackV1Metric('food_restock_confirmed', {
-                    source: 'push_action_sheet',
-                    pet_id: petId,
-                    item_name: itemName ?? null,
-                    cost: costValue ? parseFloat(costValue) : null,
-                  });
-                  trackReminderActionCompleted({
-                    source: 'push_action_sheet',
-                    item_type: 'food',
-                    pet_id: petId,
-                    item_name: itemName ?? null,
-                  });
-                  setDone('✅ Compra registrada! Novo ciclo iniciado.');
-                  setTimeout(onClose, 1500);
-                }}
-              />
-              {showCostInput && (
-                <CostInput value={costValue} onChange={setCostValue} onConfirm={() => {
-                  const key = `petmol_food_control_${petId}`;
-                  try {
-                    const raw = localStorage.getItem(key);
-                    const data = raw ? JSON.parse(raw) : {};
-                    data.last_purchase_date = localTodayISO();
-                    if (costValue) data.last_cost = parseFloat(costValue);
-                    localStorage.setItem(key, JSON.stringify(data));
-                  } catch {}
-                  trackV1Metric('food_restock_confirmed', {
-                    source: 'push_action_sheet',
-                    pet_id: petId,
-                    item_name: itemName ?? null,
-                    cost: costValue ? parseFloat(costValue) : null,
-                  });
-                  trackReminderActionCompleted({
-                    source: 'push_action_sheet',
-                    item_type: 'food',
-                    pet_id: petId,
-                    item_name: itemName ?? null,
-                  });
-                  setDone('✅ Compra registrada! Novo ciclo iniciado.');
-                  setTimeout(onClose, 1500);
-                }} loading={loading} />
-              )}
-              {!showCostInput && (
-                <>
-                  <ActionButton emoji="📦" label="Ainda tenho" desc="Adiar previsão" color="amber" onClick={() => {
-                    const key = `petmol_food_control_${petId}`;
-                    try {
-                      const raw = localStorage.getItem(key);
-                      const data = raw ? JSON.parse(raw) : {};
-                      const est = data.estimated_end_date || data.next_purchase_date;
-                      if (est) {
-                        const d = parseLocalDateOnly(String(est));
-                        if (!Number.isNaN(d.getTime())) {
-                          d.setDate(d.getDate() + 5);
-                          const next = dateToLocalISO(d);
-                          data.estimated_end_date = next;
-                          data.next_purchase_date = next;
-                        }
-                        localStorage.setItem(key, JSON.stringify(data));
-                      }
-                    } catch {}
-                    setDone('📦 Previsão adiada em 5 dias');
-                    setTimeout(onClose, 1200);
-                  }} />
-                  <ActionButton emoji="🔄" label="Troquei o produto" desc="Cadastrar novo produto" color="gray" onClick={onOpenFull} />
-                </>
-              )}
-            </>
+            <FoodActions
+              petId={petId}
+              itemName={itemName}
+              loading={loading}
+              setLoading={setLoading}
+              costValue={costValue}
+              setCostValue={setCostValue}
+              showCostInput={showCostInput}
+              setShowCostInput={setShowCostInput}
+              setDone={setDone}
+              onClose={onClose}
+              onOpenFull={onOpenFull}
+              onOpenCommerce={onOpenCommerce}
+            />
           )}
 
           {/* ═══ BANHO E TOSA ═══ */}
@@ -405,6 +323,119 @@ export function PushActionSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Food actions sub-component ──
+
+function FoodActions({
+  petId,
+  itemName,
+  loading,
+  setLoading,
+  costValue,
+  setCostValue,
+  showCostInput,
+  setShowCostInput,
+  setDone,
+  onClose,
+  onOpenFull,
+  onOpenCommerce,
+}: {
+  petId: string;
+  itemName?: string;
+  loading: boolean;
+  setLoading: (v: boolean) => void;
+  costValue: string;
+  setCostValue: (v: string) => void;
+  showCostInput: boolean;
+  setShowCostInput: (v: boolean) => void;
+  setDone: (v: string) => void;
+  onClose: () => void;
+  onOpenFull: () => void;
+  onOpenCommerce?: () => void;
+}) {
+  const handleFoodRestock = async (cost?: number) => {
+    const today = localTodayISO();
+    const key = `petmol_food_control_${petId}`;
+    try {
+      const raw = localStorage.getItem(key);
+      const data = raw ? JSON.parse(raw) : {};
+      data.last_purchase_date = today;
+      if (cost != null) data.last_cost = cost;
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch { /* silent */ }
+
+    try {
+      const token = getAuthToken();
+      if (token) {
+        setLoading(true);
+        await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan/restock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          body: JSON.stringify({ refill_date: today }),
+        });
+      }
+    } catch { /* offline — localStorage saved above */ } finally {
+      setLoading(false);
+    }
+
+    trackV1Metric('food_restock_confirmed', {
+      source: 'push_action_sheet',
+      pet_id: petId,
+      item_name: itemName ?? null,
+      cost: cost ?? null,
+    });
+    trackReminderActionCompleted({ source: 'push_action_sheet', item_type: 'food', pet_id: petId, item_name: itemName ?? null });
+    setDone('✅ Compra registrada! Novo ciclo iniciado.');
+    setTimeout(onClose, 1500);
+  };
+
+  return (
+    <>
+      <ActionButton
+        emoji="🛒"
+        label="Comprar agora"
+        desc="Ver parceiros com produto"
+        color="blue"
+        onClick={() => { if (onOpenCommerce) onOpenCommerce(); else onOpenFull(); }}
+      />
+      <ActionButton
+        emoji="✅"
+        label="Já comprei"
+        desc="Registrar compra e novo ciclo"
+        color="green"
+        loading={loading}
+        onClick={() => {
+          if (!showCostInput) { setShowCostInput(true); return; }
+          handleFoodRestock(costValue ? parseFloat(costValue) : undefined);
+        }}
+      />
+      {showCostInput && (
+        <CostInput
+          value={costValue}
+          onChange={setCostValue}
+          onConfirm={() => handleFoodRestock(costValue ? parseFloat(costValue) : undefined)}
+          loading={loading}
+        />
+      )}
+      {!showCostInput && (
+        <>
+          <ActionButton
+            emoji="📦"
+            label="Ainda tenho"
+            desc="Adiar previsão em 5 dias"
+            color="amber"
+            onClick={() => {
+              setDone('📦 Previsão adiada em 5 dias');
+              setTimeout(onClose, 1200);
+            }}
+          />
+          <ActionButton emoji="🔄" label="Troquei o produto" desc="Cadastrar novo produto" color="gray" onClick={onOpenFull} />
+        </>
+      )}
+    </>
   );
 }
 

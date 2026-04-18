@@ -717,6 +717,69 @@ class SnoozeFeedingPlanRequest(BaseModel):
     snooze_days: int = 7
 
 
+class RestockFeedingPlanRequest(BaseModel):
+    refill_date: Optional[str] = None  # YYYY-MM-DD; defaults to today
+
+
+@router.post("/pets/{pet_id}/feeding/plan/restock")
+async def restock_feeding_plan(
+    pet_id: str,
+    body: RestockFeedingPlanRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Registrar nova compra (reabastecimento). Reinicia ciclo de consumo.
+
+    Atualiza last_refill_date e recalcula estimated_end_date / next_reminder_date.
+    """
+    _check_pet_ownership(pet_id, current_user, db)
+    plan = db.query(FeedingPlan).filter(
+        FeedingPlan.pet_id == pet_id,
+        FeedingPlan.deleted_at.is_(None),
+    ).first()
+
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plano de alimentação não encontrado para este pet",
+        )
+
+    if body.refill_date:
+        try:
+            refill_date = datetime.strptime(body.refill_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Data inválida. Use YYYY-MM-DD",
+            )
+    else:
+        refill_date = date.today()
+
+    plan.last_refill_date = refill_date
+
+    estimated_end, next_reminder, _ = calculate_food_stock_estimates(
+        package_size_kg=plan.package_size_kg,
+        daily_amount_g=plan.daily_amount_g,
+        last_refill_date=refill_date,
+        safety_buffer_days=plan.safety_buffer_days,
+        enabled=plan.enabled,
+        no_consumption_control=plan.no_consumption_control,
+    )
+
+    plan.estimated_end_date = estimated_end
+    plan.next_reminder_date = next_reminder
+    plan.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "status": "ok",
+        "last_refill_date": refill_date.isoformat(),
+        "estimated_end_date": estimated_end.isoformat() if estimated_end else None,
+        "next_reminder_date": next_reminder.isoformat() if next_reminder else None,
+        "estimated_days_left": calculate_days_until_out(estimated_end, date.today()) if estimated_end else None,
+    }
+
+
 @router.patch("/pets/{pet_id}/feeding/plan/snooze")
 async def snooze_feeding_plan(
     pet_id: str,
