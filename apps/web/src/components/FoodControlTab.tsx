@@ -347,7 +347,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             </div>
           )}
 
-          {/* Status card */}}
+          {/* Status card */}
           <div className={`rounded-2xl border p-4 space-y-2 ${
             daysLeft !== null && daysLeft < 0 ? 'bg-red-50 border-red-200' :
             daysLeft !== null && daysLeft <= 5 ? 'bg-orange-50 border-orange-200' :
