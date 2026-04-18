@@ -66,6 +66,7 @@ zip -r "$ZIP_PATH" . \
     -x ".env.local" \
     -x ".secrets/*" \
     -x "*/.secrets/*" \
+    -x "services/price-service/push_subscriptions.json" \
     -x "*/.env" \
     -x "*/.env.local" \
     > /dev/null

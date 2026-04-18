@@ -50,13 +50,25 @@ def _upsert_pend(
     except Exception as e:
         logger.error(f"_upsert_pend error: {e}")
 
-# Subscriptions file: use env var or fall back to a local path that works in dev
-_DEFAULT_SUBS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "push_subscriptions.json")
-SUBSCRIPTIONS_FILE = os.environ.get("PUSH_SUBSCRIPTIONS_FILE", "/opt/petmol/logs/push_subscriptions.json")
+# Subscriptions file: use a canonical path in production and transparently
+# merge any legacy app-local file so deploys do not split active devices.
+_DEFAULT_SUBS_FILE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "push_subscriptions.json")
+)
+_CANONICAL_SUBS_FILE = os.path.abspath(
+    os.environ.get("PUSH_SUBSCRIPTIONS_FILE", "/opt/petmol/logs/push_subscriptions.json")
+)
+_LEGACY_SUBS_FILE = _DEFAULT_SUBS_FILE
 
-# If production path not accessible, fall back to local path
-if not os.path.exists(os.path.dirname(SUBSCRIPTIONS_FILE)):
-    SUBSCRIPTIONS_FILE = os.path.abspath(_DEFAULT_SUBS_FILE)
+
+def _resolve_subscriptions_file() -> str:
+    canonical_dir = os.path.dirname(_CANONICAL_SUBS_FILE)
+    if os.path.isdir(canonical_dir) or not canonical_dir:
+        return _CANONICAL_SUBS_FILE
+    return _DEFAULT_SUBS_FILE
+
+
+SUBSCRIPTIONS_FILE = _resolve_subscriptions_file()
 
 
 class SubscriptionRequest(BaseModel):
@@ -82,14 +94,34 @@ class SendNotificationRequest(BaseModel):
     icon: Optional[str] = None
 
 
+def _read_subscriptions_file(path: str) -> dict:
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _merge_subscription_maps(primary: dict, secondary: dict) -> dict:
+    merged = dict(primary)
+    for user_id, subscription in secondary.items():
+        if user_id not in merged:
+            merged[user_id] = subscription
+    return merged
+
+
 def _load_subscriptions() -> dict:
-    if os.path.exists(SUBSCRIPTIONS_FILE):
-        try:
-            with open(SUBSCRIPTIONS_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
+    subscriptions = _read_subscriptions_file(SUBSCRIPTIONS_FILE)
+    if _LEGACY_SUBS_FILE != SUBSCRIPTIONS_FILE:
+        legacy_subscriptions = _read_subscriptions_file(_LEGACY_SUBS_FILE)
+        merged = _merge_subscription_maps(subscriptions, legacy_subscriptions)
+        if merged != subscriptions:
+            _save_subscriptions(merged)
+        return merged
+    return subscriptions
 
 
 def _save_subscriptions(data: dict) -> None:
