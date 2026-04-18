@@ -233,7 +233,7 @@ export function ProductDetectionSheetGold({
       }
 
       const payload = (await res.json()) as PhotoProductIdentifyResponse;
-      if (!payload.found || !payload.name?.trim()) {
+      if (!payload.name?.trim()) {
         return { product: null, errorCode: 'photo_ai_not_found' };
       }
 

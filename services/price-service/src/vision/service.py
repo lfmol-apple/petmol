@@ -81,15 +81,16 @@ Contexto:
 - Diretriz específica: {category_guidance}
 
 Regras:
-1. Só retorne found=true se houver evidência visual suficiente na embalagem.
+1. O frontend precisa de um candidato para confirmação. Se você conseguir ler QUALQUER nome plausível de produto, marca ou linha da embalagem, prefira retornar um melhor palpite em vez de found=false.
 2. Use nomes comerciais claros, por exemplo: "Royal Canin Veterinary Diet Urinary Small Dog".
 3. Se conseguir, separe brand e name.
 4. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
 5. Se houver peso/apresentação visível, extraia em weight e presentation.
 6. Leia texto visível da embalagem como OCR visual: marca, linha, concentração, peso, espécie, faixa etária, indicação veterinária.
 7. Se a categoria esperada estiver informada, use isso para priorizar candidatos dessa categoria e evitar cair em other.
-8. Se não conseguir identificar com segurança razoável, retorne found=false.
-9. Responda APENAS JSON válido.
+8. Para medication: se houver nome comercial OU princípio ativo legível, retorne esse texto em name mesmo com confiança moderada.
+9. Só retorne found=false quando a imagem estiver realmente ilegível, cortada demais ou sem embalagem útil.
+10. Responda APENAS JSON válido.
 
 Formato JSON obrigatório:
 {{
@@ -144,10 +145,13 @@ Se não encontrar:
             result["presentation"] = result.get("presentation") or result.get("weight") or None
             result["reason"] = result.get("reason") or None
 
-            if not result["found"] and result["name"] and result["confidence"] >= 0.45:
-                # Melhor esforço: se a IA trouxe nome legível com confiança moderada,
-                # vale promover a sugestão para confirmação do usuário.
+            if not result["found"] and result["name"]:
+                # O scanner precisa de um candidato para confirmação.
+                # Se a IA leu um nome minimamente útil, preferimos promover isso.
                 result["found"] = True
+
+            if not result["confidence"] and result["name"]:
+                result["confidence"] = 0.35
 
             if hint in allowed_categories and (result.get("category") == "other" or not result.get("category")):
                 result["category"] = hint
