@@ -14,9 +14,9 @@ import { BrandBackground, PetmolTextLogo } from '@/components/ui/BrandBackground
 const G   = 'divide-y divide-slate-100 overflow-hidden rounded-[32px] border border-slate-100 bg-white/50 backdrop-blur-sm shadow-sm';
 const ROW = 'px-4 py-4';
 const CTA = 'w-full py-4 bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-base font-black rounded-2xl active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xl shadow-blue-500/20 uppercase tracking-widest';
-const DEFAULT_CHECKIN_DAY = 16;
-const DEFAULT_CHECKIN_HOUR = 9;
-const DEFAULT_CHECKIN_MINUTE = 35;
+const DEFAULT_CHECKIN_DAY = 1;
+const DEFAULT_CHECKIN_HOUR = 20;
+const DEFAULT_CHECKIN_MINUTE = 0;
 const PROFILE_PUSH_SEEN_KEY = 'petmol-profile-push-seen-v1';
 
 interface TutorData {

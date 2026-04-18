@@ -32,8 +32,8 @@ class User(Base):
     country: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     
     # Monthly check-in preferred day (1–28; 0 = último dia) and hour (0–23)
-    monthly_checkin_day: Mapped[int] = mapped_column(default=5, nullable=False)
-    monthly_checkin_hour: Mapped[int] = mapped_column(default=9, nullable=False)
+    monthly_checkin_day: Mapped[int] = mapped_column(default=1, nullable=False)
+    monthly_checkin_hour: Mapped[int] = mapped_column(default=20, nullable=False)
     monthly_checkin_minute: Mapped[int] = mapped_column(default=0, nullable=False)
 
     # Terms acceptance
