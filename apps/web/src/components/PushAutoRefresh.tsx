@@ -62,7 +62,7 @@ async function createSubscription(registration: ServiceWorkerRegistration): Prom
   const keyArray = urlBase64ToUint8Array(vapidKey);
   return registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: keyArray.buffer as ArrayBuffer,
+    applicationServerKey: keyArray as BufferSource,
   });
 }
 

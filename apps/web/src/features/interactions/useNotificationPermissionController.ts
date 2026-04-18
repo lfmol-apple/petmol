@@ -164,7 +164,7 @@ export function useNotificationPermissionController() {
       const keyArray = urlBase64ToUint8Array(vapidKey);
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: keyArray.buffer as ArrayBuffer,
+        applicationServerKey: keyArray as BufferSource,
       });
       await postSubscription(sub);
       setSubscription(sub);
@@ -212,7 +212,7 @@ export function useNotificationPermissionController() {
           const keyArray = urlBase64ToUint8Array(vapidKey);
           const refreshed = await reg.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: keyArray.buffer as ArrayBuffer,
+            applicationServerKey: keyArray as BufferSource,
           });
           await postSubscription(refreshed);
           setSubscription(refreshed);
