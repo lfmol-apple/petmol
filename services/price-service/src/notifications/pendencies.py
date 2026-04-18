@@ -39,8 +39,8 @@ class NotificationPendency(Base):
     # Primary key equals the push `tag` — natural deduplication.
     # e.g. "petmol-care-vaccine-42-CORE_DOG_RABIES-2026-04-14"
     id = Column(String, primary_key=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    pet_id = Column(Integer, nullable=True, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    pet_id = Column(String(36), nullable=True, index=True)
     type = Column(String, nullable=False)   # vaccine | parasite | medication | grooming | documents
     event_id = Column(String, nullable=True)
     title = Column(Text, nullable=False)
@@ -59,7 +59,7 @@ class NotificationPendency(Base):
 
 class PendencyOut(BaseModel):
     id: str
-    pet_id: Optional[int]
+    pet_id: Optional[str]
     type: str
     title: str
     message: str
@@ -82,8 +82,8 @@ class PendencyPatch(BaseModel):
 def upsert_pendency(
     db: Session,
     *,
-    user_id: int,
-    pet_id: Optional[int],
+    user_id: str,
+    pet_id: Optional[str],
     pend_id: str,
     type_: str,
     title: str,
@@ -137,8 +137,8 @@ def upsert_pendency(
 
 def upsert_pendency_standalone(
     *,
-    user_id: int,
-    pet_id: Optional[int],
+    user_id: str,
+    pet_id: Optional[str],
     pend_id: str,
     type_: str,
     title: str,
@@ -156,8 +156,8 @@ def upsert_pendency_standalone(
         try:
             upsert_pendency(
                 db,
-                user_id=user_id,
-                pet_id=pet_id,
+                user_id=str(user_id),
+                pet_id=str(pet_id) if pet_id is not None else None,
                 pend_id=pend_id,
                 type_=type_,
                 title=title,
@@ -173,7 +173,7 @@ def upsert_pendency_standalone(
         _log.error(f"upsert_pendency_standalone error: {e}")
 
 
-def get_active_pendencies(db: Session, user_id: int) -> List[NotificationPendency]:
+def get_active_pendencies(db: Session, user_id: str) -> List[NotificationPendency]:
     """Return active (non-snoozed, non-expired) pendencies sorted by priority desc."""
     now = datetime.now(BRT)
     rows = (

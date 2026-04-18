@@ -1,7 +1,7 @@
 'use client';
 
-// TODO(limpeza-leve): revisar sobreposicao de escopo com HealthModal.
-// Nao remover nesta fase; decidir consolidacao apos ajustes de produto.
+// RESPONSABILIDADE: timeline histórica somente leitura (READ).
+// HealthModal = gestão ativa de saúde e rotina (WRITE). Modais complementares, não duplicados.
 
 import { AuthenticatedDocumentImage } from '@/components/AuthenticatedDocumentImage';
 import { useI18n } from '@/lib/I18nContext';

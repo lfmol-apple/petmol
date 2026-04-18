@@ -44,6 +44,12 @@ import { getPetCareCollections } from '@/features/pets/healthCollections';
 import { usePetEventManagement } from '@/hooks/usePetEventManagement';
 import { useVaccineCardWorkflow } from '@/hooks/useVaccineCardWorkflow';
 import { useParasiteManagement } from '@/hooks/useParasiteManagement';
+import { usePetBootstrap } from '@/hooks/usePetBootstrap';
+import { useVaccineManagement } from '@/hooks/useVaccineManagement';
+import { useGroomingManagement } from '@/hooks/useGroomingManagement';
+import { useFoodPlanSync } from '@/hooks/useFoodPlanSync';
+import { useQuickMark } from '@/hooks/useQuickMark';
+import { vaccineInfo, commonVaccines } from '@/data/vaccineInfo';
 import { usePendencies } from '@/hooks/usePendencies';
 
 import { hasCompletedOnboarding } from '@/lib/ownerProfile';
@@ -52,31 +58,19 @@ import { getToken } from '@/lib/auth-token';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { petMolAPI } from '@/lib/api-client';
-import { normalizeBackendPetProfiles, resolveBackendPetPhoto } from '@/lib/backendPetProfile';
+import { normalizeBackendPetProfiles } from '@/lib/backendPetProfile';
 import {
   mapNomeComercialToTipo,
-  mapTipoVacinaToVaccineType,
-  type VaccineCardOcrRecord,
 } from '@/lib/vaccineOcr';
-import {
-  applyLearningToOcrRecords,
-  learnFromCorrections,
-  type VaccineOcrRecordLike,
-} from '@/lib/vaccineLearning';
+
 import {
   type GroomingRecord,
-
-  type GroomingType,
   type ParasiteControl,
   type ParasiteControlType,
-  type PlaceDetails,
 } from '@/lib/types/home';
 import type {
   DocFolderModalState,
-  FeedingPlanEntry,
-  GroomingFormData,
   ParasiteFormData,
-  VaccineFormData,
   VetHistoryDocument,
 } from '@/lib/types/homeForms';
 import { 
@@ -84,221 +78,7 @@ import {
   type VaccineRecord,
   type VaccineType
 } from '@/lib/petHealth';
-import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
 import type { ScannedProduct } from '@/lib/productScanner';
-
-// Funções de gerenciamento de vacinas com backend
-const updateVaccine = async (petId: string, vaccineId: string, updates: Partial<VaccineRecord>): Promise<boolean> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) return false;
-
-    // Map frontend VaccineRecord fields → backend VaccineRecordUpdate schema
-    const payload: Record<string, unknown> = {};
-    if (updates.vaccine_name) payload.vaccine_name = updates.vaccine_name;
-    if (updates.date_administered) payload.applied_date = updates.date_administered;
-    if (updates.next_dose_date !== undefined) payload.next_dose_date = updates.next_dose_date || null;
-    if (updates.notes !== undefined) payload.notes = updates.notes || null;
-    if (updates.record_type) payload.record_type = updates.record_type;
-    if (updates.alert_days_before !== undefined) payload.alert_days_before = updates.alert_days_before;
-    if (updates.reminder_time !== undefined) payload.reminder_time = updates.reminder_time || null;
-
-    const response = await fetch(`${API_BASE_URL}/vaccines/${vaccineId}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${savedToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    return response.ok;
-  } catch (error) {
-    console.error('Erro ao atualizar vacina:', error);
-    return false;
-  }
-};
-
-const deleteVaccine = async (_petId: string, vaccineId: string): Promise<boolean> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) return false;
-
-    const response = await fetch(`${API_BASE_URL}/vaccines/${vaccineId}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${savedToken}` },
-    });
-
-    // 204 No Content = success
-    return response.ok || response.status === 204;
-  } catch (error) {
-    console.error('Error deleting vaccine:', error);
-    return false;
-  }
-};
-
-/**
- * Remove TODAS as vacinas de um pet de forma atômica
- * Operação única no backend para evitar race conditions
- */
-const clearAllVaccines = async (petId: string): Promise<boolean> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) return false;
-
-    // Fetch current vaccine IDs from the real table
-    const listRes = await fetch(`${API_BASE_URL}/pets/${petId}/vaccines`, {
-      headers: { 'Authorization': `Bearer ${savedToken}` },
-    });
-    if (!listRes.ok) return false;
-
-    const list: { id: string }[] = await listRes.json();
-    if (list.length === 0) return true;
-
-    // Delete each vaccine via the real endpoint in parallel
-    const results = await Promise.all(
-      list.map((v) =>
-        fetch(`${API_BASE_URL}/vaccines/${v.id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${savedToken}` },
-        })
-      )
-    );
-
-    return results.every((r) => r.ok || r.status === 204);
-  } catch (error) {
-    console.error('Error clearing all vaccines:', error);
-    return false;
-  }
-};
-
-const getHealthProfile = async (petId: string): Promise<PetHealthProfile | null> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) return null;
-
-    const response = await fetch(`${API_BASE_URL}/pets/${petId}`, {
-      headers: { 'Authorization': `Bearer ${savedToken}` },
-    });
-    
-    if (!response.ok) return null;
-    
-    const pet = await response.json();
-    const healthData = pet.health_data || {};
-    
-    return {
-      pet_id: String(pet.id),
-      pet_name: pet.name,
-      species: pet.species,
-      breed: pet.breed,
-      photo: resolveBackendPetPhoto(pet),
-      birthdate: pet.birth_date,
-      weight_kg: pet.weight,
-      vaccines: healthData.vaccines || [],
-      exams: healthData.exams || [],
-      prescriptions: healthData.prescriptions || [],
-      appointments: healthData.appointments || [],
-      surgeries: healthData.surgeries || [],
-      allergies: healthData.allergies || [],
-      daily_walks: healthData.daily_walks || [],
-      chronic_conditions: healthData.chronic_conditions || [],
-      dental_records: healthData.dental_records || [],
-      parasite_history: healthData.parasite_history || [],
-      documents: healthData.documents || [],
-      weight_history: healthData.weight_history || [],
-      parasite_controls: healthData.parasite_controls || [], // ADICIONADO
-      grooming_records: healthData.grooming_records || [], // ADICIONADO
-      primary_vet: healthData.primary_vet || undefined,
-      insurance_provider: pet.insurance_provider || undefined,
-      owner_user_id: pet.user_id || undefined,
-      created_at: pet.created_at || new Date().toISOString(),
-      updated_at: pet.updated_at || new Date().toISOString(),
-      health_data: healthData, // Incluir health_data completo
-    } as PetHealthProfile;
-  } catch (error) {
-    console.error('Erro ao buscar perfil de saúde:', error);
-    return null;
-  }
-};
-
-// ===== Funções de Grooming (Banho e Tosa) =====
-const addGroomingRecord = async (petId: string, record: GroomingRecord): Promise<boolean> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) {
-      showBlockingNotice('⚠️ Sessão expirada. Por favor, faça login novamente para salvar os dados.');
-      return false;
-    }
-    const res = await fetch(`${API_BASE_URL}/pets/${petId}/grooming`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
-      body: JSON.stringify({
-        type: record.type,
-        date: record.date,
-        scheduled_time: record.scheduled_time || null,
-        location: record.location || null,
-        location_address: record.location_address || null,
-        location_phone: record.location_phone || null,
-        location_place_id: record.location_place_id || null,
-        groomer: record.groomer || null,
-        cost: record.cost ?? null,
-        notes: record.notes || null,
-        next_recommended_date: record.next_recommended_date || null,
-        frequency_days: record.frequency_days ?? null,
-        reminder_enabled: record.reminder_enabled ?? true,
-        alert_days_before: record.alert_days_before ?? null,
-      }),
-    });
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`❌ [GROOMING] Erro ao salvar: ${res.status}`, errorText);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error('❌ [GROOMING] ERRO CRÍTICO ao adicionar registro:', error);
-    return false;
-  }
-};
-
-const updateGroomingRecord = async (petId: string, recordId: string, updates: Partial<GroomingRecord>): Promise<boolean> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) {
-      showBlockingNotice('⚠️ Sessão expirada. Faça login novamente.');
-      return false;
-    }
-    const res = await fetch(`${API_BASE_URL}/pets/${petId}/grooming/${recordId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`❌ [GROOMING UPDATE] Erro ao atualizar: ${res.status}`, errorText);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error('❌ [GROOMING UPDATE] ERRO CRÍTICO:', error);
-    return false;
-  }
-};
-
-const deleteGroomingRecord = async (petId: string, recordId: string): Promise<boolean> => {
-  try {
-    const savedToken = getToken();
-    if (!savedToken) return false;
-    const res = await fetch(`${API_BASE_URL}/pets/${petId}/grooming/${recordId}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${savedToken}` },
-    });
-    return res.ok;
-  } catch (error) {
-    console.error('Erro ao deletar registro de grooming:', error);
-    return false;
-  }
-};
 
 // Helper para converter caminho de foto em URL com cache busting
 const PHOTOS_BASE_URL = process.env.NEXT_PUBLIC_PHOTOS_BASE_URL || API_BASE_URL;
@@ -362,7 +142,7 @@ export default function HomePage() {
   const [pullY, setPullY] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { t, locale } = useI18n();
-  const { tutor, token, isLoading, isAuthenticated } = useAuth();
+  const { tutor, isLoading } = useAuth();
 
   // Ler ?checkin=1 da URL (vindo de notificação push — app estava fechado)
   useEffect(() => {
@@ -370,98 +150,20 @@ export default function HomePage() {
     if (params.get('checkin') === '1') setForceCheckin(true);
   }, []);
 
-  // FORÇA: Se tem tutor logado, carregar pets e decidir se mostra onboarding
-  useEffect(() => {
-    const forceLoadPets = async () => {
-      if (tutor && tutor.email) {
-        console.log('[FORÇA] Usuário logado detectado:', tutor.email);
-        setIsChecking(false);
-        
-        try {
-          const savedToken = getToken();
-          const response = await fetch(`${API_BASE_URL}/pets`, {
-            credentials: 'include',
-            headers: savedToken ? { 'Authorization': `Bearer ${savedToken}` } : {},
-          });
-          
-          // Busca nome do tutor
-          try {
-            const savedToken2 = getToken();
-            const meRes = await fetch(`${API_BASE_URL}/auth/me`, {
-              credentials: 'include',
-              headers: savedToken2 ? { 'Authorization': `Bearer ${savedToken2}` } : {},
-            });
-            if (meRes.ok) {
-              const meData = await meRes.json();
-              setTutorName(meData.name || '');
-              if (meData.id) setLoggedUserId(meData.id);
-              // fire-and-forget: dispara push para itens vencidos ao abrir o app
-              const _tok = getToken();
-              if (_tok) {
-                fetch(`${API_BASE_URL}/notifications/send-on-open`, {
-                  method: 'POST',
-                  credentials: 'include',
-                  headers: { 'Authorization': `Bearer ${_tok}` },
-                }).then(() => {
-                  // After send-on-open creates pendencies, give the DB a moment then refetch
-                  setTimeout(() => refetchPendencies(), 1500);
-                }).catch(() => {});
-              }
-              if (typeof meData.monthly_checkin_day === 'number') {
-                setTutorCheckinDay(meData.monthly_checkin_day);
-              }
-              if (typeof meData.monthly_checkin_hour === 'number') {
-                setTutorCheckinHour(meData.monthly_checkin_hour);
-              }
-              if (typeof meData.monthly_checkin_minute === 'number') {
-                setTutorCheckinMinute(meData.monthly_checkin_minute);
-              }
-              // family: silenciado até relancamento
-              // try { await fetch(`${API_BASE_URL}/family/status`, ...) } catch {}
-            }
-          } catch (_) {}
+  // Bootstrap de pets e tutor — gerenciado por usePetBootstrap
+  const {
+    isChecking,
+    pets, setPets,
+    selectedPetId, setSelectedPetId,
+    tutorName, setTutorName,
+    loggedUserId, setLoggedUserId,
+    familyOwnerNames,
+    tutorCheckinDay, setTutorCheckinDay,
+    tutorCheckinHour, setTutorCheckinHour,
+    tutorCheckinMinute, setTutorCheckinMinute,
+    photoTimestamps, setPhotoTimestamps,
+  } = usePetBootstrap();
 
-          if (response.ok) {
-            const backendPets = await response.json();
-            console.log('[FORÇA] Pets encontrados:', backendPets.length);
-            const convertedPets = normalizeBackendPetProfiles(backendPets);
-            
-            setPets(convertedPets);
-            if (convertedPets.length > 0) {
-              setSelectedPetId(convertedPets[0].pet_id);
-              console.log('[FORÇA] Pets carregados:', convertedPets.map((p: PetHealthProfile) => p.pet_name));
-            } else {
-              console.log('[FORÇA] Nenhum pet encontrado — redirecionando para cadastro');
-              router.push('/register-pet');
-            }
-          } else {
-            // 401/403 = token inválido/vencido → login; outros erros = cadastro
-            if (response.status === 401 || response.status === 403) {
-              router.replace('/login');
-            } else {
-              router.push('/register-pet');
-            }
-          }
-        } catch (error) {
-          console.error('[FORÇA] Erro ao carregar pets:', error);
-          router.replace('/login');
-        }
-      }
-    };
-
-    forceLoadPets();
-  }, [tutor]);
-
-  const [isChecking, setIsChecking] = useState(false);
-  const [pets, setPets] = useState<PetHealthProfile[]>([]);
-  const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
-  const [tutorName, setTutorName] = useState<string>('');
-  const [loggedUserId, setLoggedUserId] = useState<string>('');
-  const [familyOwnerNames, setFamilyOwnerNames] = useState<Record<string, string>>({});
-  const [tutorCheckinDay, setTutorCheckinDay] = useState<number>(5);
-  const [tutorCheckinHour, setTutorCheckinHour] = useState<number>(9);
-  const [tutorCheckinMinute, setTutorCheckinMinute] = useState<number>(0);
-  const [photoTimestamps, setPhotoTimestamps] = useState<Record<string, number>>({});
   const [showEditModal, setShowEditModal] = useState(false);
   const [editPetInitialSection, setEditPetInitialSection] = useState<'food' | 'grooming' | undefined>(undefined);
   const [pushActionSheet, setPushActionSheet] = useState<{ type: ActionSheetType; itemName?: string; eventId?: string } | null>(null);
@@ -472,15 +174,16 @@ export default function HomePage() {
   const [showHealthModal, setShowHealthModal] = useState(false);
   const [healthModalMode, setHealthModalMode] = useState<'full' | 'health' | 'grooming' | 'food'>('full');
   const [healthActiveTab, setHealthActiveTab] = useState('vaccines');
-  // Feeding plan por pet — API-first para o chip de ração aparecer em todos os dispositivos
-  const [feedingPlan, setFeedingPlan] = useState<Record<string, FeedingPlanEntry>>({});
+  // Plano alimentar — API-first, sincronizado com localStorage
+  const { feedingPlan, setFeedingPlan, fetchFeedingPlan } = useFoodPlanSync({ selectedPetId });
   // Quick-mark medicação inline
-  const [quickMarkId,      setQuickMarkId]      = useState<string | null>(null);
-  const [quickMarkDate,    setQuickMarkDate]    = useState('');
-  const [quickMarkNotes,   setQuickMarkNotes]   = useState('');
-  const [quickMarkSaving,  setQuickMarkSaving]  = useState(false);
-  const [quickMarkToast,   setQuickMarkToast]   = useState<string | null>(null);
-  const [vaccineFiles, setVaccineFiles] = useState<File[]>([]);
+  const {
+    quickMarkId, setQuickMarkId,
+    quickMarkDate, setQuickMarkDate,
+    quickMarkNotes, setQuickMarkNotes,
+    quickMarkSaving, setQuickMarkSaving,
+    quickMarkToast, setQuickMarkToast,
+  } = useQuickMark();
   const [showVetHistoryModal, setShowVetHistoryModal] = useState(false);
   const [historicoTab, setHistoricoTab] = useState<'resumo' | 'detalhado'>('detalhado');
   const [showDocUploadInHistorico, setShowDocUploadInHistorico] = useState(false);
@@ -492,25 +195,7 @@ export default function HomePage() {
   const [showEventTypeModal, setShowEventTypeModal] = useState(false);
   const [eventTypeLocked, setEventTypeLocked] = useState(false);
   const [showPetSelector, setShowPetSelector] = useState(false);
-  const [vaccines, setVaccines] = useState<VaccineRecord[]>([]);
-  const [showVaccineForm, setShowVaccineForm] = useState(false);
-  const [vaccineFormSaving, setVaccineFormSaving] = useState(false);
-  const [importVaccineLoading, setImportVaccineLoading] = useState(false);
-  const [showQuickAddVaccine, setShowQuickAddVaccine] = useState(false);
-  const [showAllVaccinesGuide, setShowAllVaccinesGuide] = useState(false);
-  const [showAIUpload, setShowAIUpload] = useState(false);
-  const [editingVaccine, setEditingVaccine] = useState<VaccineRecord | null>(null);
-  const [showMedicalVault, setShowMedicalVault] = useState(false);
-  
-  // Sistema de Feedback e Aprendizado
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-  const [feedbackVaccine, setFeedbackVaccine] = useState<VaccineRecord | null>(null);
-  const [feedbackFormData, setFeedbackFormData] = useState({
-    field_corrected: 'name' as 'name' | 'type' | 'date_administered' | 'next_dose_date' | 'veterinarian' | 'brand',
-    original_value: '',
-    corrected_value: '',
-    user_comment: ''
-  });
+
   
   const [showTopAttentionModal, setShowTopAttentionModal] = useState(false);
   const [showCheckinPicker, setShowCheckinPicker] = useState(false);
@@ -585,31 +270,71 @@ export default function HomePage() {
     handleSaveParasite, handleEditParasite, handleDeleteParasite,
     resetParasiteForm,
   } = useParasiteManagement({ selectedPetId, pets, setPets, fetchPetEvents, t });
-  
-  // Estado para controle de higiene (banho e tosa)
-  const [groomingRecords, setGroomingRecords] = useState<GroomingRecord[]>([]);
-  const [editingGrooming, setEditingGrooming] = useState<GroomingRecord | null>(null);
-  const [showEditGroomingModal, setShowEditGroomingModal] = useState(false);
-  const [groomingDueAlerts, setGroomingDueAlerts] = useState<{petName: string; type: string; daysOverdue: number}[]>([]);
-  const [groomingFormData, setGroomingFormData] = useState<GroomingFormData>({
-    type: 'bath' as GroomingType,
-    date: localTodayISO(),
-    scheduled_time: '',
-    location: '',
-    location_address: '',
-    location_phone: '',
-    location_place_id: '',
-    cost: 0,
-    notes: '',
-    frequency_days: 14,
-    reminder_enabled: true,
-    alert_days_before: 3
+
+  // Vacinas — gerenciado por useVaccineManagement
+  const {
+    vaccines, setVaccines,
+    showVaccineForm, setShowVaccineForm,
+    vaccineFormSaving, setVaccineFormSaving,
+    importVaccineLoading, setImportVaccineLoading,
+    showQuickAddVaccine, setShowQuickAddVaccine,
+    showAllVaccinesGuide, setShowAllVaccinesGuide,
+    showAIUpload, setShowAIUpload,
+    editingVaccine, setEditingVaccine,
+    showMedicalVault, setShowMedicalVault,
+    vaccineFiles, setVaccineFiles,
+    showFeedbackModal, setShowFeedbackModal,
+    feedbackVaccine, setFeedbackVaccine,
+    feedbackFormData, setFeedbackFormData,
+    vaccineFormData, setVaccineFormData,
+    quickAddData, setQuickAddData,
+    loadVaccines,
+    resetVaccineForm,
+    calculateNextDose,
+    getRecentVets,
+    handleSaveVaccine,
+    handleEditVaccine,
+    handleDeleteVaccine,
+    handleDeleteAllVaccines,
+    handleReportVaccineIssue,
+    handleSubmitFeedback,
+    handleQuickAddVaccine,
+    handleImportAnalyzedVaccines,
+  } = useVaccineManagement({
+    selectedPetId,
+    pets,
+    setPets,
+    fetchPetEvents,
+    t,
+    locale,
+    reviewRegistros,
+    reviewConfirmed,
+    reviewExpectedCount,
+    rawRegistros,
+    reviewLearnEnabled,
+    cardAnalysis,
+    closeCardAnalysis,
   });
-  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceDetails[]>([]);
-  const [showPlaceSuggestions, setShowPlaceSuggestions] = useState(false);
-  const [searchingPlaces, setSearchingPlaces] = useState(false);
-  const [placeSearchTimeout, setPlaceSearchTimeout] = useState<NodeJS.Timeout | null>(null);
-  const placeAbortController = useRef<AbortController | null>(null);
+
+  // Banho e Tosa — gerenciado por useGroomingManagement
+  const {
+    groomingRecords, setGroomingRecords,
+    editingGrooming, setEditingGrooming,
+    showEditGroomingModal, setShowEditGroomingModal,
+    groomingDueAlerts, setGroomingDueAlerts,
+    groomingFormData, setGroomingFormData,
+    placeSuggestions, setPlaceSuggestions,
+    showPlaceSuggestions, setShowPlaceSuggestions,
+    searchingPlaces,
+    placeAbortController,
+    loadGroomingRecords,
+    searchPlaces,
+    selectPlace,
+    handleSaveGrooming,
+    handleEditGrooming,
+    handleDeleteGrooming,
+    handleCancelEditGrooming,
+  } = useGroomingManagement({ selectedPetId, pets, setPets, fetchPetEvents, t });
 
   // ── Sheets modernos ──────────────────────────────────────────────────────
   const [showVermifugoSheet, setShowVermifugoSheet] = useState(false);
@@ -646,225 +371,6 @@ export default function HomePage() {
     }
     return dateFormatted;
   };
-
-  // Informações educacionais sobre cada tipo de vacina
-  const vaccineInfo: Record<VaccineType, {description: string, protects: string[], frequency: string, importance: string}> = {
-    'multiple': {
-      description: 'Vacina polivalente que protege contra múltiplas doenças em uma única aplicação. Essencial para todos os cães.',
-      protects: ['Cinomose (vírus que afeta sistema nervoso)', 'Parvovirose (vírus intestinal grave)', 'Hepatite infecciosa canina', 'Adenovírus tipo 2 (tosse)', 'Parainfluenza (gripe)', 'Leptospirose (4 cepas - afeta rins e fígado)'],
-      frequency: 'Anual (reforço a cada 12 meses)',
-      importance: '🔴 OBRIGATÓRIA - Essencial para a saúde do pet'
-    },
-    'rabies': {
-      description: 'Vacina obrigatória por lei que protege contra a raiva, doença viral fatal transmitida por mordidas de animais infectados. Pode ser transmitida para humanos.',
-      protects: ['Raiva (doença viral fatal que afeta sistema nervoso central)'],
-      frequency: 'Anual (reforço a cada 12 meses)',
-      importance: '🔴 OBRIGATÓRIA POR LEI - Fatal se não tratada'
-    },
-    'leptospirosis': {
-      description: 'Protege contra bactéria transmitida pela urina de ratos em água parada ou solo contaminado. Pode afetar humanos (zoonose).',
-      protects: ['Leptospirose (4 sorovares: Canicola, Icterohaemorrhagiae, Grippotyphosa, Pomona)'],
-      frequency: 'Semestral ou Anual (em áreas urbanas a cada 6 meses)',
-      importance: '🟡 MUITO RECOMENDADA - Especialmente em áreas urbanas'
-    },
-    'kennel_cough': {
-      description: 'Protege contra tosse altamente contagiosa em ambientes com muitos cães (creches, hotéis, parques). Aplicada via intranasal ou injetável.',
-      protects: ['Bordetella bronchiseptica (bactéria da tosse dos canis)', 'Parainfluenza (componente viral)'],
-      frequency: 'Anual ou semestral para cães em creches',
-      importance: '🟡 RECOMENDADA - Obrigatória em creches e hotéis'
-    },
-    'giardia': {
-      description: 'Protege contra parasita intestinal microscópico que causa diarreia crônica. Comum em filhotes e ambientes coletivos.',
-      protects: ['Giardia lamblia (protozoário intestinal)'],
-      frequency: 'Anual, com 2 doses iniciais',
-      importance: '🟢 OPCIONAL - Recomendada para ambientes coletivos'
-    },
-    'coronavirus': {
-      description: 'Protege contra coronavírus canino que causa gastroenterite (diferente do COVID-19 humano). Mais grave em filhotes.',
-      protects: ['Coronavírus Canino (CCoV - causa diarreia)'],
-      frequency: 'Anual',
-      importance: '🟢 OPCIONAL - Mais importante em filhotes'
-    },
-    'influenza': {
-      description: 'Protege contra gripe canina altamente contagiosa. Importante para cães que frequentam creches, parques e exposições.',
-      protects: ['Influenza Canina H3N8', 'Influenza Canina H3N2'],
-      frequency: 'Anual',
-      importance: '🟡 RECOMENDADA - Para cães socializados'
-    },
-    'lyme': {
-      description: 'Protege contra doença transmitida por carrapatos infectados. Importante em áreas de mata e fazendas.',
-      protects: ['Borreliose (Doença de Lyme) - causa artrite e problemas renais'],
-      frequency: 'Anual, com 2 doses iniciais',
-      importance: '🟢 OPCIONAL - Recomendada em áreas rurais'
-    },
-    'parainfluenza': {
-      description: 'Protege contra vírus respiratório altamente contagioso. Normalmente incluída na V8/V10.',
-      protects: ['Parainfluenza canina (infecção respiratória leve a moderada)'],
-      frequency: 'Geralmente incluída na V8/V10',
-      importance: '🟡 INCLUÍDA - Faz parte da vacina múltipla'
-    },
-    'adenovirus': {
-      description: 'Protege contra vírus que causa hepatite e problemas respiratórios. Normalmente incluída na V8/V10.',
-      protects: ['Adenovírus tipo 1 (hepatite)', 'Adenovírus tipo 2 (tosse e pneumonia)'],
-      frequency: 'Geralmente incluída na V8/V10',
-      importance: '🟡 INCLUÍDA - Faz parte da vacina múltipla'
-    },
-    'hepatitis': {
-      description: 'Protege contra hepatite infecciosa canina causada por adenovírus. Normalmente incluída na V8/V10.',
-      protects: ['Hepatite Infecciosa Canina (afeta fígado, rins e olhos)'],
-      frequency: 'Geralmente incluída na V8/V10',
-      importance: '🟡 INCLUÍDA - Faz parte da vacina múltipla'
-    },
-    'leishmaniasis': {
-      description: '⚠️ VACINA DESCONTINUADA - A vacina contra leishmaniose (LeishTec/Leishmune) foi descontinuada no Brasil. Atualmente, a prevenção é feita com coleiras repelentes, pipetas e medicamentos preventivos.',
-      protects: ['Nota: Foco em prevenção com repelentes (coleira Scalibor, Advantix) e acompanhamento veterinário'],
-      frequency: 'N/A - Vacina não disponível',
-      importance: '⚠️ DESCONTINUADA - Use coleira repelente'
-    },
-    'distemper': {
-      description: 'Protege contra cinomose, doença viral grave que afeta múltiplos sistemas. Normalmente incluída na V8/V10.',
-      protects: ['Vírus da Cinomose (afeta sistema nervoso, respiratório e digestivo)'],
-      frequency: 'Geralmente incluída na V8/V10',
-      importance: '🔴 INCLUÍDA - Faz parte da vacina múltipla'
-    },
-    'parvovirus': {
-      description: 'Protege contra parvovirose, doença viral intestinal grave e altamente contagiosa. Normalmente incluída na V8/V10.',
-      protects: ['Parvovírus Canino (causa diarreia hemorrágica grave)'],
-      frequency: 'Geralmente incluída na V8/V10',
-      importance: '🔴 INCLUÍDA - Faz parte da vacina múltipla'
-    },
-    'bordetella': {
-      description: 'Protege contra tosse dos canis (Bordetella). Geralmente incluída na vacina de Tosse dos Canis.',
-      protects: ['Bordetella bronchiseptica (bactéria respiratória)'],
-      frequency: 'Anual ou semestral',
-      importance: '🟡 INCLUÍDA - Geralmente com Tosse dos Canis'
-    },
-    'feline_leukemia': {
-      description: 'Vacina para gatos que protege contra leucemia felina, doença viral que compromete o sistema imunológico.',
-      protects: ['Vírus da Leucemia Felina (FeLV)'],
-      frequency: 'Anual, após 2 doses iniciais',
-      importance: '🔴 ESSENCIAL - Para gatos com acesso externo'
-    },
-    'feline_distemper': {
-      description: 'Vacina polivalente V3/V4/V5 para gatos. Protege contra as principais doenças virais felinas.',
-      protects: ['Panleucopenia Felina', 'Rinotraqueíte', 'Calicivirose', 'Clamidiose (V4/V5)'],
-      frequency: 'Anual',
-      importance: '🔴 OBRIGATÓRIA - Essencial para todos os gatos'
-    },
-    'other': {
-      description: 'Outras vacinas específicas conforme orientação veterinária (ex: leishmaniose em áreas endêmicas).',
-      protects: ['Consulte seu veterinário para vacinas específicas da sua região'],
-      frequency: 'Conforme orientação veterinária',
-      importance: '🟢 CONSULTE - Depende da região e estilo de vida'
-    }
-  };
-  
-  const [vaccineFormData, setVaccineFormData] = useState<VaccineFormData>({
-    vaccine_type: 'multiple' as VaccineType,
-    vaccine_name: '',
-    date_administered: '',
-    next_dose_date: '',
-    frequency_days: 365,
-    veterinarian: '',
-    clinic_name: '',
-    notes: '',
-    record_type: 'confirmed_application',
-    alert_days_before: 3,
-    reminder_time: '09:00',
-  });
-
-  // Carregar pets e dados do tutor do backend
-  useEffect(() => {
-    const loadPets = async () => {
-      // Usar token do contexto ao invés de localStorage
-      if (!token) {
-        // Não redirecionar se ainda estiver carregando
-        if (!isLoading) {
-          router.replace('/login');
-        }
-        return;
-      }
-
-      localStorage.removeItem('petmol_pets');
-      localStorage.removeItem('pet_health_profiles');
-      localStorage.removeItem('petmol_cached_pets');
-
-      try {
-        // Buscar dados do tutor
-        const tutorResponse = await fetch(`${API_BASE_URL}/auth/me`, {
-          credentials: 'include', // Incluir cookies
-          headers: token ? {
-            'Authorization': `Bearer ${token}`,
-          } : {},
-        });
-        
-        if (tutorResponse.ok) {
-          const tutorData = await tutorResponse.json();
-          setTutorName(tutorData.name || '');
-          if (typeof tutorData.monthly_checkin_day === 'number') {
-            setTutorCheckinDay(tutorData.monthly_checkin_day);
-          }
-          if (typeof tutorData.monthly_checkin_hour === 'number') {
-            setTutorCheckinHour(tutorData.monthly_checkin_hour);
-          }
-          if (typeof tutorData.monthly_checkin_minute === 'number') {
-            setTutorCheckinMinute(tutorData.monthly_checkin_minute);
-          }
-        }
-
-        // Buscar pets
-        const response = await fetch(`${API_BASE_URL}/pets`, {
-          credentials: 'include', // Incluir cookies
-          ...(token && {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          }),
-        });
-        
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 403) {
-            router.replace('/login');
-            return;
-          }
-          throw new Error('Erro ao carregar pets');
-        }
-
-        const backendPets = await response.json();
-        console.log('[LoadPets] Pets do backend:', backendPets);
-        console.log('[LoadPets] Número de pets recebidos:', backendPets.length);
-        
-        // Converter formato backend para frontend
-        const convertedPets = normalizeBackendPetProfiles(backendPets);
-        
-        convertedPets.sort((a, b) => {
-          const aName = (a.pet_name || '').toLowerCase();
-          const bName = (b.pet_name || '').toLowerCase();
-          if (aName === 'baby') return -1;
-          if (bName === 'baby') return 1;
-          return 0;
-        });
-        setPets(convertedPets);
-        if (convertedPets.length > 0) {
-          console.log('[LoadPets] SUCESSO - Carregados', convertedPets.length, 'pets');
-          if (!selectedPetId) {
-            setSelectedPetId(convertedPets[0].pet_id);
-          }
-        } else {
-          console.log('[LoadPets] Nenhum pet — redirecionando para cadastro');
-          router.push('/register-pet');
-        }
-        setIsChecking(false);
-      } catch (error) {
-        console.error('[LoadPets] ERRO ao carregar pets do backend:', error);
-        setPets([]);
-        router.replace('/login');
-        setIsChecking(false);
-      }
-    };
-    
-    loadPets();
-  }, [isAuthenticated, token, API_BASE_URL]);
 
   // Logout
   const handleLogout = () => {
@@ -1003,68 +509,6 @@ export default function HomePage() {
 
 
 
-  // Carregar vacinas do pet atual — usa a tabela vaccine_records (fonte única de verdade)
-  // health_data.vaccines é legado e não recebe vacinas do bulk-confirm
-  const loadVaccines = async () => {
-    const pet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
-    if (!pet) return;
-    const savedToken = getToken();
-    if (!savedToken) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/pets/${pet.pet_id}/vaccines`, {
-        headers: { 'Authorization': `Bearer ${savedToken}` },
-      });
-      if (!res.ok) return;
-      const data: Array<{
-        id: string;
-        deleted?: boolean;
-        vaccine_type?: string;
-        vaccine_name: string;
-        applied_date?: string | null;
-        next_dose_date?: string | null;
-        veterinarian_name?: string | null;
-        clinic_name?: string | null;
-        notes?: string | null;
-        vaccine_code?: string | null;
-        country_code?: string | null;
-        next_due_source?: string | null;
-        record_type?: 'confirmed_application' | 'estimated_control_start' | null;
-      }> = await res.json();
-      const mapped: VaccineRecord[] = data
-        .filter(v => !v.deleted)
-        .map(v => {
-          // applied_date pode vir como "2023-11-30T00:00:00" ou "2023-11-30 00:00:00.000"
-          const toDateStr = (raw: string | null | undefined): string => {
-            if (!raw) return '';
-            return raw.replace('T', ' ').split(' ')[0]; // "2023-11-30" em qualquer formato
-          };
-          return {
-            id: v.id,
-            vaccine_type: (v.vaccine_type as VaccineType) || 'multiple',
-            vaccine_name: v.vaccine_name,
-            date_administered: toDateStr(v.applied_date),
-            next_dose_date: v.next_dose_date ? toDateStr(v.next_dose_date) : undefined,
-            veterinarian: v.veterinarian_name || '',
-            clinic_name: v.clinic_name || '',
-            notes: v.notes || undefined,
-            vaccine_code: v.vaccine_code || undefined,
-            country_code: v.country_code || undefined,
-            next_due_source: v.next_due_source || undefined,
-            record_type: v.record_type || 'confirmed_application',
-          };
-        })
-        .sort((a, b) =>
-          createLocalDate(b.date_administered).getTime() - createLocalDate(a.date_administered).getTime()
-        );
-      setVaccines(mapped);
-      setPets(prevPets => prevPets.map(p =>
-        p.pet_id === pet.pet_id ? { ...p, vaccines: mapped } : p
-      ));
-    } catch (err) {
-      console.error('Erro ao carregar vacinas:', err);
-    }
-  };
-
   useEffect(() => {
     if (showHealthModal && selectedPetId) {
       const currentPet = pets.find(p => p.pet_id === selectedPetId);
@@ -1088,85 +532,6 @@ export default function HomePage() {
     }
   }, [showHealthModal, selectedPetId]);
 
-  const fetchFeedingPlan = async (petId: string) => {
-    const token = getToken();
-    if (!token || !petId) return;
-
-    const readLocalFoodPlan = (): FeedingPlanEntry | null => {
-      try {
-        const raw = localStorage.getItem(`petmol_food_control_${petId}`);
-        if (!raw) return null;
-        const local = JSON.parse(raw);
-        return {
-          ...local,
-          food_brand: local.food_brand ?? local.brand ?? null,
-          brand: local.brand ?? local.food_brand ?? null,
-          next_purchase_date: local.next_purchase_date ?? local.nextPurchaseDate ?? null,
-          next_reminder_date: local.next_reminder_date ?? null,
-          estimated_end_date: local.estimated_end_date ?? null,
-          manual_reminder_days_before: local.manual_reminder_days_before ?? local.manualDaysBefore ?? null,
-        };
-      } catch {
-        return null;
-      }
-    };
-
-    const syncFoodPlan = (entry: FeedingPlanEntry | null) => {
-      setFeedingPlan(prev => {
-        if (!entry) {
-          const next = { ...prev };
-          delete next[petId];
-          return next;
-        }
-        return { ...prev, [petId]: entry };
-      });
-    };
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // API retorna { plan: {...}, estimate: {...} } — achata para acesso direto
-        const flat = {
-          ...(data.plan ?? {}),
-          next_reminder_date: data.estimate?.recommended_alert_date ?? null,
-          estimated_end_date: data.estimate?.estimated_end_date ?? null,
-        };
-        syncFoodPlan(flat);
-        // Sincroniza localStorage para que FoodControlTab também enxergue
-        try {
-          const stored = localStorage.getItem(`petmol_food_control_${petId}`);
-          const local = stored ? JSON.parse(stored) : {};
-          const merged = {
-            ...local,
-            next_purchase_date: flat.next_purchase_date ?? local.next_purchase_date,
-            next_reminder_date: flat.next_reminder_date ?? local.next_reminder_date,
-            estimated_end_date: flat.estimated_end_date ?? local.estimated_end_date,
-            manual_reminder_days_before: flat.manual_reminder_days_before ?? local.manual_reminder_days_before ?? local.manualDaysBefore,
-            food_brand: flat.food_brand ?? local.food_brand ?? local.brand,
-            brand: flat.food_brand ?? local.food_brand ?? local.brand,
-          };
-          localStorage.setItem(`petmol_food_control_${petId}`, JSON.stringify(merged));
-        } catch {}
-        return;
-      }
-
-      const fallback = readLocalFoodPlan();
-      syncFoodPlan(fallback);
-    } catch (e) {
-      console.error('Erro ao carregar plano alimentar:', e);
-      const fallback = readLocalFoodPlan();
-      syncFoodPlan(fallback);
-    }
-  };
-
-  // Carregar plano alimentar ao selecionar pet — garante chip de ração em qualquer dispositivo
-  useEffect(() => {
-    if (selectedPetId) fetchFeedingPlan(selectedPetId);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPetId]);
 
   // Mantém refreshAllRef sempre apontando para o closure mais recente (evita closure stale no listener)
   // Roda a cada render → sempre tem acesso à versão atual de pets, selectedPetId, etc.
@@ -1246,1169 +611,6 @@ export default function HomePage() {
   useEffect(() => {
   }, [selectedPetId, pets.length]);
 
-  // Carregar registros de higiene
-  const loadGroomingRecords = async () => {
-    const pet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
-    if (!pet) return;
-    try {
-      const savedToken = getToken();
-      if (!savedToken) return;
-      const res = await fetch(`${API_BASE_URL}/pets/${pet.pet_id}/grooming`, {
-        headers: { Authorization: `Bearer ${savedToken}` },
-      });
-      if (!res.ok) return;
-      const data: Array<{
-        id: string;
-        type: GroomingType;
-        date?: string | null;
-        scheduled_time?: string;
-        location?: string | null;
-        location_address?: string | null;
-        location_phone?: string | null;
-        location_place_id?: string | null;
-        groomer?: string | null;
-        cost?: number;
-        notes?: string | null;
-        next_recommended_date?: string | null;
-        frequency_days: number;
-        reminder_enabled?: boolean;
-        alert_days_before?: number;
-      }> = await res.json();
-      const _d = (raw: string | null | undefined): string =>
-        raw ? raw.replace('T', ' ').split(' ')[0] : '';
-      const records: GroomingRecord[] = data.map(g => ({
-        id: g.id, pet_id: pet.pet_id, type: g.type,
-        date: _d(g.date), scheduled_time: g.scheduled_time,
-        location: g.location || '', location_address: g.location_address || '',
-        location_phone: g.location_phone || '', location_place_id: g.location_place_id || '',
-        groomer: g.groomer || '', cost: g.cost, notes: g.notes || '',
-        next_recommended_date: g.next_recommended_date ? _d(g.next_recommended_date) : undefined,
-        frequency_days: g.frequency_days, reminder_enabled: g.reminder_enabled,
-        alert_days_before: g.alert_days_before,
-      } as GroomingRecord));
-      const sorted = records.sort((a, b) =>
-        createLocalDate(b.date).getTime() - createLocalDate(a.date).getTime()
-      );
-      setGroomingRecords(sorted);
-      setPets(prevPets => prevPets.map(p =>
-        p.pet_id === pet.pet_id ? { ...p, grooming_records: sorted } : p
-      ));
-      // Verificar lembretes pendentes
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const typeLabel: Record<string, string> = { bath: 'Banho', grooming: 'Tosa', bath_grooming: 'Banho & Tosa' };
-      const alerts: {petName: string; type: string; daysOverdue: number}[] = [];
-      const shownKey = `petmol_groom_alerted_${pet.pet_id}_${dateToLocalISO(today)}`;
-      const alreadyShown = localStorage.getItem(shownKey);
-      const latestByType = new Map<string, GroomingRecord>();
-      sorted.forEach((r: GroomingRecord) => {
-        const key = String(r.type || '').toLowerCase();
-        if (!key) return;
-        const prev = latestByType.get(key);
-        if (!prev) {
-          latestByType.set(key, r);
-          return;
-        }
-        const currentDate = createLocalDate(r.date).getTime();
-        const prevDate = createLocalDate(prev.date).getTime();
-        if (!Number.isNaN(currentDate) && (Number.isNaN(prevDate) || currentDate > prevDate)) {
-          latestByType.set(key, r);
-        }
-      });
-
-      Array.from(latestByType.values()).forEach((r: GroomingRecord) => {
-        if (!r.reminder_enabled || !r.next_recommended_date) return;
-        const alertDate = createLocalDate(r.next_recommended_date);
-        alertDate.setDate(alertDate.getDate() - (r.alert_days_before || 3));
-        const daysOverdue = Math.floor((today.getTime() - alertDate.getTime()) / 86400000);
-        if (daysOverdue >= 0) {
-          alerts.push({ petName: pet.pet_name, type: typeLabel[r.type] || r.type, daysOverdue });
-        }
-      });
-      if (alerts.length > 0) {
-        setGroomingDueAlerts(alerts);
-      } else {
-        setGroomingDueAlerts([]);
-      }
-    } catch {}
-  };
-
-  // Buscar estabelecimentos no Google Places com debounce
-  const searchPlaces = async (query: string) => {
-    // Cancelar timeout e requisição anteriores
-    if (placeSearchTimeout) clearTimeout(placeSearchTimeout);
-    if (placeAbortController.current) placeAbortController.current.abort();
-
-    if (!query || query.length < 3) {
-      setPlaceSuggestions([]);
-      setShowPlaceSuggestions(false);
-      return;
-    }
-
-    // Debounce de 600ms
-    const timeout = setTimeout(async () => {
-      const controller = new AbortController();
-      placeAbortController.current = controller;
-      setSearchingPlaces(true);
-      try {
-        const response = await fetch(`/api/places/search?query=${encodeURIComponent(query)}`, {
-          signal: controller.signal,
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setPlaceSuggestions(data.results || []);
-          setShowPlaceSuggestions((data.results?.length ?? 0) > 0);
-        }
-      } catch (error: unknown) {
-        if (!(error instanceof Error) || error.name !== 'AbortError') {
-          console.error('[places/search] Erro:', error);
-        }
-      } finally {
-        setSearchingPlaces(false);
-      }
-    }, 600);
-
-    setPlaceSearchTimeout(timeout);
-  };
-
-  // Selecionar estabelecimento — busca details sob demanda
-  const selectPlace = async (place: PlaceDetails) => {
-    // Preenche imediatamente com o que já temos
-    setGroomingFormData(prev => ({
-      ...prev,
-      location: place.name,
-      location_address: place.formatted_address,
-      location_phone: '',
-      location_place_id: place.place_id,
-    }));
-    setShowPlaceSuggestions(false);
-    setPlaceSuggestions([]);
-
-    // Busca detalhes (telefone, site) em background
-    try {
-      const res = await fetch(`/api/places/details?place_id=${encodeURIComponent(place.place_id)}`);
-      if (res.ok) {
-        const { result } = await res.json();
-        if (result) {
-          setGroomingFormData(prev => ({
-            ...prev,
-            location_phone: result.formatted_phone_number || '',
-          }));
-        }
-      }
-    } catch {
-      // silencioso — telefone fica vazio
-    }
-  };
-
-  // Salvar registro de higiene
-  const handleSaveGrooming = async () => {
-    const pet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
-    if (!pet) return;
-
-    // Validar campos obrigatórios
-    if (!groomingFormData.date) {
-      showBlockingNotice('Por favor, preencha a data do serviço');
-      return;
-    }
-
-    if (groomingFormData.cost !== undefined && groomingFormData.cost < 0) {
-      showBlockingNotice('O valor do serviço não pode ser negativo');
-      return;
-    }
-
-    const frequencyMap = {
-      bath: 14, // Banho a cada 14 dias
-      grooming: 45, // Tosa a cada 45 dias
-      bath_grooming: 45 // Banho e tosa a cada 45 dias
-    };
-
-    const frequency = groomingFormData.frequency_days || frequencyMap[groomingFormData.type];
-    const nextRecommended = createLocalDate(groomingFormData.date);
-    nextRecommended.setDate(nextRecommended.getDate() + frequency);
-
-    try {
-      let success = false;
-
-      if (editingGrooming) {
-        // Atualizar registro existente
-        const updatedRecord: Partial<GroomingRecord> = {
-          type: groomingFormData.type,
-          date: groomingFormData.date,
-          location: groomingFormData.location,
-          location_address: groomingFormData.location_address,
-          location_phone: groomingFormData.location_phone,
-          location_place_id: groomingFormData.location_place_id,
-          cost: groomingFormData.cost,
-          notes: groomingFormData.notes,
-          frequency_days: frequency,
-          next_recommended_date: dateToLocalISO(nextRecommended),
-          reminder_enabled: groomingFormData.reminder_enabled,
-          alert_days_before: groomingFormData.alert_days_before
-        };
-
-        success = await updateGroomingRecord(pet.pet_id, editingGrooming.id, updatedRecord);
-        
-        if (success) {
-          // Atualizar estado local imediatamente
-          setGroomingRecords(prev => prev.map(r => 
-            r.id === editingGrooming.id ? { ...r, ...updatedRecord } : r
-          ));
-          showBlockingNotice('✅ Registro atualizado com sucesso!');
-        }
-      } else {
-        // Criar novo registro
-        const newRecord: GroomingRecord = {
-          id: `groom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          pet_id: pet.pet_id,
-          type: groomingFormData.type,
-          date: groomingFormData.date,
-          location: groomingFormData.location,
-          location_address: groomingFormData.location_address,
-          location_phone: groomingFormData.location_phone,
-          location_place_id: groomingFormData.location_place_id,
-          cost: groomingFormData.cost,
-          notes: groomingFormData.notes,
-          frequency_days: frequency,
-          next_recommended_date: dateToLocalISO(nextRecommended),
-          reminder_enabled: groomingFormData.reminder_enabled,
-          alert_days_before: groomingFormData.alert_days_before
-        };
-
-        success = await addGroomingRecord(pet.pet_id, newRecord);
-        
-        if (success) {
-          showBlockingNotice('✅ Registro de banho/tosa salvo com sucesso!');
-        }
-      }
-      
-      if (success) {
-        await loadGroomingRecords();
-        
-        // Resetar formulário
-        setGroomingFormData({
-          type: 'bath',
-          date: localTodayISO(),
-          scheduled_time: '',
-          location: '',
-          location_address: '',
-          location_phone: '',
-          location_place_id: '',
-          cost: 0,
-          notes: '',
-          frequency_days: 14,
-          reminder_enabled: true,
-          alert_days_before: 3
-        });
-        setEditingGrooming(null);
-        setShowEditGroomingModal(false);
-        if (selectedPetId) fetchPetEvents(selectedPetId);
-      } else {
-        showBlockingNotice(t('grooming.error_save'));
-      }
-    } catch (error) {
-      console.error('Erro ao salvar registro de grooming:', error);
-      showBlockingNotice(t('grooming.error_save'));
-    }
-  };
-
-  // Editar registro de grooming
-  const handleEditGrooming = (record: GroomingRecord) => {
-    setEditingGrooming(record);
-    setGroomingFormData({
-      type: record.type,
-      date: record.date,
-      scheduled_time: record.scheduled_time || '',
-      location: record.location || '',
-      location_address: record.location_address || '',
-      location_phone: record.location_phone || '',
-      location_place_id: record.location_place_id || '',
-      cost: record.cost || 0,
-      notes: record.notes || '',
-      frequency_days: record.frequency_days || 14,
-      reminder_enabled: record.reminder_enabled ?? true,
-      alert_days_before: record.alert_days_before ?? 3
-    });
-    setShowEditGroomingModal(true);
-  };
-
-  // Excluir registro de grooming
-  const handleDeleteGrooming = async (record: GroomingRecord) => {
-    const typeText = record.type === 'bath' ? t('grooming.bath').toLowerCase() : 
-      record.type === 'grooming' ? t('grooming.grooming').toLowerCase() : 
-      t('grooming.bath_and_grooming');
-    
-    const accepted = await requestUserConfirmation(t('grooming.delete_confirm', { type: typeText }), {
-      title: 'Excluir registro de banho e tosa',
-      tone: 'danger',
-      confirmLabel: 'Excluir registro',
-    });
-    if (!accepted) return;
-
-    try {
-      const pet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
-      if (!pet) return;
-
-      const success = await deleteGroomingRecord(pet.pet_id, record.id);
-      if (success) {
-        // Remover do estado local imediatamente
-        setGroomingRecords(prev => prev.filter(r => r.id !== record.id));
-        showAppToast('Registro removido.');
-        await loadGroomingRecords();
-      } else {
-        showBlockingNotice(t('grooming.error_delete'));
-      }
-    } catch (error) {
-      console.error('Erro ao excluir:', error);
-      showBlockingNotice(t('grooming.error_delete'));
-    }
-  };
-
-  // Cancelar edição de grooming
-  const handleCancelEditGrooming = () => {
-    setEditingGrooming(null);
-    setShowEditGroomingModal(false);
-    setGroomingFormData({
-      type: 'bath',
-      date: localTodayISO(),
-      scheduled_time: '',
-      location: '',
-      location_address: '',
-      location_phone: '',
-      location_place_id: '',
-      cost: 0,
-      notes: '',
-      frequency_days: 14,
-      reminder_enabled: true,
-      alert_days_before: 3
-    });
-  };
-
-  // Calcular próxima dose
-  const calculateNextDose = (dateApplied: string, frequencyDays: number): string => {
-    const date = createLocalDate(dateApplied);
-    date.setDate(date.getDate() + frequencyDays);
-    return dateToLocalISO(date);
-  };
-
-  // Resetar formulário
-  const resetVaccineForm = () => {
-    setVaccineFormData({
-      vaccine_type: 'multiple',
-      vaccine_name: '',
-      date_administered: '',
-      next_dose_date: '',
-      frequency_days: 365,
-      veterinarian: '',
-      clinic_name: '',
-      notes: '',
-      record_type: 'confirmed_application',
-      alert_days_before: 3,
-      reminder_time: '09:00',
-    });
-    setEditingVaccine(null);
-    setShowVaccineForm(false);
-    setVaccineFiles([]);
-  };
-
-  // Salvar vacina (criar ou editar)
-  const handleSaveVaccine = async () => {
-    const currentPet = getCurrentPet();
-    if (!currentPet || !vaccineFormData.vaccine_name || !vaccineFormData.date_administered) {
-      showBlockingNotice('Preencha os campos obrigatórios: Nome da vacina e Data de aplicação');
-      return;
-    }
-
-    setVaccineFormSaving(true);
-    try {
-      if (editingVaccine) {
-        const updates: Partial<VaccineRecord> = {
-          vaccine_type: vaccineFormData.vaccine_type,
-          vaccine_name: vaccineFormData.vaccine_name,
-          date_administered: vaccineFormData.date_administered,
-          next_dose_date: vaccineFormData.next_dose_date || undefined,
-          veterinarian: vaccineFormData.veterinarian,
-          clinic_name: vaccineFormData.clinic_name || '',
-          batch_number: undefined,
-          notes: vaccineFormData.notes || undefined,
-          record_type: vaccineFormData.record_type,
-          alert_days_before: vaccineFormData.alert_days_before ?? 3,
-          reminder_time: vaccineFormData.reminder_time ?? '09:00',
-        };
-        const success = await updateVaccine(currentPet.pet_id, editingVaccine.id, updates);
-        
-        if (success) {
-          // Atualizar estado local imediatamente
-          setVaccines(prevVaccines => 
-            prevVaccines.map(v => 
-              v.id === editingVaccine.id 
-                ? { ...v, ...updates }
-                : v
-            )
-          );
-          setPets(prevPets => prevPets.map(p =>
-            p.pet_id === currentPet.pet_id
-              ? { ...p, vaccines: (p.vaccines || []).map(v => v.id === editingVaccine.id ? { ...v, ...updates } : v) }
-              : p
-          ));
-          showAppToast('Vacina atualizada com sucesso.');
-        } else {
-          showBlockingNotice('❌ Erro ao atualizar vacina. Tente novamente.');
-        }
-      } else {
-        // Use catalog endpoint for new vaccines (enriches with vaccine_code & protocol next_due)
-        const savedToken = getToken();
-        if (!savedToken) {
-          showBlockingNotice('❌ Sessão expirada. Faça login novamente.');
-          return;
-        }
-        const countryCode = locale.startsWith('pt') ? 'BR' : locale.startsWith('en') ? 'US' : 'BR';
-        const vaccinePayload: Record<string, unknown> = {
-          display_name: vaccineFormData.vaccine_name,
-          applied_on: vaccineFormData.date_administered,
-          source: 'manual',
-          confirmed_by_user: true,
-        };
-        const computedNextDose = vaccineFormData.date_administered
-          ? calculateNextDose(vaccineFormData.date_administered, vaccineFormData.frequency_days || 365)
-          : null;
-        const nextDoseHint = vaccineFormData.next_dose_date || computedNextDose;
-        if (nextDoseHint) vaccinePayload.next_due_on = nextDoseHint;
-        if (vaccineFormData.notes) vaccinePayload.notes = vaccineFormData.notes;
-        if (vaccineFormData.veterinarian) vaccinePayload.veterinarian = vaccineFormData.veterinarian;
-        if (vaccineFormData.clinic_name) vaccinePayload.clinic_name = vaccineFormData.clinic_name;
-        vaccinePayload.record_type = vaccineFormData.record_type;
-        vaccinePayload.alert_days_before = vaccineFormData.alert_days_before ?? 3;
-        vaccinePayload.reminder_time = vaccineFormData.reminder_time ?? '09:00';
-
-        const res = await fetch(`${API_BASE_URL}/api/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${savedToken}`,
-          },
-          body: JSON.stringify({
-            country_code: countryCode,
-            species: currentPet.species || 'dog',
-            vaccines: [vaccinePayload],
-          }),
-        });
-
-        if (!res.ok) {
-          showBlockingNotice('❌ Erro ao adicionar vacina. Tente novamente.');
-          return;
-        }
-
-        const data = await res.json();
-        const saved = data.vaccines[0];
-
-        // Map VaccineResponse → local VaccineRecord
-        const createdVaccine: VaccineRecord = {
-          id: saved.id,
-          vaccine_type: vaccineFormData.vaccine_type,
-          vaccine_name: saved.display_name,
-          date_administered: saved.applied_on,
-          next_dose_date: saved.next_due_on || vaccineFormData.next_dose_date || undefined,
-          veterinarian: vaccineFormData.veterinarian,
-          clinic_name: '',
-          notes: saved.notes || vaccineFormData.notes || undefined,
-          record_type: saved.record_type || vaccineFormData.record_type,
-          vaccine_code: saved.vaccine_code || undefined,
-          country_code: saved.country_code || undefined,
-          next_due_source: saved.next_due_source || 'unknown',
-          alert_days_before: saved.alert_days_before ?? vaccineFormData.alert_days_before ?? 3,
-          reminder_time: saved.reminder_time ?? vaccineFormData.reminder_time ?? '09:00',
-        };
-
-        trackV1Metric('vaccine_record_created', {
-          pet_id: currentPet.pet_id,
-          vaccine_id: saved.id,
-          vaccine_name: saved.display_name,
-          source: 'manual_form',
-        });
-
-        setVaccines(prevVaccines => [...prevVaccines, createdVaccine]);
-        setPets(prevPets => prevPets.map(p =>
-          p.pet_id === currentPet.pet_id
-            ? { ...p, vaccines: [...(p.vaccines || []), createdVaccine] }
-            : p
-        ));
-
-        const now = new Date();
-        const nextDate = saved.next_due_on ? new Date(saved.next_due_on) : null;
-        const diff = nextDate ? Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
-        let statusLabel = 'Em dia';
-        if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Vencendo';
-        if (diff !== null && diff < 0) statusLabel = 'Atrasada';
-        let msg = `Vacina registrada.\nStatus: ${statusLabel}\nLembrete ativo`;
-        if (saved.next_due_on) msg += `\nPróxima previsão: ${saved.next_due_on}`;
-        showAppToast(msg, {
-          title: 'Registro salvo',
-          tone: 'success',
-          durationMs: 3600,
-        });
-      }
-      
-      resetVaccineForm();
-      if (selectedPetId) fetchPetEvents(selectedPetId);
-    } catch (error) {
-      console.error('Erro ao salvar vacina:', error);
-      showBlockingNotice(t('health.vaccines.error_save'));
-    } finally {
-      setVaccineFormSaving(false);
-    }
-  };
-
-  // Editar vacina
-  const handleEditVaccine = (vaccine: VaccineRecord) => {
-    setEditingVaccine(vaccine);
-    setVaccineFormData({
-      vaccine_type: vaccine.vaccine_type,
-      vaccine_name: vaccine.vaccine_name,
-      date_administered: vaccine.date_administered,
-      next_dose_date: vaccine.next_dose_date || '',
-      frequency_days: 365,
-      veterinarian: vaccine.veterinarian,
-      clinic_name: vaccine.clinic_name || '',
-      notes: vaccine.notes || '',
-      record_type: vaccine.record_type || 'confirmed_application',
-      alert_days_before: (vaccine as unknown as Record<string, unknown>).alert_days_before as number ?? 3,
-      reminder_time: (vaccine as unknown as Record<string, unknown>).reminder_time as string ?? '09:00',
-    });
-    setShowVaccineForm(true);
-  };
-
-  // Excluir vacina
-  const handleDeleteVaccine = async (vaccine: VaccineRecord) => {
-    const accepted = await requestUserConfirmation('Excluir este registro? Essa ação remove o item do histórico.', {
-      title: 'Excluir vacina',
-      tone: 'danger',
-      confirmLabel: 'Excluir vacina',
-    });
-    if (!accepted) return;
-
-    try {
-      const success = await deleteVaccine(currentPet.pet_id, vaccine.id);
-      if (success) {
-        setVaccines(prev => prev.filter(v => v.id !== vaccine.id));
-        setPets(prevPets => prevPets.map(p =>
-          p.pet_id === currentPet.pet_id
-            ? { ...p, vaccines: (p.vaccines || []).filter(v => v.id !== vaccine.id) }
-            : p
-        ));
-        showAppToast('Vacina removida do prontuário.');
-      } else {
-        showBlockingNotice('Erro ao excluir vacina do banco de dados.');
-      }
-    } catch (error) {
-      console.error('Erro ao excluir vacina:', error);
-      showBlockingNotice(t('health.vaccines.error_delete'));
-    }
-  };
-
-  // Limpar todas as vacinas
-  const handleDeleteAllVaccines = async () => {
-    if (!currentPet) return;
-    
-    const count = vaccines.length;
-    if (count === 0) {
-      showBlockingNotice('Não há vacinas para remover.');
-      return;
-    }
-
-    const accepted = await requestUserConfirmation(`⚠️ ATENÇÃO: Você está prestes a REMOVER TODAS as ${count} vacinas do prontuário!\n\nEsta ação NÃO pode ser desfeita.\n\nDeseja continuar?`, {
-      title: 'Remover todas as vacinas',
-      tone: 'danger',
-      confirmLabel: 'Remover todas',
-    });
-    if (!accepted) return;
-
-    try {
-      // OPERAÇÃO ATÔMICA: uma única chamada para limpar todas as vacinas
-      const success = await clearAllVaccines(currentPet.pet_id);
-      
-      if (success) {
-        setVaccines([]);
-        setPets(prevPets => prevPets.map(p =>
-          p.pet_id === currentPet.pet_id ? { ...p, vaccines: [] } : p
-        ));
-        showAppToast(`Todas as ${count} vacinas foram removidas.`);
-      } else {
-        showBlockingNotice('❌ Erro ao limpar vacinas. Tente novamente.');
-      }
-    } catch (error) {
-      console.error('Erro ao limpar vacinas:', error);
-      showBlockingNotice('❌ Erro ao limpar vacinas. Tente novamente.');
-    }
-  };
-
-  // ========== SISTEMA DE FEEDBACK E APRENDIZADO ==========
-  
-  // Abrir modal de feedback para correção
-  const handleReportVaccineIssue = (vaccine: VaccineRecord) => {
-    setFeedbackVaccine(vaccine);
-    setFeedbackFormData({
-      field_corrected: 'name',
-      original_value: vaccine.vaccine_name,
-      corrected_value: '',
-      user_comment: ''
-    });
-    setShowFeedbackModal(true);
-  };
-
-  // Submeter correção de vacina
-  const handleSubmitFeedback = async () => {
-    if (!feedbackVaccine || !currentPet) return;
-
-    if (!feedbackFormData.corrected_value.trim()) {
-      showBlockingNotice('Por favor, informe o valor correto.');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/feedback/vaccine-correction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pet_id: currentPet.pet_id,
-          vaccine_id: feedbackVaccine.id,
-          field_corrected: feedbackFormData.field_corrected,
-          original_value: feedbackFormData.original_value,
-          corrected_value: feedbackFormData.corrected_value,
-          user_comment: feedbackFormData.user_comment,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        // TAMBÉM aplicar correção à vacina no banco de dados
-        try {
-          const updateData: Partial<VaccineRecord> = {};
-          
-          // Atualizar campo correto baseado no tipo
-          switch(feedbackFormData.field_corrected) {
-            case 'name':
-            case 'brand':
-              updateData.vaccine_name = feedbackFormData.corrected_value;
-              break;
-            case 'type':
-              updateData.vaccine_type = feedbackFormData.corrected_value as VaccineType;
-              break;
-            case 'date_administered':
-              updateData.date_administered = feedbackFormData.corrected_value;
-              break;
-            case 'next_dose_date':
-              updateData.next_dose_date = feedbackFormData.corrected_value;
-              break;
-            case 'veterinarian':
-              updateData.veterinarian = feedbackFormData.corrected_value;
-              break;
-          }
-          
-          // Usar a função updateVaccine existente
-          const success = await updateVaccine(currentPet.pet_id, feedbackVaccine.id, updateData);
-          
-          if (success) {
-            // Atualizar estado local imediatamente (sem esperar reload)
-            setVaccines(prevVaccines => 
-              prevVaccines.map(v => 
-                v.id === feedbackVaccine.id 
-                  ? { ...v, ...updateData }
-                  : v
-              )
-            );
-            
-            let message = t('feedback.correction_success');
-            
-            if (result.impact?.similar_corrections > 2) {
-              message += `\n\n📊 Este erro já foi reportado ${result.impact.similar_corrections}x. Estamos trabalhando na correção automática!`;
-            }
-            
-            showBlockingNotice(message);
-            
-            // Recarregar dados em background para garantir sincronização
-            loadVaccines();
-            
-          } else {
-            showBlockingNotice('✅ Feedback registrado, mas não foi possível atualizar a vacina.\n\nUse o botão ✏️ para editar manualmente.');
-          }
-          
-        } catch (updateError) {
-          console.error('Erro ao atualizar vacina:', updateError);
-          showBlockingNotice('✅ Feedback registrado!\n\n💡 Use o botão ✏️ para aplicar a correção manualmente.');
-        }
-        
-        // Fechar modal
-        setShowFeedbackModal(false);
-        setFeedbackVaccine(null);
-      } else {
-        showBlockingNotice(t('feedback.error_send'));
-      }
-    } catch (error) {
-      console.error('Erro ao enviar feedback:', error);
-      showBlockingNotice(t('feedback.error_connection'));
-    }
-  };
-
-  // ========== QUICK ADD: Preenchimento Rápido com Toques ==========
-  
-  const [quickAddData, setQuickAddData] = useState({
-    vaccine_type: 'rabies' as VaccineType,
-    vaccine_name: '',
-    date_administered: localTodayISO(),
-    next_dose_date: '',
-    veterinarian: ''
-  });
-
-  const commonVaccines: { type: VaccineType; name: string; icon: string; code: string }[] = [
-    { type: 'multiple', name: 'V10', icon: '💉', code: 'DOG_POLYVALENT_V8' },
-    { type: 'multiple', name: 'V8', icon: '💉', code: 'DOG_POLYVALENT_V8' },
-    { type: 'rabies', name: 'Raiva', icon: '🦠', code: 'DOG_RABIES' },
-    { type: 'influenza', name: 'Gripe', icon: '🤧', code: 'DOG_INFLUENZA' },
-    { type: 'giardia', name: 'Giárdia', icon: '🧪', code: 'DOG_GIARDIA' },
-    { type: 'leishmaniasis', name: 'Leishmaniose', icon: '🛡️', code: 'DOG_LEISH_TEC' },
-    { type: 'other', name: 'Outro', icon: '➕', code: 'OTHER' },
-  ];
-
-  // Estabilização Home: manter callback esperado pelos modais sem lógica extra.
-  const getRecentVets = () => {
-    const vets = (vaccines || [])
-      .map((v) => v.veterinarian)
-      .filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i)
-      .slice(0, 5);
-    return vets.length > 0 ? vets : [''];
-  };
-
-  const handleQuickAddVaccine = async (selectedVaccine: (typeof commonVaccines)[number]) => {
-    const currentPet = getCurrentPet();
-    if (!currentPet) return;
-
-    const savedToken = getToken();
-    if (!savedToken) { showBlockingNotice('❌ Sessão expirada. Faça login novamente.'); return; }
-
-    const countryCode = locale.startsWith('pt') ? 'BR' : locale.startsWith('en') ? 'US' : 'BR';
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
-        body: JSON.stringify({
-          country_code: countryCode,
-          species: currentPet.species || 'dog',
-          vaccines: [{
-            display_name: selectedVaccine.name,
-            applied_on: quickAddData.date_administered,
-            source: 'quick_add',
-            confirmed_by_user: true,
-            notes: t('health.added_via_quick'),
-            record_type: 'confirmed_application',
-          }],
-        }),
-      });
-
-      if (!res.ok) { showBlockingNotice('❌ Erro ao adicionar vacina. Tente novamente.'); return; }
-
-      const data = await res.json();
-      const saved = data.vaccines[0];
-
-      const createdVaccine: VaccineRecord = {
-        id: saved.id,
-        vaccine_type: selectedVaccine.type,
-        vaccine_name: saved.display_name,
-        date_administered: saved.applied_on,
-        next_dose_date: saved.next_due_on || undefined,
-        veterinarian: '',
-        clinic_name: '',
-        notes: saved.notes || t('health.added_via_quick'),
-        record_type: saved.record_type || 'confirmed_application',
-        vaccine_code: saved.vaccine_code || undefined,
-        country_code: saved.country_code || undefined,
-        next_due_source: saved.next_due_source || 'unknown',
-      };
-
-      trackV1Metric('vaccine_record_created', {
-        pet_id: currentPet.pet_id,
-        vaccine_id: saved.id,
-        vaccine_name: saved.display_name,
-        source: 'quick_add',
-      });
-
-      setVaccines(prevVaccines => [...prevVaccines, createdVaccine]);
-      setPets(prevPets => prevPets.map(p =>
-        p.pet_id === currentPet.pet_id
-          ? { ...p, vaccines: [...(p.vaccines || []), createdVaccine] }
-          : p
-      ));
-
-      const now = new Date();
-      const nextDate = saved.next_due_on ? new Date(saved.next_due_on) : null;
-      const diff = nextDate ? Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
-      let statusLabel = 'Em dia';
-      if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Vencendo';
-      if (diff !== null && diff < 0) statusLabel = 'Atrasada';
-      let msg = `✅ ${selectedVaccine.name} registrada!\nStatus: ${statusLabel}\nLembrete ativo`;
-      if (saved.next_due_on) msg += `\nPróxima previsão: ${saved.next_due_on}`;
-      showBlockingNotice(msg);
-
-      setShowQuickAddVaccine(false);
-      setQuickAddData({
-        vaccine_type: 'rabies',
-        vaccine_name: '',
-        date_administered: localTodayISO(),
-        next_dose_date: '',
-        veterinarian: '',
-      });
-      if (selectedPetId) fetchPetEvents(selectedPetId);
-    } catch (error) {
-      console.error('Erro ao adicionar vacina:', error);
-      showBlockingNotice('❌ Erro ao adicionar vacina. Tente novamente.');
-    }
-  };
-
-  // ===========================================================
-
-  const handleImportAnalyzedVaccines = async () => {
-    const currentPet = getCurrentPet();
-    if (!currentPet) return;
-
-    const registrosToImport = reviewRegistros || [];
-    if (registrosToImport.length === 0) return;
-
-    // Guardrails: require confirmation and a consistent count
-    if (!reviewConfirmed) {
-      showBlockingNotice('Antes de importar, confirme/edite os registros.');
-      return;
-    }
-    // Aviso se a quantidade não bate, mas não bloqueia a importação
-    if (reviewExpectedCount !== registrosToImport.length) {
-      const proceed = await requestUserConfirmation(`⚠️ Quantidade esperada (${reviewExpectedCount}) não bate com os registros encontrados (${registrosToImport.length}).\n\nVocê pode importar assim mesmo as ${registrosToImport.length} vacina(s) encontradas.\n\nContinuar?`, {
-        title: 'Quantidade divergente no cartão',
-        tone: 'warning',
-        confirmLabel: 'Importar assim mesmo',
-      });
-      if (!proceed) return;
-    }
-    if (registrosToImport.some((r) => !r.data_aplicacao)) {
-      showBlockingNotice('Preencha a data de aplicação em todos os registros antes de importar.');
-      return;
-    }
-
-    setImportVaccineLoading(true);
-
-    // 🧠 APRENDIZADO ML: Aprender com as correções ANTES de importar
-    try {
-      if (reviewLearnEnabled && rawRegistros && rawRegistros.length > 0) {
-        console.log('🧠 ML: Analisando correções do usuário...');
-        
-        // Comparar registros originais (rawRegistros) com os corrigidos (reviewRegistros)
-        const corrections: Array<{
-          original: VaccineCardOcrRecord;
-          corrected: VaccineCardOcrRecord;
-        }> = [];
-        
-        // Mapear correções por índice ou por similaridade
-        reviewRegistros.forEach((corrected, index) => {
-          const original = rawRegistros[index];
-          if (original) {
-            // Verificar se houve mudanças significativas
-            const hasChanges = 
-              original.nome_comercial !== corrected.nome_comercial ||
-              original.tipo_vacina !== corrected.tipo_vacina ||
-              original.data_aplicacao !== corrected.data_aplicacao ||
-              original.data_revacina !== corrected.data_revacina ||
-              original.veterinario_responsavel !== corrected.veterinario_responsavel;
-            
-            if (hasChanges) {
-              corrections.push({ original, corrected });
-              console.log(`🔧 Correção detectada [${index}]:`, {
-                de: original.nome_comercial || original.tipo_vacina,
-                para: corrected.nome_comercial || corrected.tipo_vacina
-              });
-            }
-          }
-        });
-        
-        if (corrections.length > 0) {
-          console.log(`📚 ML: ${corrections.length} correção(ões) detectada(s). Aplicando aprendizado...`);
-          
-          // Aplicar aprendizado com as correções
-          try {
-            // Converter para o formato esperado, garantindo que campos obrigatórios não sejam null/undefined
-            const originals: VaccineOcrRecordLike[] = corrections.map(c => ({
-              tipo_vacina: c.original.tipo_vacina || 'Vacina',
-              nome_comercial: c.original.nome_comercial || '',
-              data_aplicacao: c.original.data_aplicacao || '',
-              data_revacina: c.original.data_revacina || null,
-              veterinario_responsavel: c.original.veterinario_responsavel || null
-            }));
-            
-            const corrected: VaccineOcrRecordLike[] = corrections.map(c => ({
-              tipo_vacina: c.corrected.tipo_vacina || 'Vacina',
-              nome_comercial: c.corrected.nome_comercial || '',
-              data_aplicacao: c.corrected.data_aplicacao || '',
-              data_revacina: c.corrected.data_revacina || null,
-              veterinario_responsavel: c.corrected.veterinario_responsavel || null
-            }));
-            
-            await learnFromCorrections(originals, corrected);
-            console.log('✅ ML: Aprendizado aplicado com sucesso! Próximas leituras serão mais precisas.');
-          } catch (error) {
-            console.error('❌ ML: Erro ao aplicar aprendizado:', error);
-          }
-        } else {
-          console.log('ℹ️ ML: Nenhuma correção detectada. Leitura estava perfeita!');
-        }
-      }
-    } catch (mlError) {
-      console.warn('⚠️ ML: Erro no aprendizado (não crítico):', mlError);
-      // Não bloquear a importação por erro no ML
-    }
-
-    // Dedupe inteligente: comparar com vacinas já existentes no prontuário
-    const existingVaccines = vaccines || [];
-    const newRecords: VaccineCardOcrRecord[] = [];
-    const duplicates: VaccineCardOcrRecord[] = [];
-
-    registrosToImport.forEach((detected: VaccineCardOcrRecord) => {
-      // Normalizar para comparação
-      const detectedName = (detected.nome_comercial || detected.tipo_vacina || '').toLowerCase().trim();
-      const detectedDate = detected.data_aplicacao || '';
-      
-      // Verificar se já existe uma vacina muito similar
-      const isDuplicate = existingVaccines.some((existing) => {
-        const existingName = (existing.vaccine_name || '').toLowerCase().trim();
-        const existingDate = existing.date_administered || '';
-        
-        // Considera duplicado se: mesmo nome E mesma data de aplicação
-        return existingName === detectedName && existingDate === detectedDate;
-      });
-
-      if (isDuplicate) {
-        duplicates.push(detected);
-      } else {
-        newRecords.push(detected);
-      }
-    });
-
-    // Avisar sobre duplicatas encontradas
-    if (duplicates.length > 0) {
-      const duplicateNames = duplicates.map(d => d.nome_comercial || d.tipo_vacina).join(', ');
-      if (!await requestUserConfirmation(`⚠️ Detectadas ${duplicates.length} vacina(s) que já existem no prontuário:\n\n${duplicateNames}\n\nEstas serão IGNORADAS. Apenas ${newRecords.length} nova(s) vacina(s) será(ão) importada(s).\n\nContinuar?`, {
-        title: 'Duplicatas encontradas',
-        tone: 'warning',
-        confirmLabel: 'Continuar importação',
-      })) {
-        return;
-      }
-    }
-
-    if (newRecords.length === 0) {
-      showBlockingNotice('❌ Todas as vacinas do cartão já estão no prontuário. Nenhuma nova vacina para importar.');
-      return;
-    }
-
-    let importedCount = 0;
-    const createdVaccines: VaccineRecord[] = [];
-
-    // Usar bulk-confirm para enriquecer todas as vacinas do catálogo de uma vez
-    const savedToken = getToken();
-    const countryCode = locale.startsWith('pt') ? 'BR' : locale.startsWith('en') ? 'US' : 'BR';
-    const validRecords = newRecords.filter(d => !!d.data_aplicacao);
-
-    if (!savedToken) {
-      showBlockingNotice('❌ Sessão expirada. Faça login novamente para importar vacinas.');
-      return;
-    }
-
-    if (validRecords.length === 0) {
-      showBlockingNotice('❌ Nenhuma vacina com data de aplicação válida para importar.');
-      return;
-    }
-
-    // Tentar bulk-confirm (enriquece com catálogo e calcula próxima dose)
-    try {
-      const ocrNotes = `${t('health.imported_ocr')}${cardAnalysis?.leitura_confiavel ? '' : ' (leitura parcial)'}`;
-      const vaccinePayloads = validRecords.map(detected => ({
-        display_name: detected.nome_comercial || detected.tipo_vacina || 'Vacina',
-        applied_on: detected.data_aplicacao as string,
-        ...(detected.data_revacina ? { next_due_on: detected.data_revacina } : {}),
-        notes: ocrNotes,
-        source: 'ocr_card',
-        confirmed_by_user: true,
-        ...(detected.veterinario_responsavel ? { veterinarian: detected.veterinario_responsavel } : {}),
-      }));
-
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
-        body: JSON.stringify({ country_code: countryCode, species: currentPet.species || 'dog', vaccines: vaccinePayloads }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        for (let i = 0; i < data.vaccines.length; i++) {
-          const saved = data.vaccines[i];
-          const detected = validRecords[i];
-          createdVaccines.push({
-            id: saved.id,
-            vaccine_type: mapTipoVacinaToVaccineType(detected.tipo_vacina || 'Outro'),
-            vaccine_name: saved.display_name,
-            date_administered: saved.applied_on,
-            next_dose_date: saved.next_due_on || detected.data_revacina || undefined,
-            veterinarian: detected.veterinario_responsavel || '',
-            clinic_name: '',
-            notes: saved.notes || ocrNotes,
-            record_type: saved.record_type || 'confirmed_application',
-            vaccine_code: saved.vaccine_code || undefined,
-            country_code: saved.country_code || undefined,
-            next_due_source: saved.next_due_source || 'unknown',
-          });
-        }
-        importedCount = createdVaccines.length;
-      } else if (res.status === 401 || res.status === 403) {
-        showBlockingNotice('❌ Sessão expirada. Faça login novamente para importar vacinas.');
-        return;
-      } else {
-        // bulk-confirm falhou por outro motivo — tentar fallback manual abaixo
-        const errText = await res.text().catch(() => '');
-        console.warn(`bulk-confirm retornou ${res.status}: ${errText}`);
-      }
-    } catch (error) {
-      console.error('Erro ao importar vacinas via bulk-confirm:', error);
-    }
-
-    // Fallback: salvar individualmente via POST /pets/{id}/vaccines se bulk-confirm falhou
-    if (createdVaccines.length === 0) {
-      for (const detected of validRecords) {
-        try {
-          const ocrNotes = `${t('health.imported_ocr')}${cardAnalysis?.leitura_confiavel ? '' : ' (leitura parcial)'}`;
-          const appliedDate = detected.data_aplicacao as string;
-          // next_dose_date é obrigatório no endpoint; usar data_revacina ou +1 ano como fallback
-          const nextDoseDate = detected.data_revacina || (() => {
-            const d = new Date(appliedDate);
-            d.setFullYear(d.getFullYear() + 1);
-            return dateToLocalISO(d);
-          })();
-
-          const res = await fetch(`${API_BASE_URL}/pets/${currentPet.pet_id}/vaccines`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
-            body: JSON.stringify({
-              vaccine_name: detected.nome_comercial || detected.tipo_vacina || 'Vacina',
-              applied_date: appliedDate,
-              next_dose_date: nextDoseDate,
-              notes: `${ocrNotes}${detected.veterinario_responsavel ? ` | Dr(a). ${detected.veterinario_responsavel}` : ''}`,
-            }),
-          });
-
-          if (res.ok) {
-            const saved = await res.json();
-            createdVaccines.push({
-              id: saved.id,
-              vaccine_type: mapTipoVacinaToVaccineType(detected.tipo_vacina || 'Outro'),
-              vaccine_name: saved.vaccine_name,
-              date_administered: saved.applied_date,
-              next_dose_date: saved.next_dose_date || detected.data_revacina || undefined,
-              veterinarian: detected.veterinario_responsavel || '',
-              clinic_name: '',
-              notes: saved.notes || ocrNotes,
-              record_type: 'confirmed_application',
-            });
-            importedCount++;
-          } else if (res.status === 401 || res.status === 403) {
-            showBlockingNotice('❌ Sessão expirada. Faça login novamente para importar vacinas.');
-            return;
-          } else {
-            const errText = await res.text().catch(() => '');
-            console.error(`Falha ao salvar vacina: ${res.status} ${errText}`);
-          }
-        } catch (error) {
-          console.error('Erro ao importar vacina (fallback):', error);
-        }
-      }
-    }
-
-    if (createdVaccines.length > 0) {
-      createdVaccines.forEach((vaccine) => {
-        trackV1Metric('vaccine_record_created', {
-          pet_id: currentPet.pet_id,
-          vaccine_id: vaccine.id,
-          vaccine_name: vaccine.vaccine_name,
-          source: 'ocr_import',
-        });
-      });
-
-      setVaccines(prevVaccines => [...prevVaccines, ...createdVaccines]);
-      setPets(prevPets => prevPets.map(p =>
-        p.pet_id === currentPet.pet_id
-          ? { ...p, vaccines: [...(p.vaccines || []), ...createdVaccines] }
-          : p
-      ));
-    }
-
-    if (importedCount > 0) {
-      const wasPartialRead = !cardAnalysis?.leitura_confiavel;
-      const hadMissingVaccines = duplicates.length > 0 || newRecords.length < reviewExpectedCount;
-      
-      // Verificar se houve aprendizado ML
-      const corrections = rawRegistros && reviewRegistros ? 
-        reviewRegistros.filter((r, i) => {
-          const orig = rawRegistros[i];
-          return orig && (
-            orig.nome_comercial !== r.nome_comercial ||
-            orig.tipo_vacina !== r.tipo_vacina ||
-            orig.data_aplicacao !== r.data_aplicacao ||
-            orig.data_revacina !== r.data_revacina ||
-            orig.veterinario_responsavel !== r.veterinario_responsavel
-          );
-        }).length : 0;
-      
-      let message = `✅ ${importedCount} vacina(s) importada(s) para o prontuário digital!`;
-      
-      if (corrections > 0 && reviewLearnEnabled) {
-        message += `\n\n🧠 Sistema aprendeu com ${corrections} correção(ões)!\nPróximas leituras serão mais precisas.`;
-      }
-      
-      if (wasPartialRead || hadMissingVaccines) {
-        message += `\n\n⚠️ IMPORTANTE: Verifique se todas as vacinas do cartão foram importadas.`;
-        message += `\nSe faltou alguma, clique em "➕ Nova Vacina Manual" para adicionar.`;
-      }
-      
-      showBlockingNotice(message);
-      
-      closeCardAnalysis();
-      if (selectedPetId) fetchPetEvents(selectedPetId);
-      // Não chamar loadVaccines() aqui — ela lê apenas localStorage e apagaria as vacinas
-      // que acabamos de importar do backend. O estado já foi atualizado via setVaccines acima.
-
-      // Configurar alertas com base nas vacinas importadas + as já existentes
-      // Regra: considerar apenas a vacina mais recente por grupo canônico.
-      const allVaccinesNow = [...(vaccines || []), ...createdVaccines];
-      const latestByType = latestVaccinePerGroup(allVaccinesNow);
-
-      const overdueCurrent = Array.from(latestByType.values()).filter((v) => {
-        if (!v.next_dose_date) return false;
-        const next = createLocalDate(v.next_dose_date);
-        return !Number.isNaN(next.getTime()) && next.getTime() < Date.now();
-      });
-
-      if (overdueCurrent.length > 0) {
-        localStorage.setItem(
-          'vaccine_alerts',
-          JSON.stringify({
-            count: overdueCurrent.length,
-            vaccines: overdueCurrent.map((v) => v.vaccine_name),
-            timestamp: Date.now(),
-          })
-        );
-      }
-    } else {
-      setImportVaccineLoading(false);
-      showBlockingNotice('❌ Nenhuma vacina foi importada. Verifique se você está logado e tente novamente.');
-    }
-  };
 
   // Current pet based on selection
   const currentPet = pets.find(p => p.pet_id === selectedPetId) || pets[0];
@@ -2457,6 +659,21 @@ export default function HomePage() {
 
   // ── Pendências persistentes (in-app) — complementam o push ──
   const { pendencies, act: actPendency, refetch: refetchPendencies } = usePendencies();
+
+  // fire-and-forget: dispara push para itens vencidos ao abrir o app (loggedUserId set by usePetBootstrap)
+  useEffect(() => {
+    if (!loggedUserId) return;
+    const tok = getToken();
+    if (!tok) return;
+    fetch(`${API_BASE_URL}/notifications/send-on-open`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${tok}` },
+    }).then(() => {
+      setTimeout(() => refetchPendencies(), 1500);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedUserId]);
 
   const homePreferenceScopeId = useMemo(
     () => String(loggedUserId || tutor?.id || currentPet?.owner_user_id || 'petmol-home'),
