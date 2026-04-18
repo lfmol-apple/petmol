@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FoodControlTab } from '@/components/FoodControlTab';
+import { FoodControlTab, type FoodControlTabState } from '@/components/FoodControlTab';
 import type { PetHealthProfile } from '@/lib/petHealth';
 import { ModalPortal } from '@/components/ModalPortal';
 import { trackPartnerClicked } from '@/lib/v1Metrics';
@@ -25,7 +25,13 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
   const [snoozing, setSnoozing] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [foodBrand, setFoodBrand] = useState<string>('');
+  const [foodState, setFoodState] = useState<FoodControlTabState>({
+    showForm: false,
+    commerceStatus: null,
+    foodBrand: '',
+  });
   const overlayRef = useRef<HTMLDivElement>(null);
+  const shouldShowCommerceActions = !foodState.showForm && foodState.commerceStatus !== null && foodState.commerceStatus !== 'steady';
 
   const handleSnooze = async (days: number) => {
     setSnoozing(true);
@@ -129,6 +135,11 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                 petId={pet.pet_id}
                 petName={pet.pet_name}
                 species={(pet.species as 'dog' | 'cat') || 'dog'}
+                onStateChange={(state) => {
+                  setFoodState(state);
+                  setFoodBrand(state.foodBrand);
+                  if (state.showForm) setMode('view');
+                }}
                 onSaved={() => {
                   onSaved?.();
                   // Não fechar o modal — o usuário precisa ver o banner de confirmação
@@ -143,64 +154,66 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
               )}
 
               {/* Action buttons */}
-              <div className="px-4 pb-8 -mt-4 flex flex-col gap-2">
-                <button
-                  onClick={() => setMode('buy')}
-                  className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] shadow-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
-                      🛒
-                    </div>
-                    <div className="text-left">
-                      <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
-                      <p className="text-[12px] text-blue-700/70">Ver onde encontrar ração</p>
-                    </div>
-                  </div>
-                  <span className="text-blue-400 text-lg font-bold">›</span>
-                </button>
-
-                {!snoozeOpen ? (
+              {shouldShowCommerceActions && (
+                <div className="px-4 pb-8 -mt-4 flex flex-col gap-2">
                   <button
-                    onClick={() => setSnoozeOpen(true)}
-                    disabled={snoozing}
-                    className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
+                    onClick={() => setMode('buy')}
+                    className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] shadow-sm"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
-                        ⏸️
+                        🛒
                       </div>
                       <div className="text-left">
-                        <p className="text-[14px] font-bold text-gray-700">Adiar lembrete</p>
-                        <p className="text-[12px] text-gray-500">Escolher por quantos dias</p>
+                        <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
+                        <p className="text-[12px] text-blue-700/70">Ver onde encontrar ração</p>
                       </div>
                     </div>
-                    <span className="text-gray-400 text-lg font-bold">›</span>
+                    <span className="text-blue-400 text-lg font-bold">›</span>
                   </button>
-                ) : (
-                  <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2">
-                    <p className="text-[13px] font-semibold text-gray-600 mb-1">Adiar por quantos dias?</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[1, 3, 5, 7].map((days) => (
-                        <button
-                          key={days}
-                          onClick={() => { setSnoozeOpen(false); handleSnooze(days); }}
-                          disabled={snoozing}
-                          className="py-2 rounded-xl bg-white border border-gray-200 text-[13px] font-bold text-gray-700 hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50"
-                        >
-                          {days}d
-                        </button>
-                      ))}
-                    </div>
+
+                  {!snoozeOpen ? (
                     <button
-                      onClick={() => setSnoozeOpen(false)}
-                      className="w-full text-center text-xs text-gray-400 pt-1 hover:text-gray-600"
+                      onClick={() => setSnoozeOpen(true)}
+                      disabled={snoozing}
+                      className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
                     >
-                      Cancelar
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                          ⏸️
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[14px] font-bold text-gray-700">Adiar lembrete</p>
+                          <p className="text-[12px] text-gray-500">Escolher por quantos dias</p>
+                        </div>
+                      </div>
+                      <span className="text-gray-400 text-lg font-bold">›</span>
                     </button>
-                  </div>
-                )}
-              </div>
+                  ) : (
+                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2">
+                      <p className="text-[13px] font-semibold text-gray-600 mb-1">Adiar por quantos dias?</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 3, 5, 7].map((days) => (
+                          <button
+                            key={days}
+                            onClick={() => { setSnoozeOpen(false); handleSnooze(days); }}
+                            disabled={snoozing}
+                            className="py-2 rounded-xl bg-white border border-gray-200 text-[13px] font-bold text-gray-700 hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50"
+                          >
+                            {days}d
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setSnoozeOpen(false)}
+                        className="w-full text-center text-xs text-gray-400 pt-1 hover:text-gray-600"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             /* ── BUY MODE ─────────────────────────────────────────────────── */

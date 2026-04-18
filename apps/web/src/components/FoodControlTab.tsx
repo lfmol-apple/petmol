@@ -24,12 +24,19 @@ interface SimpleFoodData {
   category?: string;
 }
 
+export interface FoodControlTabState {
+  showForm: boolean;
+  commerceStatus: 'steady' | 'attention' | 'urgent' | null;
+  foodBrand: string;
+}
+
 export interface FoodControlTabProps {
   petId: string;
   petName?: string;
   countryCode?: string;
   species?: 'dog' | 'cat';
   onSaved?: () => void;
+  onStateChange?: (state: FoodControlTabState) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,7 +55,7 @@ function fmtDate(s: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function FoodControlTab({ petId, petName: _petName, countryCode, species, onSaved }: FoodControlTabProps) {
+export function FoodControlTab({ petId, petName: _petName, countryCode, species, onSaved, onStateChange }: FoodControlTabProps) {
   const storageKey = `petmol_food_control_${petId}`;
 
   const [form, setForm] = useState<SimpleFoodData>({
@@ -60,6 +67,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   });
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState('Dados salvos com sucesso.');
   const [apiError, setApiError] = useState<string | null>(null);
   const [hasExisting, setHasExisting] = useState(false);
   const [reminderDays, setReminderDays] = useState('3');
@@ -100,6 +108,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             const pkgKg = plan.package_size_kg ?? 0;
             const dailyG = plan.daily_amount_g ?? 0;
             const duration = pkgKg && dailyG ? Math.round((pkgKg * 1000) / dailyG) : '';
+            setReminderDays(String(plan.manual_reminder_days_before ?? 3));
+            setReminderTime(plan.reminder_time ?? '09:00');
             setForm({
               brand: plan.food_brand ?? '',
               packageSizeKg: pkgKg ? String(pkgKg) : '',
@@ -130,6 +140,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           const brand = cached.food_brand ?? cached.brand ?? '';
           const pkgKgNum: number | null = cached.package_size_kg ?? null;
           const dailyGNum: number | null = cached.daily_amount_g ?? null;
+          setReminderDays(String(cached.manual_reminder_days_before ?? cached.reminderDays ?? 3));
+          setReminderTime(cached.reminder_time ?? cached.reminderTime ?? '09:00');
           setForm({
             brand,
             packageSizeKg: pkgKgNum != null ? String(pkgKgNum) : (cached.packageSizeKg ?? ''),
@@ -196,6 +208,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const handleSave = async () => {
     setSaving(true);
     setSavedOk(false);
+    setSaveFeedback(hasExisting ? 'Alteracoes salvas com sucesso.' : 'Controle de alimentacao salvo com sucesso.');
     setApiError(null);
 
     const dailyG = dailyConsumptionG || (pkgKg && days ? Math.round((pkgKg * 1000) / days) : null);
@@ -210,6 +223,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
         package_size_kg: pkgKg,
         daily_amount_g: dailyG,
         last_refill_date: form.startDate || null,
+        manual_reminder_days_before: parseInt(reminderDays) || 3,
+        reminder_time: reminderTime || '09:00',
         barcode: form.barcode,
         category: form.category,
       }));
@@ -306,6 +321,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       });
       localStorage.removeItem(storageKey);
       setForm({ brand: '', packageSizeKg: '', durationDays: '', startDate: localTodayISO(), dailyConsumptionG: '' });
+      setReminderDays('3');
+      setReminderTime('09:00');
       setHasExisting(false);
       setSavedOk(false);
       if (!res.ok && res.status !== 404) {
@@ -316,6 +333,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       onSaved?.();
     } catch {
       localStorage.removeItem(storageKey);
+      setReminderDays('3');
+      setReminderTime('09:00');
       setHasExisting(false);
       setApiError('Sem conexão. Registro removido localmente.');
     } finally {
@@ -326,6 +345,14 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const showForm = !hasExisting || formOpen;
+
+  useEffect(() => {
+    onStateChange?.({
+      showForm,
+      commerceStatus: commerceSnapshot?.status ?? null,
+      foodBrand: form.brand.trim(),
+    });
+  }, [commerceSnapshot?.status, form.brand, onStateChange, showForm]);
 
   return (
     <div className="p-4 space-y-3 pb-8">
@@ -338,7 +365,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           {savedOk && (
             <div className="bg-green-500 rounded-2xl px-4 py-3 flex items-center gap-2 shadow-sm">
               <span className="text-white text-lg">✅</span>
-              <span className="text-white text-sm font-bold">Dados salvos!</span>
+              <span className="text-white text-sm font-bold">{saveFeedback}</span>
             </div>
           )}
           {deleteFeedback && (
@@ -535,7 +562,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           )}
           {savedOk && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-800 flex items-center gap-2">
-              <span>✅</span><span>Salvo!</span>
+              <span>✅</span><span>{saveFeedback}</span>
             </div>
           )}
 
