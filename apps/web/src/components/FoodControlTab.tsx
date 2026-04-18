@@ -186,15 +186,17 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const pkgKg = parseFloat(form.packageSizeKg) || null;
   const dailyConsumptionG = parseFloat(form.dailyConsumptionG) || null;
   const days = dailyConsumptionG && pkgKg ? Math.round((pkgKg * 1000) / dailyConsumptionG) : (parseInt(form.durationDays) || null);
-  const estimatedEndDate =
-    form.startDate && days ? addDays(form.startDate, days) : null;
-  const alertDate = estimatedEndDate ? addDays(estimatedEndDate, -3) : null;
-  const daysLeft = estimatedEndDate ? Math.round((new Date(estimatedEndDate + 'T00:00:00').getTime() - Date.now()) / 86400000) : null;
+  // Local estimates — used only for form preview (pre-save) and progress bar denominator
+  const localEndDate = form.startDate && days ? addDays(form.startDate, days) : null;
+  const localDaysLeft = localEndDate ? Math.round((new Date(localEndDate + 'T00:00:00').getTime() - Date.now()) / 86400000) : null;
+  // Display values: backend is authoritative; local is fallback before first save
+  const displayDaysLeft = apiEstimate?.estimated_days_left ?? localDaysLeft;
+  const displayEndDate = apiEstimate?.estimated_end_date ?? localEndDate;
   const commerceSnapshot = resolveFoodCommerceSnapshot({
     brand: form.brand,
     packageSizeKg: form.packageSizeKg,
-    daysLeft,
-    estimatedEndDate: estimatedEndDate ? fmtDate(estimatedEndDate) : null,
+    daysLeft: displayDaysLeft,
+    estimatedEndDate: displayEndDate ? fmtDate(displayEndDate) : null,
   });
   const foodHandoffUrl = commerceSnapshot
     ? `/api/handoff/shopping?query=${encodeURIComponent(commerceSnapshot.searchQuery)}&fallback=${encodeURIComponent(googleShoppingUrl(commerceSnapshot.searchQuery))}`
@@ -376,8 +378,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
           {/* Status card */}
           <div className={`rounded-2xl border p-4 space-y-2 ${
-            daysLeft !== null && daysLeft < 0 ? 'bg-red-50 border-red-200' :
-            daysLeft !== null && daysLeft <= 5 ? 'bg-orange-50 border-orange-200' :
+            displayDaysLeft !== null && displayDaysLeft < 0 ? 'bg-red-50 border-red-200' :
+            displayDaysLeft !== null && displayDaysLeft <= 5 ? 'bg-orange-50 border-orange-200' :
             'bg-white border-slate-200'
           }`}>
             <div className="flex items-start justify-between gap-2">
@@ -385,33 +387,33 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                 <span className="text-xl flex-shrink-0">🥣</span>
                 <p className="font-bold text-gray-900 text-sm leading-tight">{form.brand || 'Ração'}</p>
               </div>
-              {daysLeft !== null && (
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${
-                  daysLeft < 0 ? 'bg-red-100 text-red-700' :
-                  daysLeft <= 5 ? 'bg-orange-100 text-orange-700' :
+              {displayDaysLeft !== null && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${
+                  displayDaysLeft < 0 ? 'bg-red-100 text-red-700' :
+                  displayDaysLeft <= 5 ? 'bg-orange-100 text-orange-700' :
                   'bg-green-100 text-green-700'
                 }`}>
-                  {daysLeft < 0 ? 'Acabou' : daysLeft === 0 ? 'Hoje' : `${daysLeft}d restantes`}
+                  {displayDaysLeft < 0 ? 'Acabou' : displayDaysLeft === 0 ? 'Hoje' : `${displayDaysLeft}d restantes`}
                 </span>
               )}
             </div>
-            {days != null && daysLeft !== null && (
+            {days != null && displayDaysLeft !== null && (
               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    daysLeft < 0 ? 'bg-red-400' :
-                    daysLeft <= 5 ? 'bg-orange-400' :
+                    displayDaysLeft < 0 ? 'bg-red-400' :
+                    displayDaysLeft <= 5 ? 'bg-orange-400' :
                     'bg-green-400'
                   }`}
-                  style={{ width: `${Math.max(4, Math.min(100, Math.round(((days - Math.max(daysLeft, 0)) / days) * 100)))}%` }}
+                  style={{ width: `${Math.max(4, Math.min(100, Math.round(((days - Math.max(displayDaysLeft, 0)) / days) * 100)))}%` }}
                 />
               </div>
             )}
             <div className="grid grid-cols-2 gap-1 text-xs text-gray-500 mt-0.5">
               {form.packageSizeKg && <span>📦 {form.packageSizeKg} kg</span>}
               {form.startDate && <span>📅 Início: {fmtDate(form.startDate)}</span>}
-              {estimatedEndDate && (
-                <span className="col-span-2">⏳ Prev. término: {fmtDate(estimatedEndDate)}</span>
+              {displayEndDate && (
+                <span className="col-span-2">⏳ Prev. término: {fmtDate(displayEndDate)}</span>
               )}
             </div>
           </div>

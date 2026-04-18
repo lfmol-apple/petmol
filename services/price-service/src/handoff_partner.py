@@ -63,7 +63,7 @@ def _no_url_response(partner: str) -> JSONResponse:
 
 @router.get("/shop", response_model=None)
 def handoff_shop(
-    partner: str = Query(default="petz", description="petz | cobasi | petlove"),
+    partner: str = Query(default="petz", description="petz | cobasi | petlove | amazon"),
     lead_id: Optional[str] = Query(default=None),
     dest: Optional[str] = Query(default=None, description="URL destino override (ignorado em prod se affiliate URL configurada)"),
     q: Optional[str] = Query(default=None, description="Query de busca contextual (ex: marca de ração)"),
@@ -87,6 +87,9 @@ def handoff_shop(
     elif partner == "petlove":
         affiliate_url = settings.petlove_dog_life_url or dest
         target = "petlove"
+    elif partner == "amazon":
+        affiliate_url = getattr(settings, "amazon_affiliate_url", None) or dest or "https://www.amazon.com.br/s?k=pet+shop"
+        target = "amazon"
     else:
         # default: petz
         affiliate_url = settings.petz_affiliate_url or dest

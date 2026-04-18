@@ -41,6 +41,7 @@ import { useMasterInteractionRules } from '@/features/interactions/useMasterInte
 import { requestUserConfirmation, showAppToast, showBlockingNotice } from '@/features/interactions/userPromptChannel';
 import { trackV1Metric } from '@/lib/v1Metrics';
 import { getPetCareCollections } from '@/features/pets/healthCollections';
+import { computeCareBreakdown } from '@/features/care/computeCareBreakdown';
 import { usePetEventManagement } from '@/hooks/usePetEventManagement';
 import { useVaccineCardWorkflow } from '@/hooks/useVaccineCardWorkflow';
 import { useParasiteManagement } from '@/hooks/useParasiteManagement';
@@ -680,147 +681,10 @@ export default function HomePage() {
     [loggedUserId, tutor?.id, currentPet?.owner_user_id]
   );
 
-  const _selectedPetCareBreakdown = useMemo(() => {
-    const todayRef = new Date();
-    todayRef.setHours(0, 0, 0, 0);
-    const todayStr = dateToLocalISO(todayRef);
-
-    type CareItem = { key: string; compliant: boolean; label: string };
-    const items: CareItem[] = [];
-
-    type ExtendedVaccineRecord = VaccineRecord & { history_status?: string; tracking_mode?: string };
-    const vaccinesData: ExtendedVaccineRecord[] = vaccines || [];
-    const petCareCollections = getPetCareCollections(currentPet);
-    const groomingData: GroomingRecord[] = groomingRecords?.length ? groomingRecords : petCareCollections.groomingRecords;
-    const parasiteData: ParasiteControl[] = parasiteControls?.length ? parasiteControls : petCareCollections.parasiteControls;
-
-    const currentVaccineRecords = vaccinesData.filter((v) => {
-      const historyStatus = String(v?.history_status || '').toLowerCase();
-      const trackingMode = String(v?.tracking_mode || '').toLowerCase();
-      const dueSource = String(v?.next_due_source || '').toLowerCase();
-      if (historyStatus === 'history') return false;
-      if (historyStatus === 'current' || historyStatus === 'active') return true;
-      if (trackingMode === 'active' || trackingMode === 'protocol') return true;
-      if (dueSource === 'protocol') return true;
-      return false;
-    });
-    const hasVaccineOverdue = currentVaccineRecords.some((v) => {
-      const dueRaw = String(v?.next_dose_date || '').split('T')[0];
-      if (!dueRaw) return false;
-      const dueDate = createLocalDate(dueRaw);
-      return !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < todayRef.getTime();
-    });
-    const hasGroomingOverdue = _selectedPetAllAlerts.some((a: PetInteractionItem) => a.category === 'grooming' && (a.status === 'overdue' || a.status === 'today'));
-
-    const hasCurrentRegimen = currentVaccineRecords.length > 0;
-    items.push({ key: 'vaccine', compliant: hasCurrentRegimen && !hasVaccineOverdue, label: 'Vacina' });
-
-    const groomingEligible = groomingData.length > 0 || _selectedPetAllAlerts.some((a: PetInteractionItem) => a.category === 'grooming');
-    if (groomingEligible) {
-      items.push({ key: 'grooming', compliant: !hasGroomingOverdue, label: 'Higiene' });
-    }
-
-    const parasiteTypes: Array<'dewormer' | 'flea_tick' | 'collar'> = ['dewormer', 'flea_tick', 'collar'];
-    parasiteTypes.forEach((type) => {
-      const controlsForType = parasiteData.filter((c) => c.type === type);
-      const latest = controlsForType
-        .slice()
-        .sort((a, b) => {
-          const da = createLocalDate(String(a?.date_applied || '1970-01-01')).getTime();
-          const db = createLocalDate(String(b?.date_applied || '1970-01-01')).getTime();
-          return db - da;
-        })[0];
-
-      const dueRaw = latest?.next_due_date ? String(latest.next_due_date).split('T')[0] : '';
-      const dueDate = dueRaw ? createLocalDate(dueRaw) : null;
-      const compliant = !!dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() >= todayRef.getTime();
-      const parasiteLabel = type === 'dewormer' ? 'Vermífugo' : type === 'flea_tick' ? 'Antipulgas' : 'Coleira';
-      items.push({ key: `parasite-${type}`, compliant, label: parasiteLabel });
-    });
-
-    type MedicationEventLike = {
-      id: string;
-      type?: string;
-      source?: string;
-      status?: string;
-      extra_data?: string | null;
-      scheduled_at?: string;
-      next_due_date?: string | null;
-    };
-
-    const activeMedicationEvents = (petEvents as MedicationEventLike[]).filter((ev) => {
-      if (ev.type !== 'medicacao' || ev.source === 'document' || ev.status === 'cancelled') return false;
-      if (ev.status !== 'completed') return true;
-      try {
-        const ex = JSON.parse(String(ev.extra_data || '{}')) as Record<string, unknown>;
-        if (ex.treatment_days) {
-          const appliedDates = Array.isArray(ex.applied_dates) ? ex.applied_dates : [];
-          return appliedDates.length < parseInt(String(ex.treatment_days), 10);
-        }
-      } catch {}
-      return false;
-    });
-
-    activeMedicationEvents.forEach((ev) => {
-        let extra: Record<string, unknown> = {};
-        try {
-          const parsed = JSON.parse(String(ev.extra_data || '{}'));
-          if (parsed && typeof parsed === 'object') {
-            extra = parsed as Record<string, unknown>;
-          }
-        } catch {
-          extra = {};
-        }
-
-        const totalDoses = extra.treatment_days ? parseInt(String(extra.treatment_days), 10) : 0;
-        const appliedDatesRaw = Array.isArray(extra.applied_dates) ? extra.applied_dates : [];
-        const skippedDatesRaw = Array.isArray(extra.skipped_dates) ? extra.skipped_dates : [];
-        const appliedDates: string[] = appliedDatesRaw.map((d) => String(d).replace('T', ' ').split(' ')[0]);
-        const skippedDates: string[] = skippedDatesRaw.map((d) => String(d).replace('T', ' ').split(' ')[0]);
-
-        let compliant = true;
-        if (totalDoses > 0) {
-          const startRaw = String(ev.scheduled_at || '').replace('T', ' ').split(' ')[0];
-          const startDate = createLocalDate(startRaw);
-          if (!Number.isNaN(startDate.getTime())) {
-            if (startDate.getTime() > todayRef.getTime()) {
-              compliant = true;
-            } else {
-              const appliedToday = appliedDates.includes(todayStr);
-              const skippedToday = skippedDates.includes(todayStr);
-              compliant = appliedToday || skippedToday;
-            }
-          }
-        } else if (ev.status !== 'completed') {
-          const appliedToday = appliedDates.includes(todayStr);
-          const skippedToday = skippedDates.includes(todayStr);
-          const dueRaw = ev.next_due_date ? String(ev.next_due_date).split('T')[0] : '';
-          const dueDate = dueRaw ? createLocalDate(dueRaw) : null;
-          const dueNow = !dueDate || (!Number.isNaN(dueDate.getTime()) && dueDate.getTime() <= todayRef.getTime());
-          compliant = !dueNow || appliedToday || skippedToday;
-        }
-
-        items.push({ key: `med-${ev.id}`, compliant, label: 'Medicação' });
-      });
-
-    const totalItems = items.length;
-    const compliantItems = items.filter(item => item.compliant).length;
-    const overdueItems = Math.max(0, totalItems - compliantItems);
-    const pendingItems = items.filter(item => !item.compliant);
-    const pendingCounts = pendingItems.reduce((acc: Record<string, number>, item) => {
-      acc[item.label] = (acc[item.label] || 0) + 1;
-      return acc;
-    }, {});
-    const pendingSummary = Object.entries(pendingCounts)
-      .map(([label, count]) => (count > 1 ? `${label} (${count})` : label))
-      .join(', ');
-
-    const hoverReason = overdueItems === 0
-      ? 'Tudo em dia: régua em 100%.'
-      : `Régua abaixo de 100% porque ${overdueItems} item(ns) está(ão) pendente(s): ${pendingSummary}.`;
-
-    return { totalItems, compliantItems, overdueItems, hoverReason };
-  }, [_selectedPetAllAlerts, currentPet, petEvents, vaccines, parasiteControls, groomingRecords]);
+  const _selectedPetCareBreakdown = useMemo(
+    () => computeCareBreakdown(currentPet, petEvents, vaccines, parasiteControls, groomingRecords, _selectedPetAllAlerts),
+    [_selectedPetAllAlerts, currentPet, petEvents, vaccines, parasiteControls, groomingRecords],
+  );
   const _selectedPetCareScore = useMemo(() => {
     if (_selectedPetCareBreakdown.totalItems === 0) return 100;
     const proportional = Math.round((_selectedPetCareBreakdown.compliantItems / _selectedPetCareBreakdown.totalItems) * 100);

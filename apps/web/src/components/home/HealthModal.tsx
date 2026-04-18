@@ -264,7 +264,7 @@ export function HealthModal({
   return (
     <ModalPortal>
     <>
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm flex items-center justify-center sm:p-4 z-50 animate-fadeIn overflow-hidden">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm flex items-center justify-center sm:p-4 z-50 animate-fadeIn">
           <div className="bg-slate-50 rounded-[32px] shadow-premium w-full max-w-4xl max-h-[100dvh] sm:max-h-[94dvh] overflow-hidden flex flex-col animate-scaleIn border border-slate-200/50">
             {/* Header do Modal - Design Clean e Elegante */}
             <div className="sticky top-0 z-50 shadow-sm bg-white/90 backdrop-blur-xl border-b border-slate-100">

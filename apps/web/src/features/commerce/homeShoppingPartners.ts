@@ -35,7 +35,7 @@ export const HOME_SHOPPING_PARTNERS: HomeShoppingPartner[] = [
     description: 'Racao, brinquedos e mais',
     logoSrc: '/partner-logos/amazon.svg',
     logoAlt: 'Amazon',
-    directUrl: 'https://www.amazon.com.br/s?k=pet+shop&rh=n%3A16209062011',
+    fallbackUrl: 'https://www.amazon.com.br/s?k=pet+shop',
   },
   {
     id: 'petlove',
