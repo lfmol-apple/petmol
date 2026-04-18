@@ -133,6 +133,7 @@ export interface ProductDetectionSheetProps {
   petId: string;
   petName?: string;
   hint?: ProductCategory;
+  defaultMode?: 'scan' | 'manual';
   onProductConfirmed: (product: ScannedProduct) => void;
   onClose: () => void;
 }
@@ -141,6 +142,7 @@ export function ProductDetectionSheetGold({
   petId,
   petName,
   hint,
+  defaultMode,
   onProductConfirmed,
   onClose,
 }: ProductDetectionSheetProps) {
@@ -156,7 +158,7 @@ export function ProductDetectionSheetGold({
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
 
-  const [step, setStep] = useState<Step>('entry');
+  const [step, setStep] = useState<Step>(defaultMode === 'scan' ? 'scanning' : defaultMode === 'manual' ? 'manual' : 'entry');
   const [confirmed, setConfirmed] = useState<ScannedProduct | null>(null);
   const [fromHistory, setFromHistory] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);

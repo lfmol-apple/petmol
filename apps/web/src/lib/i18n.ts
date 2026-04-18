@@ -9216,6 +9216,10 @@ export const translations: Record<string, TranslationEntry> = {
     'pt-BR': 'Todos', 'en': 'All', 'es': 'Todos',
     'fr': 'Tous', 'it': 'Tutti'
   },
+  'doc.cat.health': {
+    'pt-BR': 'Saúde', 'en': 'Health', 'es': 'Salud',
+    'fr': 'Santé', 'it': 'Salute'
+  },
   'doc.cat.exams': {
     'pt-BR': 'Exames', 'en': 'Exams', 'es': 'Exámenes',
     'fr': 'Examens', 'it': 'Esami'

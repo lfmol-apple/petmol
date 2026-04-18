@@ -333,10 +333,20 @@ async def bulk_confirm_vaccines(
             continue
 
         # --- Persist ---
+        # Use canonical display name from catalog if resolved; fall back to user input
+        canonical_vaccine_name = vac.display_name
+        if resolved_code and resolved_code in VACCINE_CATALOG:
+            catalog_entry = VACCINE_CATALOG[resolved_code]
+            canonical_vaccine_name = (
+                catalog_entry.display_name.get(country)
+                or catalog_entry.display_name.get("BR")
+                or vac.display_name
+            )
+
         vaccine_record = VaccineRecord(
             id=str(uuid4()),
             pet_id=pet_id,
-            vaccine_name=vac.display_name,
+            vaccine_name=canonical_vaccine_name,
             applied_date=applied_date,
             next_dose_date=next_due_date,
             dose_number=vac.dose_number,

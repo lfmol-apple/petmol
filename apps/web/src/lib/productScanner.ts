@@ -51,39 +51,6 @@ function extractConcentration(text: string): string | undefined {
   return text.match(/\b\d+(?:[,.]\d+)?\s?(?:mg|mcg|g|ml)(?:\/\d+(?:[,.]\d+)?\s?(?:ml|kg|g))?\b/i)?.[0];
 }
 
-// ── Product Catalog (autocomplete suggestions per category) ──────────────────
-export const PRODUCT_CATALOG: Record<ProductCategory, string[]> = {
-  food: [
-    'Fórmula Natural', 'Premier Pet', 'Royal Canin', 'Hills Science Diet',
-    'Hills Prescription Diet', 'Purina Pro Plan', 'Guabi Natural', 'Magnus Natural',
-    'Pedigree', 'Eukanuba', 'Farmina N&D', 'Natural Life', 'Equilíbrio',
-    'Vitapet', 'Canidae', 'Acana', 'Orijen', 'Biofresh', 'Prozoo',
-    'Total Alimentos', 'Rações Primor',
-  ],
-  antiparasite: [
-    'Bravecto', 'Nexgard', 'Simparica', 'Simparica Trio', 'Frontline Plus',
-    'Frontline Spray', 'Advantage', 'Advantix', 'Revolution', 'Stronghold',
-    'Comfortis', 'Capstar', 'Vectra 3D', 'Credelio', 'Program',
-  ],
-  dewormer: [
-    'Drontal', 'Drontal Plus', 'Milbemax', 'Panacur', 'Canex Premium',
-    'Iverlan', 'Verm-X', 'Exiltel', 'Selemax',
-  ],
-  collar: [
-    'Seresto', 'Scalibor', 'Foresto', 'Bolfo', 'Exspot', 'Preventic',
-  ],
-  medication: [
-    'Prednisolona', 'Amoxicilina', 'Metronidazol', 'Tramadol', 'Dipirona',
-    'Omeprazol', 'Cefalexina', 'Enrofloxacina', 'Dexametasona', 'Furosemida',
-    'Atenolol', 'Enalapril', 'Phenobarbital', 'Meloxicam', 'Ranitidina',
-  ],
-  hygiene: [
-    'Pet Society', 'Limpets', 'Petgroom', 'Pet Clean', 'Sanol Dog', 'Sanol Cat',
-    'Tapete Higiênico', 'Areia Sanitária', 'PetLab', 'Biodog',
-  ],
-  other: [],
-};
-
 // ── Scan History ─────────────────────────────────────────────────────────────
 export interface ScanHistoryEntry {
   barcode?: string;
@@ -147,16 +114,6 @@ export function getSearchSuggestions(query: string, category?: ProductCategory, 
   for (const entry of history) {
     if (entry.product.name && normalize(entry.product.name).includes(q)) {
       results.add(entry.product.name);
-    }
-  }
-
-  // 2. Catalog
-  const cats: ProductCategory[] = category && category !== 'other'
-    ? [category]
-    : ['food', 'antiparasite', 'dewormer', 'collar', 'medication', 'hygiene'];
-  for (const cat of cats) {
-    for (const brand of PRODUCT_CATALOG[cat]) {
-      if (normalize(brand).includes(q)) results.add(brand);
     }
   }
 

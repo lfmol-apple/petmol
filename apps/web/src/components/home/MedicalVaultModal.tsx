@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type Dispatch, type SetStateAction } from 'react';
-import { MedicalShareQR } from '@/components/MedicalShareQR';
+import { PetShareExportPanel } from '@/components/PetShareExportPanel';
 import { PetDocumentVault } from '@/components/PetDocumentVault';
 import { API_BASE_URL } from '@/lib/api';
 import type { PetHealthProfile } from '@/lib/petHealth';
@@ -70,7 +70,12 @@ export function MedicalVaultModal({
         <div className="px-4 py-4 sm:p-6 overflow-y-auto flex-1">
           {showQRInVault && (
             <div className="mb-6">
-              <MedicalShareQR petId={currentPet.pet_id} petName={currentPet.pet_name} />
+              <PetShareExportPanel
+                  pet={currentPet as unknown as PetHealthProfile}
+                  vaccines={[]}
+                  petEvents={[]}
+                  documents={[]}
+                />
             </div>
           )}
 

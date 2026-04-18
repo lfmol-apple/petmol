@@ -107,15 +107,13 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const { t } = useI18n();
 
   const CATEGORY_TABS = [
-    { id: 'all',          label: t('doc.cat.all'),           icon: '📁' },
-    { id: 'vaccine',      label: t('common.vaccines'),       icon: '💉' },
-    { id: 'exam',         label: t('doc.cat.exams'),         icon: '🔬' },
-    { id: 'prescription', label: t('doc.cat.prescriptions'), icon: '📋' },
-    { id: 'report',       label: t('doc.cat.reports'),       icon: '📄' },
-    { id: 'comprovante',  label: t('doc.cat.vouchers'),      icon: '🧾' },
-    { id: 'photo',        label: t('doc.cat.photos'),        icon: '📸' },
-    { id: 'other',        label: t('doc.cat.others'),        icon: '📎' },
+    { id: 'all',    label: t('doc.cat.all'),  icon: '📁' },
+    { id: 'health', label: t('doc.cat.health'), icon: '💊' },
+    { id: 'exam',   label: t('doc.cat.exams'), icon: '🔬' },
+    { id: 'photo',  label: t('doc.cat.photos'), icon: '📸' },
   ];
+
+  const HEALTH_CATS = ['vaccine', 'prescription', 'report', 'comprovante'];
 
   const CATEGORY_OPTIONS = [
     { value: 'exam',         label: '🔬 ' + t('upload.type_exam') },
@@ -420,6 +418,8 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const baseDocs = eventId != null ? docs.filter((d) => d.event_id === eventId) : docs;
   const filtered = activeCategory === 'all'
     ? baseDocs
+    : activeCategory === 'health'
+    ? baseDocs.filter((d) => HEALTH_CATS.includes(d.category || 'other'))
     : baseDocs.filter((d) => (d.category || 'other') === activeCategory);
   const groupedDocs = useMemo(
     () => groupVaultDocumentsByMonth(filtered as VaultPetDocument[]),
