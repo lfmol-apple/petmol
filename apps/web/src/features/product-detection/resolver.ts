@@ -1,6 +1,8 @@
-import { saveLocalProduct } from './cache';
+import { getLocalProduct, saveLocalProduct } from './cache';
 import type { ResolvedProduct } from './types';
 import { API_BASE_URL } from '@/lib/api';
+import { fetchFromCosmos } from './apis/cosmos';
+import { fetchFromGlobal } from './apis/global';
 
 export type { ResolvedProduct };
 export { getLocalProduct, saveLocalProduct } from './cache';
@@ -65,53 +67,73 @@ export async function resolveProductLookup(barcode: string): Promise<ProductLook
 }
 
 async function resolveFreshProduct(barcode: string): Promise<ResolvedProduct | null> {
+  const cached = getLocalProduct(barcode);
+  if (cached) {
+    console.info('[ProductScanner] cacheHit', { barcode, source: cached.source });
+    return cached;
+  }
+
   const data = await resolveProductLookup(barcode);
-  if (!data) return null;
+  if (data?.ok && data.found && data.product?.name) {
+    const normalizedCategory = data.product.category;
+    const category = (
+      normalizedCategory === 'food' ||
+      normalizedCategory === 'medication' ||
+      normalizedCategory === 'antiparasite' ||
+      normalizedCategory === 'dewormer' ||
+      normalizedCategory === 'collar' ||
+      normalizedCategory === 'hygiene' ||
+      normalizedCategory === 'other'
+    )
+      ? normalizedCategory
+      : 'other';
 
-  if (!data.ok || !data.found || !data.product?.name) return null;
+    const raw = data.product.raw ?? {};
+    const manufacturer = typeof raw.manufacturer === 'string'
+      ? raw.manufacturer
+      : data.product.brand || undefined;
+    const presentation = typeof raw.presentation === 'string'
+      ? raw.presentation
+      : undefined;
+    const concentration = typeof raw.concentration === 'string'
+      ? raw.concentration
+      : undefined;
+    const weight = typeof raw.weight === 'string'
+      ? raw.weight
+      : undefined;
 
-  const normalizedCategory = data.product.category;
-  const category = (
-    normalizedCategory === 'food' ||
-    normalizedCategory === 'medication' ||
-    normalizedCategory === 'antiparasite' ||
-    normalizedCategory === 'dewormer' ||
-    normalizedCategory === 'collar' ||
-    normalizedCategory === 'hygiene' ||
-    normalizedCategory === 'other'
-  )
-    ? normalizedCategory
-    : 'other';
+    const product: ResolvedProduct = {
+      barcode: data.gtin || barcode,
+      name: data.product.name,
+      brand: data.product.brand || undefined,
+      image: data.product.image_url || undefined,
+      weight,
+      manufacturer,
+      presentation,
+      concentration,
+      category,
+      source: normalizeSource(data.source),
+    };
 
-  const raw = data.product.raw ?? {};
-  const manufacturer = typeof raw.manufacturer === 'string'
-    ? raw.manufacturer
-    : data.product.brand || undefined;
-  const presentation = typeof raw.presentation === 'string'
-    ? raw.presentation
-    : undefined;
-  const concentration = typeof raw.concentration === 'string'
-    ? raw.concentration
-    : undefined;
-  const weight = typeof raw.weight === 'string'
-    ? raw.weight
-    : undefined;
+    saveLocalProduct(barcode, product);
+    return product;
+  }
 
-  const product: ResolvedProduct = {
-    barcode: data.gtin || barcode,
-    name: data.product.name,
-    brand: data.product.brand || undefined,
-    image: data.product.image_url || undefined,
-    weight,
-    manufacturer,
-    presentation,
-    concentration,
-    category,
-    source: normalizeSource(data.source),
-  };
+  const cosmosProduct = await fetchFromCosmos(barcode);
+  if (cosmosProduct) {
+    console.info('[ProductScanner] cosmosFallbackHit', { barcode });
+    saveLocalProduct(barcode, cosmosProduct);
+    return cosmosProduct;
+  }
 
-  saveLocalProduct(barcode, product);
-  return product;
+  const globalProduct = await fetchFromGlobal(barcode);
+  if (globalProduct) {
+    console.info('[ProductScanner] globalFallbackHit', { barcode });
+    saveLocalProduct(barcode, globalProduct);
+    return globalProduct;
+  }
+
+  return null;
 }
 
 export async function resolveProduct(barcode: string): Promise<ResolvedProduct | null> {

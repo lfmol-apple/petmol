@@ -123,18 +123,6 @@ export function getSearchSuggestions(query: string, category?: ProductCategory, 
 export async function identifyProductByBarcode(barcode: string): Promise<ScannedProduct> {
   try {
     const { resolveProduct, resolveProductLookup } = await import('@/features/product-detection/resolver');
-    const lookup = await resolveProductLookup(barcode);
-    if (lookup?.queued) {
-      return {
-        barcode: lookup.gtin || barcode,
-        name: '',
-        category: 'other',
-        found: false,
-        queued: true,
-        queueMessage: 'Produto enviado para fila de catalogação',
-      };
-    }
-
     const resolved = await resolveProduct(barcode);
     if (resolved) {
       return {
@@ -147,6 +135,18 @@ export async function identifyProductByBarcode(barcode: string): Promise<Scanned
         presentation: resolved.presentation ?? resolved.weight,
         concentration: resolved.concentration,
         found: true,
+      };
+    }
+
+    const lookup = await resolveProductLookup(barcode);
+    if (lookup?.queued) {
+      return {
+        barcode: lookup.gtin || barcode,
+        name: '',
+        category: 'other',
+        found: false,
+        queued: true,
+        queueMessage: 'Produto enviado para fila de catalogação',
       };
     }
   } catch {
