@@ -18,7 +18,6 @@ const DEFAULT_CHECKIN_DAY = 16;
 const DEFAULT_CHECKIN_HOUR = 9;
 const DEFAULT_CHECKIN_MINUTE = 35;
 const PROFILE_PUSH_SEEN_KEY = 'petmol-profile-push-seen-v1';
-const PROFILE_PUSH_OPT_IN_KEY = 'petmol-profile-push-opt-in-v1';
 
 interface TutorData {
   id: string;
@@ -68,8 +67,6 @@ export default function ProfilePage() {
   const [addrOpen, setAddrOpen] = useState(false);
   const [notifsOpen, setNotifsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [pushOptIn, setPushOptIn] = useState(false);
-  const [pushPrefsReady, setPushPrefsReady] = useState(false);
   const [pushLoading, setPushLoading] = useState<"activate" | "deactivate" | "test" | null>(null);
   const [pushFeedback, setPushFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -80,21 +77,12 @@ export default function ProfilePage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const storedOptIn = window.localStorage.getItem(PROFILE_PUSH_OPT_IN_KEY);
     const hasSeenPushPref = window.localStorage.getItem(PROFILE_PUSH_SEEN_KEY) === '1';
-    const nextOptIn = storedOptIn == null ? true : storedOptIn === '1';
-
-    setPushOptIn(nextOptIn);
-    if (storedOptIn == null) {
-      window.localStorage.setItem(PROFILE_PUSH_OPT_IN_KEY, '1');
-    }
 
     if (!hasSeenPushPref) {
       setNotifsOpen(true);
       window.localStorage.setItem(PROFILE_PUSH_SEEN_KEY, '1');
     }
-
-    setPushPrefsReady(true);
   }, []);
 
   useEffect(() => {
@@ -112,21 +100,6 @@ export default function ProfilePage() {
       if (normalized.length === 8) handleCepLookup();
     }
   }, [tutorData?.postal_code, editMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !pushPrefsReady) return;
-    window.localStorage.setItem(PROFILE_PUSH_OPT_IN_KEY, pushOptIn ? '1' : '0');
-  }, [pushOptIn, pushPrefsReady]);
-
-  useEffect(() => {
-    if (!pushPrefsReady || !pushOptIn || !isSupported || permission !== 'granted' || isSubscribed) return;
-    subscribeToPush().catch(() => {});
-  }, [isSubscribed, isSupported, permission, pushOptIn, pushPrefsReady, subscribeToPush]);
-
-  useEffect(() => {
-    if (!isSubscribed) return;
-    setPushOptIn(true);
-  }, [isSubscribed]);
 
   const loadTutorData = async () => {
     try {
@@ -270,6 +243,7 @@ export default function ProfilePage() {
     denied: 'Bloqueado',
     default: 'Não solicitado',
   };
+  const pushToggleChecked = isSubscribed || pushLoading === 'activate';
 
   const activatePush = async () => {
     setPushLoading('activate');
@@ -277,14 +251,12 @@ export default function ProfilePage() {
     try {
       if (!isSupported) {
         setNotifsOpen(true);
-        setPushOptIn(true);
         setPushFeedback({ ok: false, msg: 'Push não está disponível neste contexto. Abra o PETMOL pela Tela de Início e tente novamente.' });
         return;
       }
 
       const granted = permission === 'granted' ? true : await requestPermission();
       if (!granted) {
-        setPushOptIn(false);
         setPushFeedback({ ok: false, msg: 'Permissão negada pelo navegador.' });
         return;
       }
@@ -295,11 +267,9 @@ export default function ProfilePage() {
         return;
       }
 
-      setPushOptIn(true);
       setPushFeedback({ ok: true, msg: 'Notificações no celular ativadas com sucesso.' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao ativar notificações.';
-      setPushOptIn(false);
       setPushFeedback({ ok: false, msg });
     } finally {
       setPushLoading(null);
@@ -311,7 +281,6 @@ export default function ProfilePage() {
     setPushFeedback(null);
     try {
       await unsubscribe();
-      setPushOptIn(false);
       setPushFeedback({ ok: true, msg: 'Notificações no celular desativadas.' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao desativar notificações.';
@@ -323,17 +292,11 @@ export default function ProfilePage() {
 
   const handlePushToggle = async () => {
     setNotifsOpen(true);
-    if (pushOptIn) {
-      if (isSubscribed) {
-        await deactivatePush();
-        return;
-      }
-      setPushOptIn(false);
-      setPushFeedback(null);
+    if (isSubscribed) {
+      await deactivatePush();
       return;
     }
 
-    setPushOptIn(true);
     await activatePush();
   };
 
@@ -569,7 +532,7 @@ export default function ProfilePage() {
                         </p>
                       </div>
                       <PreferenceSwitch
-                        checked={pushOptIn}
+                        checked={pushToggleChecked}
                         onToggle={() => {
                           void handlePushToggle();
                         }}
@@ -578,8 +541,8 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${pushOptIn ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {pushOptIn ? 'Campo marcado' : 'Campo desmarcado'}
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${pushToggleChecked ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {pushToggleChecked ? 'Chave ligada' : 'Chave desligada'}
                       </span>
                       <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${isSubscribed ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                         {isSubscribed ? 'Push ativo' : 'Push inativo'}

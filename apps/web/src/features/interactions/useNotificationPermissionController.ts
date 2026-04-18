@@ -92,6 +92,20 @@ async function postTestNotification(): Promise<void> {
   }
 }
 
+async function showLocalTestNotification(): Promise<void> {
+  if (typeof window === 'undefined' || Notification.permission !== 'granted') return;
+
+  const reg = await getSwRegistration();
+  await reg.showNotification('Teste PETMOL', {
+    body: 'Push funcionando! Clique para abrir os lembretes.',
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/badge-mono.png',
+    tag: 'petmol-test',
+    data: { url: '/home' },
+    requireInteraction: false,
+  });
+}
+
 function isExpiredSubscriptionError(message: string): boolean {
   const normalized = message.toLowerCase();
   return normalized.includes('subscription expirada') || normalized.includes('nenhuma subscription');
@@ -224,6 +238,7 @@ export function useNotificationPermissionController() {
   const sendTestNotification = useCallback(async (): Promise<void> => {
     try {
       await postTestNotification();
+      await showLocalTestNotification();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao enviar push de teste';
       if (!isExpiredSubscriptionError(message)) {
@@ -238,6 +253,7 @@ export function useNotificationPermissionController() {
       }
 
       await postTestNotification();
+      await showLocalTestNotification();
     }
   }, [subscribeToPush]);
 
