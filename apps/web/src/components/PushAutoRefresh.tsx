@@ -15,6 +15,13 @@ import { useEffect } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  return Uint8Array.from(Array.from(rawData).map((char) => char.charCodeAt(0)));
+}
+
 function getAuthHeaders(): Record<string, string> {
   const token = getToken();
   return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } : { 'Content-Type': 'application/json' };
@@ -41,6 +48,34 @@ async function ensureServiceWorkerReady(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.ready;
 }
 
+async function fetchVapidPublicKey(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/notifications/vapid-public-key`);
+  if (!response.ok) {
+    throw new Error(`VAPID indisponivel (${response.status})`);
+  }
+  const data = await response.json();
+  return data.publicKey as string;
+}
+
+async function createSubscription(registration: ServiceWorkerRegistration): Promise<PushSubscription> {
+  const vapidKey = await fetchVapidPublicKey();
+  const keyArray = urlBase64ToUint8Array(vapidKey);
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: keyArray.buffer as ArrayBuffer,
+  });
+}
+
+async function syncSubscription(subscription: PushSubscription): Promise<Response> {
+  return fetch(`${API_BASE_URL}/notifications/subscribe`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      subscription: serializeSubscription(subscription),
+    }),
+  });
+}
+
 export function PushAutoRefresh() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -52,16 +87,24 @@ export function PushAutoRefresh() {
 
     ensureServiceWorkerReady()
       .then(async (reg) => {
-        const existing = await reg.pushManager.getSubscription();
-        if (!existing) return; // Sem subscription ativa — não força
+        let subscription = await reg.pushManager.getSubscription();
 
-        const response = await fetch(`${API_BASE_URL}/notifications/subscribe`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            subscription: serializeSubscription(existing),
-          }),
-        });
+        if (!subscription) {
+          subscription = await createSubscription(reg);
+        }
+
+        let response = await syncSubscription(subscription);
+
+        if (!response.ok && (response.status === 400 || response.status === 410)) {
+          try {
+            await subscription.unsubscribe();
+          } catch {
+            // best effort
+          }
+
+          subscription = await createSubscription(reg);
+          response = await syncSubscription(subscription);
+        }
 
         if (!response.ok) {
           console.warn('[push] PushAutoRefresh nao conseguiu sincronizar a subscription', response.status);
