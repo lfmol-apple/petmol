@@ -942,6 +942,110 @@ def send_no_control_pushes() -> None:
         logger.error(f"send_no_control_pushes erro: {e}")
 
 
+def send_food_reminder_pushes() -> None:
+    """Daily job at 09:00 BRT.
+
+    For each feeding plan where next_reminder_date <= today:
+      - enabled=true, no_consumption_control=false, deleted_at IS NULL
+    Creates pendency (type='food', priority=60) and sends push.
+    Dedup tag: petmol-food-{pet_id}-{next_reminder_date}  → one push per pet per reminder cycle.
+    """
+    from datetime import timezone as _tz, timedelta as _td
+
+    brt = _tz(_td(hours=-3))
+    now = datetime.now(brt)
+
+    # Only fire at 09:00 BRT
+    if now.hour != 9 or now.minute != 0:
+        return
+
+    today = now.date()
+
+    subscriptions = _load_subscriptions()
+    if not subscriptions:
+        return
+
+    try:
+        db = SessionLocal()
+        try:
+            from ..health.models import FeedingPlan
+            from ..pets.models import Pet
+
+            plans = db.query(FeedingPlan).filter(
+                FeedingPlan.next_reminder_date <= today,
+                FeedingPlan.enabled.is_(True),
+                FeedingPlan.no_consumption_control.is_(False),
+                FeedingPlan.deleted_at.is_(None),
+            ).all()
+
+            expired_ids: list[str] = []
+
+            for plan in plans:
+                pet = db.query(Pet).filter(Pet.id == plan.pet_id).first()
+                if not pet:
+                    continue
+
+                sub = subscriptions.get(str(pet.user_id))
+                if not sub:
+                    continue
+
+                days_left = (
+                    (plan.estimated_end_date - today).days
+                    if plan.estimated_end_date
+                    else 0
+                )
+                brand = plan.food_brand or "Ração"
+                pend_id = (
+                    f"petmol-food-{plan.pet_id}-"
+                    f"{plan.next_reminder_date.isoformat() if plan.next_reminder_date else today.isoformat()}"
+                )
+
+                if days_left > 0:
+                    title = f"🍖 A ração de {pet.name} está acabando"
+                    body = f"{brand} acaba em {days_left} dia{'s' if days_left != 1 else ''}"
+                else:
+                    title = f"🍖 A ração de {pet.name} acabou"
+                    body = f"O estoque de {brand} chegou ao fim"
+
+                _upsert_pend(
+                    user_id=pet.user_id,
+                    pet_id=pet.id,
+                    pend_id=pend_id,
+                    type_="food",
+                    title=title,
+                    message=body,
+                    deep_link=f"/home?modal=food&petId={pet.id}",
+                    priority=60,
+                )
+
+                payload = {
+                    "title": title,
+                    "body": body,
+                    "icon": "/icons/icon-192x192.png",
+                    "badge": "/icons/badge-mono.png",
+                    "image": "/brand/notification-banner.png",
+                    "tag": pend_id,
+                    "data": {"url": f"/home?modal=food&petId={pet.id}"},
+                    "requireInteraction": True,
+                    "autoCloseMs": 0,
+                }
+                ok = _send_push(sub, payload)
+                if not ok:
+                    expired_ids.append(str(pet.user_id))
+                else:
+                    logger.info(f"Push ração enviado -> pet {pet.id} user {pet.user_id}")
+
+            if expired_ids:
+                for uid in expired_ids:
+                    subscriptions.pop(uid, None)
+                _save_subscriptions(subscriptions)
+
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"send_food_reminder_pushes erro: {e}")
+
+
 @router.get("/settings")
 async def get_notification_settings(
     current_user: User = Depends(get_current_user),

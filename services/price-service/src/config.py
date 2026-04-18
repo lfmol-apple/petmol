@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     
     # Feature flags - countries with price comparison enabled
     prices_enabled_countries: str = "BR,AR,MX,CO,CL"
-    feature_reminders_push: bool = False
+    feature_reminders_push: bool = True
 
     # Database - usa caminho relativo que funciona local e produção
     database_url: str = f"sqlite:///{os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'petmol.db'))}"

@@ -49,7 +49,7 @@ function fmtDate(s: string): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function FoodControlTab({ petId, petName: _petName, countryCode, species, onSaved }: FoodControlTabProps) {
-  const storageKey = `petmol_food_v2_${petId}`;
+  const storageKey = `petmol_food_control_${petId}`;
 
   const [form, setForm] = useState<SimpleFoodData>({
     brand: '',
@@ -68,6 +68,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [loadedExisting, setLoadedExisting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
+  const [apiEstimate, setApiEstimate] = useState<{ estimated_end_date: string | null; estimated_days_left: number | null } | null>(null);
 
   const applyScannedProduct = (product: ScannedProduct) => {
     setForm(prev => ({
@@ -108,6 +109,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                 : localTodayISO(),
               dailyConsumptionG: dailyG ? String(dailyG) : '',
             });
+            // Capture API-calculated estimate — no local recalculation
+            setApiEstimate({
+              estimated_end_date: json.estimate?.estimated_end_date ?? null,
+              estimated_days_left: json.estimate?.estimated_days_left ?? null,
+            });
             setHasExisting(true);
             setLoadedExisting(true);
             return;
@@ -115,21 +121,28 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
         }
       } catch { /* offline */ }
 
-      // Fallback: localStorage cache
+      // Fallback: localStorage cache (petmol_food_control key — API-format fields)
       try {
         const raw = localStorage.getItem(storageKey);
         if (raw) {
-          const cached = JSON.parse(raw) as Partial<SimpleFoodData>;
+          const cached = JSON.parse(raw);
+          // Handle both API-format (food_brand, package_size_kg) and legacy form-format
+          const brand = cached.food_brand ?? cached.brand ?? '';
+          const pkgKgNum: number | null = cached.package_size_kg ?? null;
+          const dailyGNum: number | null = cached.daily_amount_g ?? null;
           setForm({
-            brand: cached.brand ?? '',
-            packageSizeKg: cached.packageSizeKg ?? '',
+            brand,
+            packageSizeKg: pkgKgNum != null ? String(pkgKgNum) : (cached.packageSizeKg ?? ''),
             durationDays: cached.durationDays ?? '',
-            startDate: cached.startDate ?? localTodayISO(),
-            dailyConsumptionG: cached.dailyConsumptionG ?? '',
+            startDate: ((cached.last_refill_date ?? cached.startDate ?? localTodayISO()) as string).split('T')[0],
+            dailyConsumptionG: dailyGNum != null ? String(dailyGNum) : (cached.dailyConsumptionG ?? ''),
             barcode: cached.barcode,
             category: cached.category,
           });
-          setHasExisting(Boolean(cached.brand || cached.packageSizeKg));
+          if (cached.estimated_end_date) {
+            setApiEstimate({ estimated_end_date: cached.estimated_end_date, estimated_days_left: null });
+          }
+          setHasExisting(Boolean(brand || pkgKgNum));
         }
       } catch { /* silent */ }
       setLoadedExisting(true);
@@ -219,7 +232,18 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
       if (res.ok) {
         try {
-          localStorage.setItem(storageKey, JSON.stringify(form));
+          // Write in API-compatible format for unified petmol_food_control key
+          const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
+          localStorage.setItem(storageKey, JSON.stringify({
+            ...existing,
+            food_brand: form.brand || '',
+            brand: form.brand || '',
+            package_size_kg: pkgKg,
+            daily_amount_g: dailyG,
+            last_refill_date: form.startDate || null,
+            barcode: form.barcode,
+            category: form.category,
+          }));
           const usageKey = `petmol_product_usage_${petId}`;
           const current = JSON.parse(localStorage.getItem(usageKey) || '[]') as Array<{ name: string; count: number; lastUsed: string }>;
           const name = form.brand.trim();
@@ -254,7 +278,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       }
     } catch {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(form));
+        const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
+        localStorage.setItem(storageKey, JSON.stringify({ ...existing, food_brand: form.brand, brand: form.brand, package_size_kg: pkgKg, daily_amount_g: dailyG, last_refill_date: form.startDate || null }));
       } catch { /* silent */ }
       setApiError('Sem conexão. Dados salvos localmente.');
     }
@@ -487,20 +512,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             onTimeChange={setReminderTime}
           />
 
-          {estimatedEndDate && (
+          {pkgKg && dailyConsumptionG && (
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
               <span>📦</span>
               <span className="text-xs font-semibold text-amber-800">
-                Término estimado: {fmtDate(estimatedEndDate)}
-              </span>
-            </div>
-          )}
-
-          {alertDate && (
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <span>⏰</span>
-              <span className="text-xs font-medium text-slate-700">
-                Janela sugerida para agir: {fmtDate(alertDate)}
+                Duração estimada: ~{Math.round((pkgKg * 1000) / dailyConsumptionG)} dias (após salvar, data exata calculada pelo servidor)
               </span>
             </div>
           )}

@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FoodControlTab } from '@/components/FoodControlTab';
 import type { PetHealthProfile } from '@/lib/petHealth';
 import { ModalPortal } from '@/components/ModalPortal';
-import { useState } from 'react';
 import { trackPartnerClicked } from '@/lib/v1Metrics';
+import { API_BASE_URL } from '@/lib/api';
+import { getToken } from '@/lib/auth-token';
+import {
+  HOME_SHOPPING_PARTNERS,
+  buildFoodHandoffUrl,
+  type HomeShoppingPartnerId,
+} from '@/features/commerce/homeShoppingPartners';
 
 export interface FoodItemSheetProps {
   pet: PetHealthProfile;
@@ -15,7 +21,39 @@ export interface FoodItemSheetProps {
 
 export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
   const [mode, setMode] = useState<'view' | 'buy'>('view');
+  const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
+  const [snoozing, setSnoozing] = useState(false);
+  const [foodBrand, setFoodBrand] = useState<string>('');
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  const handleSnooze = async () => {
+    setSnoozing(true);
+    setSnoozeFeedback(null);
+    try {
+      const token = getToken();
+      const res = await fetch(
+        `${API_BASE_URL}/api/health/pets/${pet.pet_id}/feeding/plan/snooze`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+          body: JSON.stringify({ snooze_days: 7 }),
+        },
+      );
+      if (res.ok) {
+        setSnoozeFeedback('Lembrete adiado. Você receberá um novo aviso em 7 dias.');
+      } else {
+        setSnoozeFeedback('Não foi possível adiar. Tente novamente.');
+      }
+    } catch {
+      setSnoozeFeedback('Sem conexão. Tente novamente.');
+    } finally {
+      setSnoozing(false);
+    }
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -25,6 +63,18 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // Load food brand for contextual buy mode
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`petmol_food_control_${pet.pet_id}`);
+      if (raw) {
+        const cached = JSON.parse(raw);
+        const brand = cached.food_brand ?? cached.brand ?? '';
+        if (brand) setFoodBrand(brand);
+      }
+    } catch { /* silent */ }
+  }, [pet.pet_id]);
 
   // Prevent body scroll while open
   useEffect(() => {
@@ -83,9 +133,16 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                   onClose();
                 }}
               />
-              
-              {/* Buy button at the end */}
-              <div className="px-4 pb-8 -mt-4">
+
+              {/* Snooze feedback */}
+              {snoozeFeedback && (
+                <div className="mx-4 mb-2 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800 flex items-center gap-2">
+                  <span>⏰</span><span>{snoozeFeedback}</span>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="px-4 pb-8 -mt-4 flex flex-col gap-2">
                 <button
                   onClick={() => setMode('buy')}
                   className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] shadow-sm"
@@ -101,42 +158,71 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                   </div>
                   <span className="text-blue-400 text-lg font-bold">›</span>
                 </button>
+
+                <button
+                  onClick={handleSnooze}
+                  disabled={snoozing}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                      ⏸️
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[14px] font-bold text-gray-700">{snoozing ? 'Adiando...' : 'Adiar 7 dias'}</p>
+                      <p className="text-[12px] text-gray-500">Lembrar de novo em 7 dias</p>
+                    </div>
+                  </div>
+                  <span className="text-gray-400 text-lg font-bold">›</span>
+                </button>
               </div>
             </>
           ) : (
             /* ── BUY MODE ─────────────────────────────────────────────────── */
             <div className="p-5 pb-8 space-y-4">
               <h3 className="text-[16px] font-bold text-gray-900">Onde comprar</h3>
-              <p className="text-sm text-gray-500">Escolha onde encontrar ração e acessórios:</p>
+              <p className="text-sm text-gray-500">
+                Escolha onde encontrar ração{foodBrand ? ` (${foodBrand})` : ''}:
+              </p>
 
               <div className="space-y-3">
-                {[
-                  { name: 'Cobasi', url: 'https://www.cobasi.com.br/cachorro/racoes', emoji: '🐾' },
-                  { name: 'Petz', url: 'https://www.petz.com.br/cachorro/racoes', emoji: '🐕' },
-                  { name: 'Petlove', url: 'https://www.petlove.com.br/cachorro/racoes', emoji: '❤️' },
-                  { name: 'Amazon Pet', url: 'https://www.amazon.com.br/s?k=racao+pet', emoji: '📦' },
-                ].map(store => (
-                  <button
-                    key={store.name}
-                    onClick={() => {
-                      trackPartnerClicked({
-                        source: 'food_sheet',
-                        partner: store.name.toLowerCase(),
-                        pet_id: pet.pet_id,
-                        control_type: 'food',
-                      });
-                      window.open(store.url, '_blank', 'noopener,noreferrer');
-                    }}
-                    className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all text-left"
-                  >
-                    <span className="text-2xl">{store.emoji}</span>
-                    <div className="flex-1">
-                      <p className="font-bold text-gray-900 text-sm">{store.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Comprar ração</p>
-                    </div>
-                    <span className="text-gray-400 text-lg">›</span>
-                  </button>
-                ))}
+                {HOME_SHOPPING_PARTNERS.filter(
+                  (p) => p.id === 'petz' || p.id === 'cobasi' || p.id === 'petlove',
+                ).map((partner) => {
+                  const url = buildFoodHandoffUrl(
+                    foodBrand || '',
+                    pet.pet_id,
+                    partner.id as HomeShoppingPartnerId,
+                  );
+                  return (
+                    <button
+                      key={partner.id}
+                      onClick={() => {
+                        trackPartnerClicked({
+                          source: 'food_sheet',
+                          partner: partner.id,
+                          pet_id: pet.pet_id,
+                          control_type: 'food',
+                        });
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      }}
+                      className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all text-left"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={partner.logoSrc}
+                        alt={partner.logoAlt}
+                        className="w-10 h-10 rounded-xl object-contain bg-gray-50 p-1 flex-shrink-0"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-900 text-sm">{partner.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{partner.description}</p>
+                      </div>
+                      <span className="text-gray-400 text-lg">›</span>
+                    </button>
+                  );
+                })}
               </div>
 
               <button

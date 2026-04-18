@@ -9,6 +9,7 @@ from typing import List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -700,6 +701,51 @@ async def delete_feeding_plan(
     plan.updated_at = datetime.utcnow()
     db.commit()
     return None
+
+
+class SnoozeFeedingPlanRequest(BaseModel):
+    snooze_days: int = 7
+
+
+@router.patch("/pets/{pet_id}/feeding/plan/snooze")
+async def snooze_feeding_plan(
+    pet_id: str,
+    body: SnoozeFeedingPlanRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Adiar lembrete de ração por N dias.
+
+    Incrementa next_reminder_date pelo número de dias informado e persiste.
+    Retorna a nova next_reminder_date para o frontend atualizar o estado.
+    """
+    _check_pet_ownership(pet_id, current_user, db)
+    plan = db.query(FeedingPlan).filter(
+        FeedingPlan.pet_id == pet_id,
+        FeedingPlan.deleted_at.is_(None),
+    ).first()
+
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plano de alimentação não encontrado para este pet",
+        )
+
+    if not plan.next_reminder_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Plano não possui data de lembrete configurada",
+        )
+
+    plan.next_reminder_date = plan.next_reminder_date + timedelta(days=body.snooze_days)
+    plan.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "status": "ok",
+        "next_reminder_date": plan.next_reminder_date.isoformat(),
+        "snooze_days": body.snooze_days,
+    }
 
 
 @router.get("/pets/{pet_id}/feeding/estimate", response_model=FeedingEstimate)
