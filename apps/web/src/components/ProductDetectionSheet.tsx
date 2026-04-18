@@ -643,7 +643,7 @@ export function ProductDetectionSheetGold({
       category: hint ?? 'other',
       found: false,
     } : null);
-    setStep('manual');
+    setStep('not-found');
   };
 
   const selectManual = (name: string) => {
@@ -1017,9 +1017,11 @@ export function ProductDetectionSheetGold({
 
       <div>
         <h3 className="text-[17px] font-bold text-gray-900">
-          {photoUrl ? 'O que você vê escrito na embalagem?' : 'Qual produto é esse?'}
+          {photoUrl ? 'Não identificamos automaticamente. Informe ou escolha o produto.' : 'Qual produto é esse?'}
         </h3>
-        <p className="mt-1 text-xs text-gray-400">{hint ? CATEGORY_HINT[hint] : CATEGORY_HINT.other}</p>
+        <p className="mt-1 text-xs text-gray-400">
+          {photoUrl ? 'Use o nome comercial, marca ou escolha uma sugestão para concluir.' : (hint ? CATEGORY_HINT[hint] : CATEGORY_HINT.other)}
+        </p>
       </div>
 
       {(cameraFailed || scannerError === 'lookup_timeout' || scannerError === 'product_not_found' || scannerError === 'manual_invalid_barcode' || scannerError === 'photo_barcode_not_found' || scannerError === 'photo_processing_error') && describeScannerError(scannerError) && (
@@ -1120,7 +1122,7 @@ export function ProductDetectionSheetGold({
         <p className="mt-1 text-sm leading-relaxed text-gray-500">
           {confirmed?.queued
             ? (confirmed.queueMessage || 'Produto enviado para fila de catalogação')
-            : 'Use foto, digitação ou escolha da lista para continuar sem travar.'}
+            : 'A leitura automática da foto não fechou um produto confiável. Você ainda pode tentar outra foto, escanear de novo ou escolher o item sem perder o fluxo.'}
         </p>
         {confirmed?.barcode && <p className="mt-2 font-mono text-xs text-gray-300">EAN: {confirmed.barcode}</p>}
       </div>
