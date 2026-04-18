@@ -3,6 +3,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { useI18n } from '@/lib/I18nContext';
 import { PremiumPanelShell } from '@/components/premium';
+import { IosSwitch } from '@/components/ui/IosSwitch';
 import type { ParasiteControl, ParasiteControlType } from '@/lib/types/home';
 import type { ParasiteFormData } from '@/lib/types/homeForms';
 import { dateToLocalISO } from '@/lib/localDate';
@@ -249,17 +250,16 @@ export function HealthParasiteControlPanel({
             <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-800">🔔 Lembrete de compra</span>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={parasiteFormData.reminder_enabled}
-                    onChange={(e) => setParasiteFormData((prev) => ({ ...prev, reminder_enabled: e.target.checked }))}
-                    className="w-4 h-4 text-[#0056D2] border-gray-300 rounded focus:ring-2 focus:ring-[#0056D2]"
-                  />
+                <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-gray-600">
                     {parasiteFormData.reminder_enabled ? '✅ Ativado' : '⭕ Desativado'}
                   </span>
-                </label>
+                  <IosSwitch
+                    checked={parasiteFormData.reminder_enabled}
+                    onChange={() => setParasiteFormData((prev) => ({ ...prev, reminder_enabled: !prev.reminder_enabled }))}
+                    size="sm"
+                  />
+                </div>
               </div>
               {parasiteFormData.reminder_enabled && (
                 <select

@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from 'react';
 import { PremiumPanelShell } from '@/components/premium';
+import { IosSwitch } from '@/components/ui/IosSwitch';
 import { parsePetEventExtraData, type PetEventRecord } from '@/lib/petEvents';
 import type { EventFormState } from '@/hooks/usePetEventManagement';
 import { localTodayISO } from '@/lib/localDate';
@@ -146,14 +147,15 @@ export function HealthMedicationPanel({
           </div>
 
           {/* Lembrete de medicação */}
-          <label className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 cursor-pointer">
-            <input
-              type="checkbox"
+          <div className="flex items-center justify-between gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
+            <span className="text-sm font-medium text-amber-800">
+              🔔 Quero lembretes desta medicação
+            </span>
+            <IosSwitch
               checked={eventFormData.reminder_enabled}
-              onChange={e => {
-                const isChecking = e.target.checked;
+              onChange={() => {
                 setEventFormData(prev => {
-                  if (!isChecking) return { ...prev, reminder_enabled: false, reminder_date: '' };
+                  if (prev.reminder_enabled) return { ...prev, reminder_enabled: false, reminder_date: '' };
                   const today = localTodayISO();
                   const evDate = prev.scheduled_at.split('T')[0];
                   const autoDate = prev.reminder_date
@@ -164,12 +166,9 @@ export function HealthMedicationPanel({
                   return { ...prev, reminder_enabled: true, reminder_date: autoDate };
                 });
               }}
-              className="w-4 h-4 accent-amber-500"
+              size="sm"
             />
-            <span className="text-sm font-medium text-amber-800">
-              🔔 Quero lembretes desta medicação
-            </span>
-          </label>
+          </div>
 
           {/* Configuração de lembretes — multi-time */}
           {eventFormData.reminder_enabled && (

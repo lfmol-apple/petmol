@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { API_BASE_URL } from '@/lib/api';
 import { showBlockingNotice } from '@/features/interactions/userPromptChannel';
 import { useNotificationPermissionController } from '@/features/interactions/useNotificationPermissionController';
+import { IosSwitch } from '@/components/ui/IosSwitch';
 
 // ── Design tokens ─────────────────────────────────────────────
 import { BrandBackground, PetmolTextLogo } from '@/components/ui/BrandBackground';
@@ -38,21 +39,7 @@ interface TutorData {
 }
 
 function PreferenceSwitch({ checked, onToggle, disabled = false }: { checked: boolean; onToggle: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-disabled={disabled}
-      onClick={onToggle}
-      disabled={disabled}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-all ${checked ? 'bg-[#0056D2]' : 'bg-slate-200'} ${disabled ? 'opacity-50' : 'active:scale-95'}`}
-    >
-      <span
-        className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : ''}`}
-      />
-    </button>
-  );
+  return <IosSwitch checked={checked} onChange={onToggle} disabled={disabled} size="md" />;
 }
 
 export default function ProfilePage() {

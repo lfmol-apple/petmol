@@ -7,6 +7,7 @@ import { ModalPortal } from '@/components/ModalPortal';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { trackPartnerClicked } from '@/lib/v1Metrics';
 import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
+import { IosSwitch } from '@/components/ui/IosSwitch';
 import type { ScannedProduct } from '@/lib/productScanner';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -812,19 +813,18 @@ export function MedicationItemSheet({
               </div>
 
               {/* Lembretes toggle */}
-              <label className="flex items-center gap-3 p-3 bg-amber-50 rounded-2xl border border-amber-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.reminder_enabled}
-                  onChange={e => setForm(f => ({
-                    ...f,
-                    reminder_enabled: e.target.checked,
-                    reminder_date: e.target.checked ? (f.reminder_date || f.scheduled_date) : '',
-                  }))}
-                  className="w-4 h-4 accent-amber-500"
-                />
+              <div className="flex items-center justify-between gap-3 p-3 bg-amber-50 rounded-2xl border border-amber-200">
                 <span className="text-sm font-semibold text-amber-800">🔔 Quero lembretes desta medicação</span>
-              </label>
+                <IosSwitch
+                  checked={form.reminder_enabled}
+                  onChange={() => setForm(f => ({
+                    ...f,
+                    reminder_enabled: !f.reminder_enabled,
+                    reminder_date: !f.reminder_enabled ? (f.reminder_date || f.scheduled_date) : '',
+                  }))}
+                  size="sm"
+                />
+              </div>
 
               {form.reminder_enabled && (
                 <div className="space-y-3 px-4 py-3 bg-amber-50 rounded-2xl border border-amber-200">
