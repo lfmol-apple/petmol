@@ -4,13 +4,13 @@ type IosSwitchSize = 'sm' | 'md';
 
 const SIZE_CLASSES: Record<IosSwitchSize, { track: string; thumb: string; translate: string }> = {
   sm: {
-    track: 'h-6 w-11',
-    thumb: 'h-5 w-5',
+    track: 'h-6 w-11 min-h-6 min-w-11 max-h-6 max-w-11',
+    thumb: 'h-5 w-5 min-h-5 min-w-5 max-h-5 max-w-5',
     translate: 'translate-x-5',
   },
   md: {
-    track: 'h-7 w-12',
-    thumb: 'h-6 w-6',
+    track: 'h-7 w-12 min-h-7 min-w-12 max-h-7 max-w-12',
+    thumb: 'h-6 w-6 min-h-6 min-w-6 max-h-6 max-w-6',
     translate: 'translate-x-5',
   },
 };
@@ -39,7 +39,7 @@ export function IosSwitch({
       onClick={onChange}
       disabled={disabled}
       className={[
-        'relative inline-flex shrink-0 items-center rounded-full border transition-all duration-200 ease-out',
+        'relative inline-flex flex-none items-center rounded-full border align-middle touch-manipulation transition-all duration-200 ease-out',
         sizeClasses.track,
         checked
           ? 'border-[#0a63ff] bg-gradient-to-b from-[#3b93ff] via-[#1478ff] to-[#0057d6] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_8px_18px_rgba(0,102,255,0.28)]'

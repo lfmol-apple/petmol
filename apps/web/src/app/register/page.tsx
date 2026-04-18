@@ -150,12 +150,13 @@ export default function RegisterPage() {
 
             {/* Terms */}
             <label className="flex items-start gap-4 cursor-pointer group p-1">
-              <div
-                onClick={() => setTermsAccepted(v => !v)}
-                className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer ${termsAccepted ? 'bg-blue-500 border-blue-500 shadow-md shadow-blue-500/20' : 'border-slate-200 bg-white group-hover:border-blue-300'}`}
-              >
-                {termsAccepted && <span className="text-white text-xs font-black">✓</span>}
-              </div>
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                aria-label="Aceitar termos de uso e política de privacidade"
+                className="mt-1 block flex-none self-start"
+              />
               <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                 Li e aceito os{' '}
                 <Link href="/legal/terms" target="_blank" className="text-blue-600 font-bold hover:underline">Termos de uso</Link>
