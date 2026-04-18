@@ -281,7 +281,12 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
         const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
         localStorage.setItem(storageKey, JSON.stringify({ ...existing, food_brand: form.brand, brand: form.brand, package_size_kg: pkgKg, daily_amount_g: dailyG, last_refill_date: form.startDate || null }));
       } catch { /* silent */ }
-      setApiError('Sem conexão. Dados salvos localmente.');
+      setHasExisting(true);
+      setFormOpen(false);
+      setSavedOk(true);
+      onSaved?.();
+      setTimeout(() => setSavedOk(false), 4000);
+      setApiError('Sem conexão — dados salvos localmente.');
     }
 
     setSaving(false);

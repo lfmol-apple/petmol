@@ -131,7 +131,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                 species={(pet.species as 'dog' | 'cat') || 'dog'}
                 onSaved={() => {
                   onSaved?.();
-                  onClose();
+                  // Não fechar o modal — o usuário precisa ver o banner de confirmação
                 }}
               />
 
