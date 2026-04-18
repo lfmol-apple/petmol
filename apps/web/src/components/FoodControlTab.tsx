@@ -200,6 +200,36 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
     const dailyG = dailyConsumptionG || (pkgKg && days ? Math.round((pkgKg * 1000) / days) : null);
 
+    // ── 1. Salvar no localStorage PRIMEIRO (otimista) ─────────────────────
+    try {
+      const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
+      localStorage.setItem(storageKey, JSON.stringify({
+        ...existing,
+        food_brand: form.brand || '',
+        brand: form.brand || '',
+        package_size_kg: pkgKg,
+        daily_amount_g: dailyG,
+        last_refill_date: form.startDate || null,
+        barcode: form.barcode,
+        category: form.category,
+      }));
+    } catch { /* silent */ }
+
+    // ── 2. Fechar form e mostrar feedback imediatamente ─────────────────
+    if (!hasExisting) {
+      trackV1Metric('food_cycle_created', {
+        pet_id: petId,
+        brand: form.brand || null,
+        package_size_kg: pkgKg,
+      });
+    }
+    setHasExisting(true);
+    setFormOpen(false);
+    setSavedOk(true);
+    onSaved?.();
+    setTimeout(() => setSavedOk(false), 4000);
+
+    // ── 3. Tentar sincronizar com API (sem bloquear UX) ────────────────
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
@@ -231,62 +261,24 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       });
 
       if (res.ok) {
+        // Atualizar produto no histórico de uso
         try {
-          // Write in API-compatible format for unified petmol_food_control key
-          const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
-          localStorage.setItem(storageKey, JSON.stringify({
-            ...existing,
-            food_brand: form.brand || '',
-            brand: form.brand || '',
-            package_size_kg: pkgKg,
-            daily_amount_g: dailyG,
-            last_refill_date: form.startDate || null,
-            barcode: form.barcode,
-            category: form.category,
-          }));
           const usageKey = `petmol_product_usage_${petId}`;
           const current = JSON.parse(localStorage.getItem(usageKey) || '[]') as Array<{ name: string; count: number; lastUsed: string }>;
           const name = form.brand.trim();
           if (name) {
             const found = current.find(item => item.name.toLowerCase() === name.toLowerCase());
-            if (found) {
-              found.count += 1;
-              found.lastUsed = localTodayISO();
-            } else {
-              current.push({ name, count: 1, lastUsed: localTodayISO() });
-            }
+            if (found) { found.count += 1; found.lastUsed = localTodayISO(); }
+            else { current.push({ name, count: 1, lastUsed: localTodayISO() }); }
             current.sort((a, b) => b.count - a.count || b.lastUsed.localeCompare(a.lastUsed));
             localStorage.setItem(usageKey, JSON.stringify(current));
             setRecurringProducts(current);
           }
         } catch { /* silent */ }
-
-        if (!hasExisting) {
-          trackV1Metric('food_cycle_created', {
-            pet_id: petId,
-            brand: form.brand || null,
-            package_size_kg: pkgKg,
-          });
-        }
-        setHasExisting(true);
-        setFormOpen(false);
-        setSavedOk(true);
-        onSaved?.();
-        setTimeout(() => setSavedOk(false), 3000);
-      } else {
-        setApiError('Erro ao salvar. Tente novamente.');
       }
+      // Se não ok: dado já está salvo no localStorage, não mostramos erro ao usuário
     } catch {
-      try {
-        const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
-        localStorage.setItem(storageKey, JSON.stringify({ ...existing, food_brand: form.brand, brand: form.brand, package_size_kg: pkgKg, daily_amount_g: dailyG, last_refill_date: form.startDate || null }));
-      } catch { /* silent */ }
-      setHasExisting(true);
-      setFormOpen(false);
-      setSavedOk(true);
-      onSaved?.();
-      setTimeout(() => setSavedOk(false), 4000);
-      setApiError('Sem conexão — dados salvos localmente.');
+      // Offline: dado já está salvo no localStorage — sem ação adicional
     }
 
     setSaving(false);
@@ -342,7 +334,20 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       {!showForm && (
         <div className="space-y-3">
 
-          {/* Status card */}
+          {/* Feedback de salvamento — no topo para garantir visibilidade */}
+          {savedOk && (
+            <div className="bg-green-500 rounded-2xl px-4 py-3 flex items-center gap-2 shadow-sm">
+              <span className="text-white text-lg">✅</span>
+              <span className="text-white text-sm font-bold">Dados salvos!</span>
+            </div>
+          )}
+          {deleteFeedback && (
+            <div className="bg-slate-100 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+              <span>ℹ️</span><span className="text-sm text-slate-700">{deleteFeedback}</span>
+            </div>
+          )}
+
+          {/* Status card */}}
           <div className={`rounded-2xl border p-4 space-y-2 ${
             daysLeft !== null && daysLeft < 0 ? 'bg-red-50 border-red-200' :
             daysLeft !== null && daysLeft <= 5 ? 'bg-orange-50 border-orange-200' :
@@ -422,16 +427,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             </button>
           </div>
 
-          {savedOk && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-800 flex items-center gap-2">
-              <span>✅</span><span>Salvo!</span>
-            </div>
-          )}
-          {deleteFeedback && (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 flex items-center gap-2">
-              <span>ℹ️</span><span>{deleteFeedback}</span>
-            </div>
-          )}
+          </div>
+
         </div>
       )}
 
