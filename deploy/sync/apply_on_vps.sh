@@ -113,6 +113,47 @@ else
 fi
 
 # ============================================
+# Step 2.5: Preserve legacy push subscriptions before rsync delete
+# ============================================
+LEGACY_SUBS_FILE="$APP_DIR/services/price-service/push_subscriptions.json"
+CANONICAL_SUBS_FILE="${PUSH_SUBSCRIPTIONS_FILE:-/opt/petmol/logs/push_subscriptions.json}"
+
+if [ -f "$LEGACY_SUBS_FILE" ]; then
+    log "Migrating legacy push subscriptions to canonical store..."
+    python3 - <<PY
+import json
+import os
+
+legacy_path = os.path.abspath("$LEGACY_SUBS_FILE")
+canonical_path = os.path.abspath("$CANONICAL_SUBS_FILE")
+
+def read_json(path):
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def is_subscription(value):
+    return isinstance(value, dict) and bool(value.get("endpoint"))
+
+canonical = read_json(canonical_path)
+legacy = read_json(legacy_path)
+merged = dict(canonical)
+for key, value in legacy.items():
+    if key not in merged or is_subscription(value):
+        merged[key] = value
+
+os.makedirs(os.path.dirname(canonical_path), exist_ok=True)
+with open(canonical_path, "w") as handle:
+    json.dump(merged, handle)
+PY
+fi
+
+# ============================================
 # Step 3: Rsync to app directory (preserve .env files and secrets)
 # ============================================
 log "Syncing files..."

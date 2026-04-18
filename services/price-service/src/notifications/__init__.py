@@ -105,10 +105,21 @@ def _read_subscriptions_file(path: str) -> dict:
         return {}
 
 
-def _merge_subscription_maps(primary: dict, secondary: dict) -> dict:
+def _is_subscription_entry(value: object) -> bool:
+    return isinstance(value, dict) and bool(value.get("endpoint"))
+
+
+def _merge_subscription_maps(primary: dict, secondary: dict, *, prefer_secondary: bool = False) -> dict:
     merged = dict(primary)
     for user_id, subscription in secondary.items():
         if user_id not in merged:
+            merged[user_id] = subscription
+            continue
+
+        if not prefer_secondary:
+            continue
+
+        if _is_subscription_entry(subscription):
             merged[user_id] = subscription
     return merged
 
@@ -117,7 +128,7 @@ def _load_subscriptions() -> dict:
     subscriptions = _read_subscriptions_file(SUBSCRIPTIONS_FILE)
     if _LEGACY_SUBS_FILE != SUBSCRIPTIONS_FILE:
         legacy_subscriptions = _read_subscriptions_file(_LEGACY_SUBS_FILE)
-        merged = _merge_subscription_maps(subscriptions, legacy_subscriptions)
+        merged = _merge_subscription_maps(subscriptions, legacy_subscriptions, prefer_secondary=True)
         if merged != subscriptions:
             _save_subscriptions(merged)
         return merged
