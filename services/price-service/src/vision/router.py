@@ -40,6 +40,24 @@ class ExtractVaccineCardResponse(BaseModel):
     raw_text: Optional[str] = Field(None, description="Texto bruto extraído (debug)")
 
 
+class IdentifyProductPhotoRequest(BaseModel):
+    image: str = Field(..., description="Imagem em base64 (jpeg, png, webp)")
+    pet_id: str = Field(..., description="ID do pet")
+    hint: Optional[str] = Field(None, description="Categoria esperada: food, medication, antiparasite, dewormer, collar, hygiene, other")
+
+
+class IdentifyProductPhotoResponse(BaseModel):
+    found: bool
+    name: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    weight: Optional[str] = None
+    manufacturer: Optional[str] = None
+    presentation: Optional[str] = None
+    confidence: float = Field(..., description="Confiança da identificação (0-1)")
+    reason: Optional[str] = None
+
+
 @router.post("/extract-vaccine-card", response_model=ExtractVaccineCardResponse)
 async def extract_vaccine_card(
     request: ExtractVaccineCardRequest,
@@ -116,6 +134,57 @@ async def extract_vaccine_card(
         )
     except Exception as e:
         logger.error(f"Erro ao processar imagem: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao processar a imagem. Tente novamente."
+        )
+
+
+@router.post("/identify-product-photo", response_model=IdentifyProductPhotoResponse)
+async def identify_product_photo(
+    request: IdentifyProductPhotoRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Identifica um produto pet a partir da foto da embalagem."""
+
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        logger.error("GOOGLE_API_KEY ou GEMINI_API_KEY não configuradas")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Serviço de IA não configurado corretamente"
+        )
+
+    try:
+        image_data = request.image
+        if image_data.startswith("data:image"):
+            image_data = image_data.split(",", 1)[1]
+
+        image_bytes = base64.b64decode(image_data)
+        image_size_mb = len(image_bytes) / (1024 * 1024)
+        if image_size_mb > 4:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Imagem muito grande ({image_size_mb:.1f}MB). Máximo: 4MB"
+            )
+
+        vision_service = VisionService(api_key)
+        result = await vision_service.identify_product_from_image(
+            image_bytes=image_bytes,
+            pet_id=request.pet_id,
+            hint=request.hint,
+        )
+
+        return IdentifyProductPhotoResponse(**result)
+    except base64.binascii.Error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Imagem inválida. Esperado base64 válido"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao identificar produto por foto: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Falha ao processar a imagem. Tente novamente."

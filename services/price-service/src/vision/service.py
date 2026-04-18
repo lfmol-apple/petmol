@@ -4,7 +4,7 @@ Handles communication with Google Gemini AI for image analysis
 """
 
 import google.generativeai as genai
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import logging
 from datetime import datetime
@@ -24,6 +24,136 @@ class VisionService:
         """
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
+
+    @staticmethod
+    def _detect_mime_type(image_bytes: bytes) -> str:
+        if image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+            return "image/png"
+        if image_bytes.startswith(b'\xff\xd8\xff'):
+            return "image/jpeg"
+        if image_bytes[:4] == b'RIFF' and image_bytes[8:12] == b'WEBP':
+            return "image/webp"
+        return "image/jpeg"
+
+    @staticmethod
+    def _strip_json_fences(response_text: str) -> str:
+        text = response_text.strip()
+        if text.startswith("```json"):
+            return text.replace("```json", "").replace("```", "").strip()
+        if text.startswith("```"):
+            return text.replace("```", "").strip()
+        return text
+
+    async def identify_product_from_image(
+        self,
+        image_bytes: bytes,
+        pet_id: str,
+        hint: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Identifica um produto pet a partir de uma foto da embalagem.
+
+        Retorna um payload estruturado para o frontend preencher o sheet atual.
+        """
+        prompt = f"""
+Você é um especialista em identificar produtos pet por imagem de embalagem.
+
+Objetivo:
+- Ler visualmente a foto da embalagem.
+- Identificar o produto mais provável.
+- Priorizar produtos pet reais, especialmente ração, antipulgas, vermífugo, coleira, medicamento e higiene.
+- Se a imagem estiver ambígua ou ilegível, diga que não encontrou.
+
+Contexto:
+- Pet ID: {pet_id}
+- Categoria esperada: {hint or 'não informada'}
+
+Regras:
+1. Só retorne found=true se houver evidência visual suficiente na embalagem.
+2. Use nomes comerciais claros, por exemplo: "Royal Canin Veterinary Diet Urinary Small Dog".
+3. Se conseguir, separe brand e name.
+4. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
+5. Se houver peso/apresentação visível, extraia em weight e presentation.
+6. Se não conseguir identificar com segurança razoável, retorne found=false.
+7. Responda APENAS JSON válido.
+
+Formato JSON obrigatório:
+{{
+  "found": true,
+  "name": "Nome completo do produto",
+  "brand": "Marca",
+  "category": "food",
+  "weight": "4 kg",
+  "manufacturer": "Fabricante ou marca",
+  "presentation": "Saco 4 kg",
+  "confidence": 0.92,
+  "reason": "Resumo curto do que foi lido na embalagem"
+}}
+
+Se não encontrar:
+{{
+  "found": false,
+  "name": null,
+  "brand": null,
+  "category": null,
+  "weight": null,
+  "manufacturer": null,
+  "presentation": null,
+  "confidence": 0.0,
+  "reason": "Não foi possível identificar com segurança"
+}}
+"""
+
+        try:
+            logger.info("Enviando imagem de produto para Gemini AI (pet_id=%s, hint=%s)", pet_id, hint)
+
+            image_part = {
+                "mime_type": self._detect_mime_type(image_bytes),
+                "data": image_bytes,
+            }
+
+            response = self.model.generate_content([prompt, image_part])
+            response_text = self._strip_json_fences(response.text)
+            result = json.loads(response_text)
+
+            allowed_categories = {"food", "medication", "antiparasite", "dewormer", "collar", "hygiene", "other"}
+            category = result.get("category")
+            if category not in allowed_categories:
+                result["category"] = hint if hint in allowed_categories else "other"
+
+            result["found"] = bool(result.get("found") and result.get("name"))
+            result["confidence"] = float(result.get("confidence") or 0.0)
+            result["name"] = result.get("name") or None
+            result["brand"] = result.get("brand") or None
+            result["weight"] = result.get("weight") or None
+            result["manufacturer"] = result.get("manufacturer") or result.get("brand") or None
+            result["presentation"] = result.get("presentation") or result.get("weight") or None
+            result["reason"] = result.get("reason") or None
+
+            logger.info(
+                "Gemini produto: found=%s category=%s confidence=%.2f name=%s",
+                result["found"],
+                result.get("category"),
+                result["confidence"],
+                result.get("name"),
+            )
+            return result
+        except json.JSONDecodeError as e:
+            logger.error("Erro ao fazer parse da resposta do Gemini para produto: %s", e)
+            return {
+                "found": False,
+                "name": None,
+                "brand": None,
+                "category": hint or "other",
+                "weight": None,
+                "manufacturer": None,
+                "presentation": None,
+                "confidence": 0.0,
+                "reason": "Resposta inválida da IA",
+            }
+        except Exception as e:
+            logger.error("Erro ao identificar produto com Gemini: %s", str(e), exc_info=True)
+            raise
     
     async def extract_vaccine_data(self, image_bytes: bytes, pet_id: str) -> Dict[str, Any]:
         """
@@ -157,17 +287,9 @@ Retorne APENAS o JSON, sem texto adicional.
             # Enviar para Gemini
             logger.info(f"Enviando imagem para Gemini AI (pet_id={pet_id})")
             
-            # Detectar MIME type baseado nos bytes da imagem
-            if image_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
-                mime_type = "image/png"
-            elif image_bytes.startswith(b'\xff\xd8\xff'):
-                mime_type = "image/jpeg"
-            else:
-                mime_type = "image/jpeg"  # Default
-                
             # Preparar imagem
             image_part = {
-                "mime_type": mime_type,
+                "mime_type": self._detect_mime_type(image_bytes),
                 "data": image_bytes
             }
             
@@ -175,13 +297,7 @@ Retorne APENAS o JSON, sem texto adicional.
             response = self.model.generate_content([prompt, image_part])
             
             # Parse da resposta
-            response_text = response.text.strip()
-            
-            # Remover markdown se existir
-            if response_text.startswith("```json"):
-                response_text = response_text.replace("```json", "").replace("```", "").strip()
-            elif response_text.startswith("```"):
-                response_text = response_text.replace("```", "").strip()
+            response_text = self._strip_json_fences(response.text)
             
             # Parse JSON
             result = json.loads(response_text)

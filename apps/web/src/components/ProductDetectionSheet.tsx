@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { BrowserCodeReader, BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType } from '@zxing/library';
 import { ModalPortal } from '@/components/ModalPortal';
+import { API_BASE_URL } from '@/lib/api';
+import { getToken } from '@/lib/auth-token';
 import {
   identifyProductByBarcode,
   saveToScanHistory,
@@ -77,6 +79,33 @@ const ZXING_FORMATS = [
   BarcodeFormat.ITF,
 ];
 
+interface PhotoProductIdentifyResponse {
+  found: boolean;
+  name?: string | null;
+  brand?: string | null;
+  category?: ProductCategory | null;
+  weight?: string | null;
+  manufacturer?: string | null;
+  presentation?: string | null;
+  confidence?: number | null;
+  reason?: string | null;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error('file_reader_invalid_result'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('file_reader_failed'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function resolveScannerErrorCode(error: unknown): string {
   if (error && typeof error === 'object' && 'name' in error && typeof (error as { name?: unknown }).name === 'string') {
     const name = (error as { name: string }).name;
@@ -123,7 +152,11 @@ function describeScannerError(errorCode: string | null): string | null {
     case 'product_not_found':
       return 'O código foi lido, mas ainda não encontramos o produto. Continue sem travar pela foto, código ou nome.';
     case 'photo_barcode_not_found':
-      return 'Não localizamos um código de barras na foto. Tente outra imagem ou digite o código.';
+      return 'Não localizamos um código de barras na foto. Vamos tentar ler a embalagem visualmente.';
+    case 'photo_ai_not_found':
+      return 'A foto foi analisada, mas não foi possível identificar o produto com segurança. Tente outra imagem ou digite o nome.';
+    case 'photo_ai_error':
+      return 'A leitura visual da embalagem falhou agora. Você pode tentar outra foto ou digitar o produto.';
     default:
       return 'Não foi possível usar a câmera agora. Você pode continuar por foto, código manual ou nome do produto.';
   }
@@ -171,6 +204,44 @@ export function ProductDetectionSheetGold({
   const [detectedBarcode, setDetectedBarcode] = useState('');
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
+
+  const identifyProductFromPhoto = useCallback(async (file: File, barcodeFromPhoto?: string): Promise<ScannedProduct | null> => {
+    try {
+      const image = await fileToBase64(file);
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/vision/identify-product-photo`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          image,
+          pet_id: petId,
+          hint: hint ?? null,
+        }),
+      });
+
+      if (!res.ok) return null;
+
+      const payload = (await res.json()) as PhotoProductIdentifyResponse;
+      if (!payload.found || !payload.name?.trim()) return null;
+
+      return {
+        barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
+        name: payload.name.trim(),
+        brand: payload.brand?.trim() || undefined,
+        weight: payload.weight?.trim() || undefined,
+        manufacturer: payload.manufacturer?.trim() || undefined,
+        presentation: payload.presentation?.trim() || payload.weight?.trim() || undefined,
+        category: (payload.category && payload.category !== 'other' ? payload.category : hint) ?? payload.category ?? 'other',
+        found: true,
+      };
+    } catch {
+      return null;
+    }
+  }, [confirmed?.barcode, hint, petId]);
 
   useEffect(() => {
     setHistory(loadScanHistory(petId, hint).slice(0, 5));
@@ -502,6 +573,8 @@ export function ProductDetectionSheetGold({
     setPhotoUrl(url);
     setStep('photo-processing');
 
+    let detectedPhotoBarcode = '';
+
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
       const tempId = `pds-file-${Date.now()}`;
@@ -514,17 +587,51 @@ export function ProductDetectionSheetGold({
       try {
         const result = await scanner.scanFileV2(file, false);
         div.remove();
-        setScannerError(null);
-        await resolveDetectedBarcode(result.decodedText);
+        detectedPhotoBarcode = result.decodedText.replace(/\D/g, '');
       } catch {
         div.remove();
-        setScannerError('photo_barcode_not_found');
-        setStep('manual');
       }
     } catch {
-      setScannerError('photo_processing_error');
-      setStep('manual');
+      // Continua para leitura visual mesmo se o OCR de barcode falhar.
     }
+
+    if (detectedPhotoBarcode) {
+      setDetectedBarcode(detectedPhotoBarcode);
+      setManualBarcode(detectedPhotoBarcode);
+      const product = await identifyProductByBarcode(detectedPhotoBarcode);
+      const resolvedFromBarcode: ScannedProduct = {
+        ...product,
+        barcode: product.barcode || detectedPhotoBarcode,
+        category: product.category === 'other' && hint ? hint : product.category,
+      };
+
+      if (resolvedFromBarcode.found) {
+        setScannerError(null);
+        setFromHistory(false);
+        setConfirmed(resolvedFromBarcode);
+        setStep('confirm');
+        return;
+      }
+    }
+
+    const identifiedFromPhoto = await identifyProductFromPhoto(file, detectedPhotoBarcode || undefined);
+    if (identifiedFromPhoto) {
+      setScannerError(null);
+      setFromHistory(false);
+      setConfirmed(identifiedFromPhoto);
+      setStep('confirm');
+      return;
+    }
+
+    setScannerError(detectedPhotoBarcode ? 'photo_ai_not_found' : 'photo_barcode_not_found');
+    setManualBarcode(detectedPhotoBarcode);
+    setConfirmed(detectedPhotoBarcode ? {
+      barcode: detectedPhotoBarcode,
+      name: '',
+      category: hint ?? 'other',
+      found: false,
+    } : null);
+    setStep('manual');
   };
 
   const selectManual = (name: string) => {
@@ -880,7 +987,7 @@ export function ProductDetectionSheetGold({
       <div className="h-12 w-12 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin" />
       <div className="text-center">
         <p className="font-semibold text-gray-800">Analisando a foto...</p>
-        <p className="mt-1 text-sm text-gray-400">Procurando código de barras na imagem</p>
+          <p className="mt-1 text-sm text-gray-400">Lendo código e embalagem para identificar o produto</p>
       </div>
     </div>
   );
