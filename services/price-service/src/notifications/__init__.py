@@ -486,14 +486,13 @@ def send_medication_pushes() -> None:
 
 
 def send_care_pushes() -> None:
-    """Called every minute. Sends care pushes only when the date rule matches and
-    the current BRT time equals the tutor-configured reminder time.
+    """Called every minute. Sends care pushes only when the date rule matches.
 
     Rules:
-    - Overdue (days_left < 0): push every day at the configured time until resolved
-    - Today (days_left == 0): push at the configured time
+    - Overdue (days_left < 0): push every day at FIXED 09:00 BRT (independent of reminder_time)
+    - Today (days_left == 0): push at the configured reminder_time (or 09:00 default)
     - Advance reminder (days_left > 0): push only when days_left == alert_days_before
-      (or reminder_days_before for grooming). No generic X-day window.
+      (or reminder_days_before for grooming) at the configured reminder_time.
 
     Applies latest-by-type rule: only the most recent record per type per pet drives urgency.
     Dedup: tag includes pet_id + category + type + today_date → one push per item per day.
@@ -570,8 +569,13 @@ def send_care_pushes() -> None:
                         advance = _VACCINE_ADVANCE_DAYS
                     if days_left > 0 and days_left != advance:
                         continue
-                    if not _matches_reminder_time(now, getattr(v, "reminder_time", None)):
-                        continue
+                    # Overdue → slot fixo 09:00 BRT; due/advance → reminder_time do registro
+                    if days_left < 0:
+                        if now.hour != 9 or now.minute != 0:
+                            continue
+                    else:
+                        if not _matches_reminder_time(now, getattr(v, "reminder_time", None)):
+                            continue
                     if days_left < 0:
                         title = f"💉 {pet.name} — vacina atrasada"
                         body = f"Vacina {v.vaccine_name} venceu há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
@@ -623,8 +627,13 @@ def send_care_pushes() -> None:
                     advance = c.alert_days_before or c.reminder_days or 0
                     if days_left > 0 and days_left != advance:
                         continue
-                    if not _matches_reminder_time(now, getattr(c, "reminder_time", None)):
-                        continue
+                    # Overdue → slot fixo 09:00 BRT; due/advance → reminder_time do registro
+                    if days_left < 0:
+                        if now.hour != 9 or now.minute != 0:
+                            continue
+                    else:
+                        if not _matches_reminder_time(now, getattr(c, "reminder_time", None)):
+                            continue
                     label = parasite_type_labels.get(key) or c.product_name or key
                     if days_left < 0:
                         body = f"{label} venceu há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
@@ -674,8 +683,13 @@ def send_care_pushes() -> None:
                     advance = r.reminder_days_before or r.alert_days_before or 0
                     if days_left > 0 and days_left != advance:
                         continue
-                    if not _matches_reminder_time(now, getattr(r, "scheduled_time", None)):
-                        continue
+                    # Overdue → slot fixo 09:00 BRT; due/advance → scheduled_time do registro
+                    if days_left < 0:
+                        if now.hour != 9 or now.minute != 0:
+                            continue
+                    else:
+                        if not _matches_reminder_time(now, getattr(r, "scheduled_time", None)):
+                            continue
                     label = groom_type_labels.get(key, key)
                     if days_left < 0:
                         body = f"{label} de {pet.name} está em atraso há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
@@ -797,6 +811,200 @@ def send_monthly_docs_reminder() -> None:
             db.close()
     except Exception as e:
         logger.error(f"send_monthly_docs_reminder erro: {e}")
+
+
+def send_no_control_pushes() -> None:
+    """Weekly job — every Monday at 20:00 BRT.
+
+    For each user: find pets with NO control records in the last 90 days across
+    vaccine, parasite, and grooming domains.
+    Sends a single aggregated push + creates a pendency (type='no_control', priority=40,
+    expires_at=+7d).
+    Dedup tag: petmol-no-control-{user_id}-{ISO_week}  → one push per user per week.
+    """
+    from datetime import timezone as _tz, timedelta as _td
+
+    brt = _tz(_td(hours=-3))
+    now = datetime.now(brt)
+
+    # Only fire on Monday (weekday == 0) at 20:00 BRT
+    if now.weekday() != 0 or now.hour != 20 or now.minute != 0:
+        return
+
+    week_key = now.strftime("%Y-W%W")
+    cutoff = now.date() - _td(days=90)
+
+    subscriptions = _load_subscriptions()
+    if not subscriptions:
+        return
+
+    try:
+        db = SessionLocal()
+        try:
+            from ..pets.models import Pet
+            from ..pets.vaccine_models import VaccineRecord
+            from ..pets.parasite_models import ParasiteControlRecord
+            from ..pets.grooming_models import GroomingRecord
+            from ..user_auth.models import User
+
+            str_ids = list(subscriptions.keys())
+            users = db.query(User).filter(User.id.in_(str_ids)).all()
+            expired_ids = []
+
+            for user in users:
+                sub = subscriptions.get(str(user.id))
+                if not sub:
+                    continue
+
+                pets = db.query(Pet).filter(Pet.user_id == user.id).all()
+                if not pets:
+                    continue
+
+                inactive_pets: list[str] = []
+                for pet in pets:
+                    # Any vaccine record in last 90 days?
+                    has_vaccine = db.query(VaccineRecord).filter(
+                        VaccineRecord.pet_id == pet.id,
+                        VaccineRecord.deleted == False,
+                        VaccineRecord.applied_date >= cutoff,
+                    ).first()
+                    if has_vaccine:
+                        continue
+
+                    # Any parasite record in last 90 days?
+                    has_parasite = db.query(ParasiteControlRecord).filter(
+                        ParasiteControlRecord.pet_id == pet.id,
+                        ParasiteControlRecord.deleted == False,
+                        ParasiteControlRecord.date_applied >= cutoff,
+                    ).first()
+                    if has_parasite:
+                        continue
+
+                    # Any grooming record in last 90 days?
+                    has_grooming = db.query(GroomingRecord).filter(
+                        GroomingRecord.pet_id == pet.id,
+                        GroomingRecord.deleted == False,
+                        GroomingRecord.date >= cutoff,
+                    ).first()
+                    if has_grooming:
+                        continue
+
+                    inactive_pets.append(pet.name)
+
+                if not inactive_pets:
+                    continue
+
+                count = len(inactive_pets)
+                names = ", ".join(inactive_pets[:3]) + ("…" if count > 3 else "")
+                title = f"🐾 {names} sem registros de cuidado"
+                body = (
+                    f"{count} pet{'s' if count > 1 else ''} sem nenhum controle registrado nos últimos 90 dias. "
+                    "Que tal registrar uma vacina ou vermífugo?"
+                )
+                pend_id = f"petmol-no-control-{user.id}-{week_key}"
+
+                # Upsert pendency (survives even if push fails)
+                _upsert_pend(
+                    user_id=user.id,
+                    pet_id=None,
+                    pend_id=pend_id,
+                    type_="no_control",
+                    title=title,
+                    message=body,
+                    deep_link="/home?modal=vaccines",
+                    priority=40,
+                )
+
+                payload = {
+                    "title": title,
+                    "body": body,
+                    "icon": "/icons/icon-192x192.png",
+                    "badge": "/icons/badge-mono.png",
+                    "image": "/brand/notification-banner.png",
+                    "tag": pend_id,
+                    "data": {"url": "/home?modal=vaccines"},
+                    "requireInteraction": False,
+                    "autoCloseMs": 6000,
+                }
+                ok = _send_push(sub, payload)
+                if not ok:
+                    expired_ids.append(str(user.id))
+                else:
+                    logger.info(f"Push sem-controle enviado -> user {user.id} pets={inactive_pets}")
+
+            if expired_ids:
+                for uid in expired_ids:
+                    subscriptions.pop(uid, None)
+                _save_subscriptions(subscriptions)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"send_no_control_pushes erro: {e}")
+
+
+@router.get("/settings")
+async def get_notification_settings(
+    current_user: User = Depends(get_current_user),
+):
+    """Return the user's notification preferences."""
+    return {
+        "monthly_checkin_day": current_user.monthly_checkin_day,
+        "monthly_checkin_hour": current_user.monthly_checkin_hour,
+        "monthly_checkin_minute": current_user.monthly_checkin_minute,
+        "push_enabled": {
+            "vaccine": True,
+            "parasite": True,
+            "grooming": True,
+            "medication": True,
+            "food": True,
+        },
+    }
+
+
+class NotificationSettingsPatch(BaseModel):
+    monthly_checkin_day: Optional[int] = None
+    monthly_checkin_hour: Optional[int] = None
+    monthly_checkin_minute: Optional[int] = None
+
+
+@router.patch("/settings")
+async def patch_notification_settings(
+    body: NotificationSettingsPatch,
+    current_user: User = Depends(get_current_user),
+):
+    """Update the user's notification preferences."""
+    if body.monthly_checkin_day is not None:
+        if not (1 <= body.monthly_checkin_day <= 28):
+            raise HTTPException(status_code=422, detail="monthly_checkin_day deve estar entre 1 e 28")
+    if body.monthly_checkin_hour is not None:
+        if not (0 <= body.monthly_checkin_hour <= 23):
+            raise HTTPException(status_code=422, detail="monthly_checkin_hour deve estar entre 0 e 23")
+    if body.monthly_checkin_minute is not None:
+        if not (0 <= body.monthly_checkin_minute <= 59):
+            raise HTTPException(status_code=422, detail="monthly_checkin_minute deve estar entre 0 e 59")
+
+    from ..user_auth.models import User as UserModel
+    from ..db import get_db as _get_db
+    db = next(_get_db())
+    try:
+        db_user = db.query(UserModel).filter(UserModel.id == current_user.id).first()
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        if body.monthly_checkin_day is not None:
+            db_user.monthly_checkin_day = body.monthly_checkin_day
+        if body.monthly_checkin_hour is not None:
+            db_user.monthly_checkin_hour = body.monthly_checkin_hour
+        if body.monthly_checkin_minute is not None:
+            db_user.monthly_checkin_minute = body.monthly_checkin_minute
+        db.commit()
+        db.refresh(db_user)
+        return {
+            "monthly_checkin_day": db_user.monthly_checkin_day,
+            "monthly_checkin_hour": db_user.monthly_checkin_hour,
+            "monthly_checkin_minute": db_user.monthly_checkin_minute,
+        }
+    finally:
+        db.close()
 
 
 @router.get("/vapid-public-key")

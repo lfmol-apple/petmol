@@ -314,6 +314,7 @@ def start_push_scheduler():
             send_medication_pushes,
             send_care_pushes,
             send_monthly_docs_reminder,
+            send_no_control_pushes,
         )
 
         scheduler = BackgroundScheduler()
@@ -324,6 +325,8 @@ def start_push_scheduler():
         scheduler.add_job(send_care_pushes, "interval", minutes=1, id="care_pushes")
         # Lembrete mensal de documentos — dia 12, 18h BRT; filtro interno na função
         scheduler.add_job(send_monthly_docs_reminder, "interval", minutes=1, id="monthly_docs_reminder")
+        # Lembrete semanal pets sem controle — segunda-feira 20h BRT; filtro interno na função
+        scheduler.add_job(send_no_control_pushes, "interval", minutes=1, id="no_control_pushes")
         scheduler.start()
         logger = __import__("logging").getLogger(__name__)
         logger.info("[PETMOL] Push scheduler iniciado (verifica a cada minuto)")

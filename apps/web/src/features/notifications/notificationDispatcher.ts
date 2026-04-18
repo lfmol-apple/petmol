@@ -7,18 +7,15 @@
  * Fluxo:
  *   1. Verificar se policy está ativa
  *   2. Verificar timing (antecedência)
- *   3. Verificar cooldown em localStorage
- *   4. Decidir canais (home, central, push)
- *   5. Montar objeto NotificationPayload
- *   6. Despachar para cada canal
+ *   3. Decidir canais (home, central) — push é gerenciado inteiramente pelo backend
+ *   4. Montar objeto NotificationPayload
+ *   5. Despachar para cada canal
  */
 
 import type { CanonicalPetEvent } from '@/features/events/types';
 import type { CareInteractionPolicy, MasterInteractionRules } from '@/features/interactions/types';
 import { loadMasterInteractionRules } from '@/features/interactions/preferences';
 import { resolveCarePolicyKeyFromEvent, getCarePolicyForEvent } from '@/features/interactions/interactionEngine';
-import { resolveCanonicalActionTargetModal } from '@/features/interactions/homeModalRouting';
-import { sendPush } from './pushService';
 import { localTodayISO } from '@/lib/localDate';
 
 // ---------------------------------------------------------------------------
@@ -51,35 +48,6 @@ export interface NotificationPayload {
   priority: number;
   /** Canais em que esta notificação foi despachada */
   channels: ('home' | 'central' | 'push')[];
-}
-
-// ---------------------------------------------------------------------------
-// Cooldown — controla quando o último dispatch ocorreu por evento
-// ---------------------------------------------------------------------------
-const COOLDOWN_KEY_PREFIX = 'petmol_notif_cooldown_';
-
-function getCooldownKey(eventId: string): string {
-  return `${COOLDOWN_KEY_PREFIX}${eventId}`;
-}
-
-function isInCooldown(eventId: string, cooldownHours: number): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    const raw = localStorage.getItem(getCooldownKey(eventId));
-    if (!raw) return false;
-    const lastSent = new Date(raw).getTime();
-    const elapsed = (Date.now() - lastSent) / (1000 * 60 * 60); // horas
-    return elapsed < cooldownHours;
-  } catch {
-    return false;
-  }
-}
-
-function markCooldown(eventId: string): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(getCooldownKey(eventId), new Date().toISOString());
-  } catch { /* noop */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -167,22 +135,14 @@ export function dispatchNotification(
     if (event.diff > advance) return null;
   }
 
-  // 3. Cooldown
-  const cooldown = resolvedPolicy.cooldown_hours ?? masterRules.globalPolicy.cooldown_hours ?? 24;
-  if (isInCooldown(event.id, cooldown)) return null;
-
-  // 4. Decidir canais
+  // 3. Decidir canais — push é exclusivo do backend
   const channels: NotificationPayload['channels'] = [];
 
   const homeActive = masterRules.channels.homePanel.enabled && resolvedPolicy.showOnHome !== false;
   const centralActive = masterRules.channels.internalCenter.enabled && resolvedPolicy.showInCenter !== false;
-  const pushActive =
-    masterRules.externalChannels.pushNotifications.active &&
-    (resolvedPolicy.pushEnabled === true);
 
   if (homeActive) channels.push('home');
   if (centralActive) channels.push('central');
-  if (pushActive) channels.push('push');
 
   // Se nenhum canal ativo, não despachar
   if (channels.length === 0) return null;
@@ -207,34 +167,7 @@ export function dispatchNotification(
     channels,
   };
 
-  // 6. Despachar por canal
-  if (pushActive) {
-    sendPush({
-      id: payload.id,
-      petId: payload.petId,
-      petName: payload.petName,
-      title: payload.title,
-      body: payload.message,
-      icon: '/icons/icon-192x192.png',
-      clickUrl: buildClickUrl(destination, event),
-      tag: `petmol-${event.pet_id}-${resolveCarePolicyKeyFromEvent(event)}`,
-      preferredHour: resolvedPolicy.pushPreferredHour,
-      domain: event.domain,
-    });
-  }
-
-  // Marcar cooldown depois de despachar
-  markCooldown(event.id);
-
   return payload;
-}
-
-function buildClickUrl(destination: NotificationDestination, event: CanonicalPetEvent): string {
-  const modal = resolveCanonicalActionTargetModal(event.action_target);
-  const params = new URLSearchParams({ modal, petId: event.pet_id });
-  if (event.label) params.set('itemName', event.label);
-  if (destination === 'purchase') params.set('buy', '1');
-  return `/home?${params}`;
 }
 
 // ---------------------------------------------------------------------------
