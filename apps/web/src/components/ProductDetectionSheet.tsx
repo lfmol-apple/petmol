@@ -91,6 +91,11 @@ interface PhotoProductIdentifyResponse {
   reason?: string | null;
 }
 
+interface PhotoIdentifyOutcome {
+  product: ScannedProduct | null;
+  errorCode: 'photo_ai_not_found' | 'photo_ai_error' | null;
+}
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -205,7 +210,7 @@ export function ProductDetectionSheetGold({
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
 
-  const identifyProductFromPhoto = useCallback(async (file: File, barcodeFromPhoto?: string): Promise<ScannedProduct | null> => {
+  const identifyProductFromPhoto = useCallback(async (file: File, barcodeFromPhoto?: string): Promise<PhotoIdentifyOutcome> => {
     try {
       const image = await fileToBase64(file);
       const token = getToken();
@@ -223,23 +228,30 @@ export function ProductDetectionSheetGold({
         }),
       });
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        return { product: null, errorCode: 'photo_ai_error' };
+      }
 
       const payload = (await res.json()) as PhotoProductIdentifyResponse;
-      if (!payload.found || !payload.name?.trim()) return null;
+      if (!payload.found || !payload.name?.trim()) {
+        return { product: null, errorCode: 'photo_ai_not_found' };
+      }
 
       return {
-        barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
-        name: payload.name.trim(),
-        brand: payload.brand?.trim() || undefined,
-        weight: payload.weight?.trim() || undefined,
-        manufacturer: payload.manufacturer?.trim() || undefined,
-        presentation: payload.presentation?.trim() || payload.weight?.trim() || undefined,
-        category: (payload.category && payload.category !== 'other' ? payload.category : hint) ?? payload.category ?? 'other',
-        found: true,
+        product: {
+          barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
+          name: payload.name.trim(),
+          brand: payload.brand?.trim() || undefined,
+          weight: payload.weight?.trim() || undefined,
+          manufacturer: payload.manufacturer?.trim() || undefined,
+          presentation: payload.presentation?.trim() || payload.weight?.trim() || undefined,
+          category: (payload.category && payload.category !== 'other' ? payload.category : hint) ?? payload.category ?? 'other',
+          found: true,
+        },
+        errorCode: null,
       };
     } catch {
-      return null;
+      return { product: null, errorCode: 'photo_ai_error' };
     }
   }, [confirmed?.barcode, hint, petId]);
 
@@ -615,15 +627,15 @@ export function ProductDetectionSheetGold({
     }
 
     const identifiedFromPhoto = await identifyProductFromPhoto(file, detectedPhotoBarcode || undefined);
-    if (identifiedFromPhoto) {
+    if (identifiedFromPhoto.product) {
       setScannerError(null);
       setFromHistory(false);
-      setConfirmed(identifiedFromPhoto);
+      setConfirmed(identifiedFromPhoto.product);
       setStep('confirm');
       return;
     }
 
-    setScannerError(detectedPhotoBarcode ? 'photo_ai_not_found' : 'photo_barcode_not_found');
+    setScannerError(identifiedFromPhoto.errorCode ?? (detectedPhotoBarcode ? 'photo_ai_not_found' : 'photo_barcode_not_found'));
     setManualBarcode(detectedPhotoBarcode);
     setConfirmed(detectedPhotoBarcode ? {
       barcode: detectedPhotoBarcode,

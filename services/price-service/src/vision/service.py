@@ -55,6 +55,17 @@ class VisionService:
 
         Retorna um payload estruturado para o frontend preencher o sheet atual.
         """
+        category_hint = (hint or "other").strip().lower()
+        category_guidance = {
+            "food": "Para ração/alimento, procure marca, linha, indicação veterinária, espécie e peso da embalagem. Exemplos: Royal Canin Veterinary, Premier, Hills, Purina, Farmina, Guabi.",
+            "medication": "Para medicamento, procure nome comercial, princípio ativo, concentração, laboratório/fabricante e apresentação. Exemplos: Apoquel, Prediderm, Amoxicilina, Simparic, Otomax, Dermotrat.",
+            "antiparasite": "Para antiparasitário, procure marca comercial, faixa de peso e apresentação. Exemplos: Bravecto, NexGard, Simparica, Frontline, Revolution.",
+            "dewormer": "Para vermífugo, procure nome comercial e apresentação. Exemplos: Drontal, Milbemax, Canex, Panacur.",
+            "collar": "Para coleira, procure marca e tamanho/faixa de peso. Exemplos: Seresto, Scalibor, Foresto.",
+            "hygiene": "Para higiene, procure nome do produto, marca e volume/peso. Exemplos: shampoo, tapete higiênico, areia, lenço umedecido.",
+            "other": "Se não houver categoria clara, identifique o produto pet mais provável lendo marca, nome e apresentação.",
+        }.get(category_hint, "Se houver categoria esperada, use-a para desempatar o produto mais provável.")
+
         prompt = f"""
 Você é um especialista em identificar produtos pet por imagem de embalagem.
 
@@ -67,6 +78,7 @@ Objetivo:
 Contexto:
 - Pet ID: {pet_id}
 - Categoria esperada: {hint or 'não informada'}
+- Diretriz específica: {category_guidance}
 
 Regras:
 1. Só retorne found=true se houver evidência visual suficiente na embalagem.
@@ -74,8 +86,10 @@ Regras:
 3. Se conseguir, separe brand e name.
 4. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
 5. Se houver peso/apresentação visível, extraia em weight e presentation.
-6. Se não conseguir identificar com segurança razoável, retorne found=false.
-7. Responda APENAS JSON válido.
+6. Leia texto visível da embalagem como OCR visual: marca, linha, concentração, peso, espécie, faixa etária, indicação veterinária.
+7. Se a categoria esperada estiver informada, use isso para priorizar candidatos dessa categoria e evitar cair em other.
+8. Se não conseguir identificar com segurança razoável, retorne found=false.
+9. Responda APENAS JSON válido.
 
 Formato JSON obrigatório:
 {{
@@ -129,6 +143,14 @@ Se não encontrar:
             result["manufacturer"] = result.get("manufacturer") or result.get("brand") or None
             result["presentation"] = result.get("presentation") or result.get("weight") or None
             result["reason"] = result.get("reason") or None
+
+            if not result["found"] and result["name"] and result["confidence"] >= 0.45:
+                # Melhor esforço: se a IA trouxe nome legível com confiança moderada,
+                # vale promover a sugestão para confirmação do usuário.
+                result["found"] = True
+
+            if hint in allowed_categories and (result.get("category") == "other" or not result.get("category")):
+                result["category"] = hint
 
             logger.info(
                 "Gemini produto: found=%s category=%s confidence=%.2f name=%s",
