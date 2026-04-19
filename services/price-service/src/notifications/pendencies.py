@@ -187,6 +187,9 @@ def get_active_pendencies(db: Session, user_id: str) -> List[NotificationPendenc
     result = []
     changed = False
     for r in rows:
+        if r.type == "vaccine":
+            continue
+
         # Auto-expire
         if r.expires_at:
             exp = r.expires_at

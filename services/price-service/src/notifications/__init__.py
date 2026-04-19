@@ -35,6 +35,9 @@ def _upsert_pend(
     priority: int = 50,
 ) -> None:
     """Best-effort pendency upsert — failures are logged but never crash the scheduler."""
+    if type_ == "vaccine":
+        return
+
     try:
         from .pendencies import upsert_pendency_standalone
         upsert_pendency_standalone(

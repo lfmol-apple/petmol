@@ -1175,7 +1175,8 @@ export default function HomePage() {
           <>
             {/* Atenção agora — API pendencies (primary) or inline alerts (fallback) */}
             {(() => {
-              const topPend = pendencies[0];
+              const visiblePendencies = pendencies.filter((pendency) => pendency.type !== 'vaccine');
+              const topPend = visiblePendencies[0];
               if (topPend) {
                 const isHigh = topPend.priority >= 75;
                 return (
@@ -1211,9 +1212,9 @@ export default function HomePage() {
                         Já resolvi
                       </button>
                     </div>
-                    {pendencies.length > 1 && (
+                    {visiblePendencies.length > 1 && (
                       <p className="text-[10px] text-gray-400 text-center">
-                        +{pendencies.length - 1} {pendencies.length - 1 === 1 ? 'outro item' : 'outros itens'} pendentes
+                        +{visiblePendencies.length - 1} {visiblePendencies.length - 1 === 1 ? 'outro item' : 'outros itens'} pendentes
                       </p>
                     )}
                   </div>
@@ -1226,9 +1227,6 @@ export default function HomePage() {
               if (alertParasitesValue) {
                 label = `${currentPetName} está com antiparasitário atrasado`;
                 action = handleOpenVermifugo;
-              } else if (alertVaccinesValue) {
-                label = `${currentPetName} tem vacina em atraso`;
-                action = handleOpenVaccines;
               }
               if (!label || !action) return null;
               return (

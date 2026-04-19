@@ -5,6 +5,7 @@ PRODUCTION: All settings via ENV. No hardcoded domains.
 """
 import os
 import re
+from urllib.parse import urlsplit, urlunsplit
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional, Set
@@ -135,7 +136,32 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string."""
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        expanded: List[str] = []
+
+        for origin in origins:
+            if origin not in expanded:
+                expanded.append(origin)
+
+            try:
+                parts = urlsplit(origin)
+            except Exception:
+                continue
+
+            hostname = parts.hostname
+            if hostname not in {"localhost", "127.0.0.1"}:
+                continue
+
+            alternate_host = "127.0.0.1" if hostname == "localhost" else "localhost"
+            netloc = alternate_host
+            if parts.port is not None:
+                netloc = f"{alternate_host}:{parts.port}"
+
+            alternate_origin = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+            if alternate_origin not in expanded:
+                expanded.append(alternate_origin)
+
+        return expanded
     
     @property
     def prices_enabled_countries_set(self) -> Set[str]:
