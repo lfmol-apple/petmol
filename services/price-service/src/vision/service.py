@@ -189,6 +189,20 @@ Se a imagem for realmente ilegível:
                 visible_text
             )
 
+            if not probable_name and useful_partial:
+                species_map = {"dog": "Dog", "cat": "Cat", "other": "Pet"}
+                stage_map = {"puppy": "Puppy", "adult": "Adult", "senior": "Senior", "all": "All Ages"}
+                probable_parts = [
+                    brand,
+                    line,
+                    stage_map.get(result.get("life_stage")),
+                    species_map.get(result.get("species")),
+                    size,
+                    flavor,
+                    weight,
+                ]
+                probable_name = " ".join([str(part).strip() for part in probable_parts if part and str(part).strip()]) or None
+
             result["found"] = bool(result.get("found") or name or useful_partial)
             result["confidence"] = float(result.get("confidence") or 0.0)
             result["name"] = name

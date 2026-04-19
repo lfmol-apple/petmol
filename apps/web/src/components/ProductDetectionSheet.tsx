@@ -25,6 +25,7 @@ import {
   type ProductDetectionOrigin,
   type ProductDetectionResultType,
 } from '@/features/product-detection/resolver';
+import { buildPartialFoodName } from '@/features/product-detection/foodParser';
 import { submitLearningConfirmation, findLocalCorrection, type ScanDecisionSource } from '@/features/product-detection/learningStore';
 
 type Step =
@@ -122,6 +123,18 @@ interface PhotoIdentifyOutcome {
 }
 
 const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024;
+
+function hasUsefulProductPartial(payload: PhotoProductIdentifyResponse): boolean {
+  return Boolean(
+    payload.brand?.trim() ||
+    payload.weight?.trim() ||
+    payload.species?.trim() ||
+    payload.life_stage?.trim() ||
+    payload.line?.trim() ||
+    payload.probable_name?.trim() ||
+    payload.visible_text?.trim(),
+  );
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -315,7 +328,56 @@ export function ProductDetectionSheetGold({
       });
 
       if (!resolved) {
-        return { product: null, errorCode: 'photo_ai_not_found' };
+        if (!hasUsefulProductPartial(payload)) {
+          return { product: null, errorCode: 'photo_ai_not_found' };
+        }
+
+        const partialName = buildPartialFoodName(
+          payload.brand,
+          payload.probable_name,
+          payload.species,
+          payload.life_stage,
+          payload.weight,
+          payload.line,
+          payload.size,
+          payload.flavor,
+          payload.visible_text,
+          payload.reason,
+        ) || [
+          payload.brand?.trim(),
+          payload.line?.trim(),
+          payload.species?.trim(),
+          payload.life_stage?.trim(),
+          payload.weight?.trim(),
+        ].filter(Boolean).join(' ').trim();
+
+        if (!partialName) {
+          return { product: null, errorCode: 'photo_ai_not_found' };
+        }
+
+        const fallbackCategory = payload.category ?? hint ?? 'other';
+        return {
+          product: {
+            barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
+            name: partialName,
+            brand: payload.brand?.trim() || undefined,
+            weight: payload.weight?.trim() || undefined,
+            manufacturer: payload.manufacturer?.trim() || payload.brand?.trim() || undefined,
+            presentation: payload.presentation?.trim() || payload.weight?.trim() || undefined,
+            category: fallbackCategory,
+            found: true,
+          },
+          errorCode: null,
+          origin: 'partial_name',
+          resultType: 'partial',
+          confidence: { score: 0.58, level: 'medium' },
+          probableName: payload.probable_name?.trim() || partialName,
+          visibleText: payload.visible_text?.trim() || undefined,
+          species: payload.species?.trim() || undefined,
+          lifeStage: payload.life_stage?.trim() || undefined,
+          detectedWeight: payload.weight?.trim() || undefined,
+          detectedBrand: payload.brand?.trim() || undefined,
+        };
       }
 
       return {

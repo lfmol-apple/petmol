@@ -25,6 +25,8 @@ const KNOWN_BRANDS: string[] = [
 
 // ── Correções OCR comuns ────────────────────────────────────────────────────
 const OCR_CORRECTIONS: Array<[RegExp, string]> = [
+  [/r0yal/gi, 'Royal'],
+  [/can[l1i]n/gi, 'Canin'],
   [/g0lden/gi, 'Golden'],
   [/g[o0]lden/gi, 'Golden'],
   [/pr[e3]mi[e3]r/gi, 'Premier'],
@@ -66,10 +68,23 @@ const PORT_RULES: Array<{ re: RegExp; value: 'mini' | 'small' | 'medium' | 'larg
 
 const WEIGHT_RE = /\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i;
 
+const FOOD_LINE_RULES: Array<{ re: RegExp; value: string }> = [
+  { re: /\burinary\s*(?:s[\/\\]?\s*o|so)\b/i, value: 'Urinary S/O' },
+  { re: /\brenal\b/i, value: 'Renal' },
+  { re: /\bgastro\s*intestinal\b/i, value: 'Gastro Intestinal' },
+  { re: /\bhepatic\b/i, value: 'Hepatic' },
+  { re: /\bderm(?:a|ato)\b/i, value: 'Dermatology' },
+  { re: /\bweight\s*control\b/i, value: 'Weight Control' },
+  { re: /\bmini\s*adult\b/i, value: 'Mini Adult' },
+  { re: /\bmedium\s*adult\b/i, value: 'Medium Adult' },
+  { re: /\bmaxi\s*adult\b/i, value: 'Maxi Adult' },
+];
+
 // ── Tipos ──────────────────────────────────────────────────────────────────
 export interface FoodFields {
   brand?: string;
   brandMatchMode?: 'exact' | 'fuzzy';
+  line?: string;
   species?: 'dog' | 'cat' | 'other';
   lifeStage?: 'puppy' | 'adult' | 'senior' | 'all';
   weight?: string;
@@ -105,7 +120,14 @@ function normalizeFoodWeight(raw: string | null | undefined): string | undefined
     .replace(/(\d)\s*[gG]\b/g, '$1 g');
   const match = cleaned.match(/\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i);
   if (!match) return undefined;
-  return `${match[1].replace('.', ',')} ${match[2].toLowerCase()}`;
+  const value = Number(match[1].replace(',', '.'));
+  const unit = match[2].toLowerCase();
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  if (unit === 'g' && value >= 1000) {
+    const kg = (value / 1000).toFixed(value % 1000 === 0 ? 0 : 1).replace('.', ',');
+    return `${kg} kg`;
+  }
+  return `${match[1].replace('.', ',')} ${unit}`;
 }
 
 function levenshtein(a: string, b: string): number {
@@ -155,6 +177,13 @@ export function extractFoodFields(rawText: string): FoodFields {
 
   const brandMatch = fuzzyMatchBrandDetails(sanitized);
   const brand = brandMatch?.brand;
+  let line: string | undefined;
+  for (const { re, value } of FOOD_LINE_RULES) {
+    if (re.test(sanitized)) {
+      line = value;
+      break;
+    }
+  }
 
   let species: FoodFields['species'];
   for (const { re, value } of SPECIES_RULES) {
@@ -176,6 +205,7 @@ export function extractFoodFields(rawText: string): FoodFields {
 
   const parts: string[] = [];
   if (brand) parts.push(brand);
+  if (line) parts.push(line);
   if (lifeStage && lifeStage !== 'all') {
     parts.push(lifeStage === 'puppy' ? 'filhote' : lifeStage === 'senior' ? 'senior' : 'adulto');
   }
@@ -187,6 +217,7 @@ export function extractFoodFields(rawText: string): FoodFields {
   return {
     brand,
     brandMatchMode: brandMatch?.mode,
+    line,
     species,
     lifeStage,
     weight,
@@ -231,7 +262,7 @@ export function buildPartialFoodName(
   const resolvedBrand = brand?.trim() || extracted.brand;
   const resolvedSpecies = species?.trim() || extracted.species;
   const resolvedLifeStage = lifeStage?.trim() || extracted.lifeStage;
-  const normalizedLine = line?.trim();
+  const normalizedLine = line?.trim() || extracted.line;
   const normalizedSize = size?.trim();
   const normalizedFlavor = flavor?.trim();
   const speciesLabel = resolvedSpecies === 'dog'

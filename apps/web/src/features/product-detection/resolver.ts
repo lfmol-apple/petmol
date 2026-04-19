@@ -160,13 +160,28 @@ export function resolvePhotoProductCandidate(
   if (!name && category === 'food') {
     usedParser = true;
     origin = 'parser';
+    const parsed = extractFoodFields(
+      [
+        payload.name,
+        probableName,
+        payload.brand,
+        payload.line,
+        payload.size,
+        payload.flavor,
+        payload.visible_text,
+        payload.reason,
+        payload.weight,
+      ].filter(Boolean).join(' '),
+    );
+    fuzzyBrand = parsed.brandMatchMode === 'fuzzy';
+    weight = weight ?? parsed.weight;
     name = buildPartialFoodName(
-      brand,
+      brand ?? parsed.brand,
       probableName,
-      payload.species,
-      payload.life_stage,
-      payload.weight,
-      payload.line,
+      payload.species ?? parsed.species,
+      payload.life_stage ?? parsed.lifeStage,
+      payload.weight ?? parsed.weight,
+      payload.line ?? parsed.line,
       payload.size,
       payload.flavor,
       visibleText,
@@ -186,16 +201,33 @@ export function resolvePhotoProductCandidate(
   }
 
   if (!name && category === 'food') {
-    const fields = extractFoodFields([brand, probableName, visibleText, weight].filter(Boolean).join(' '));
+    const fields = extractFoodFields(
+      [brand, probableName, visibleText, weight, payload.reason, payload.line, payload.size, payload.flavor].filter(Boolean).join(' '),
+    );
     usedParser = true;
     origin = 'parser';
     fuzzyBrand = fields.brandMatchMode === 'fuzzy';
     weight = weight ?? fields.weight;
     const finalBrand = brand ?? fields.brand;
-    name = [finalBrand, payload.species, payload.life_stage, weight]
+    name = [finalBrand, fields.line, payload.species ?? fields.species, payload.life_stage ?? fields.lifeStage, payload.size, weight]
       .filter(Boolean)
       .join(' ')
       .trim() || undefined;
+  }
+
+  if (!name) {
+    const genericPartial = [
+      brand,
+      normalizeText(payload.line),
+      normalizeText(payload.probable_name),
+      normalizeText(payload.species),
+      normalizeText(payload.life_stage),
+      weight,
+    ].filter(Boolean).join(' ').trim();
+    if (genericPartial) {
+      name = genericPartial;
+      origin = origin === 'ia' ? origin : 'partial_name';
+    }
   }
 
   if (!name) return null;
