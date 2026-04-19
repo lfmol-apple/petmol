@@ -49,11 +49,15 @@ class IdentifyProductPhotoRequest(BaseModel):
 
 class IdentifyProductPhotoResponse(BaseModel):
     found: bool
+    product_name: Optional[str] = None
     name: Optional[str] = None
     probable_name: Optional[str] = None
     brand: Optional[str] = None
     category: Optional[str] = None
     weight: Optional[str] = None
+    weight_value: Optional[float] = None
+    weight_unit: Optional[str] = None
+    variant: Optional[str] = None
     size: Optional[str] = None
     manufacturer: Optional[str] = None
     presentation: Optional[str] = None
@@ -64,6 +68,7 @@ class IdentifyProductPhotoResponse(BaseModel):
     line: Optional[str] = None
     flavor: Optional[str] = None
     visible_text: Optional[str] = None
+    raw_text_blobs: List[str] = Field(default_factory=list)
 
 
 PHOTO_AI_TIMEOUT_SECONDS = float(os.getenv("VISION_PRODUCT_TIMEOUT_SECONDS", "22"))
@@ -203,14 +208,18 @@ async def identify_product_photo(
 
         has_name = bool((result.get("name") or "").strip())
         has_partial = bool(
+            (result.get("product_name") or "").strip() or
             (result.get("brand") or "").strip() or
             (result.get("species") or "").strip() or
             (result.get("life_stage") or "").strip() or
             (result.get("weight") or "").strip() or
+            result.get("weight_value") is not None or
+            (result.get("weight_unit") or "").strip() or
             (result.get("line") or "").strip() or
-            (result.get("size") or "").strip() or
+            (result.get("variant") or "").strip() or
             (result.get("flavor") or "").strip() or
             (result.get("probable_name") or "").strip() or
+            bool(result.get("raw_text_blobs")) or
             (result.get("visible_text") or "").strip()
         )
         return_type = "full_name" if has_name else "partial_useful" if has_partial else "empty"

@@ -3,7 +3,7 @@ import type { ResolvedProduct } from './types';
 import { API_BASE_URL } from '@/lib/api';
 import { fetchFromCosmos } from './apis/cosmos';
 import { fetchFromGlobal } from './apis/global';
-import { buildPartialFoodName, enrichFoodProduct, extractFoodFields } from './foodParser';
+import { buildFoodSearchQueries, buildPartialFoodName, enrichFoodProduct, extractFoodFields, type StructuredFoodInput } from './foodParser';
 import type { ProductCategory } from '@/lib/productScanner';
 
 export type { ResolvedProduct };
@@ -28,11 +28,15 @@ type ProductLookupResponse = {
 
 export interface ProductPhotoVisionPayload {
   found?: boolean;
+  product_name?: string | null;
   name?: string | null;
   probable_name?: string | null;
   brand?: string | null;
   category?: ProductCategory | null;
   weight?: string | null;
+  weight_value?: number | null;
+  weight_unit?: string | null;
+  variant?: string | null;
   size?: string | null;
   manufacturer?: string | null;
   presentation?: string | null;
@@ -43,9 +47,10 @@ export interface ProductPhotoVisionPayload {
   line?: string | null;
   flavor?: string | null;
   visible_text?: string | null;
+  raw_text_blobs?: string[] | null;
 }
 
-export type ProductDetectionOrigin = 'gtin' | 'ia' | 'parser' | 'partial_name' | 'manual';
+export type ProductDetectionOrigin = 'gtin' | 'ia' | 'parser' | 'fuzzy_match' | 'partial_name' | 'manual';
 export type ProductDetectionResultType = 'complete' | 'partial' | 'fallback';
 export type ProductDetectionConfidenceLevel = 'high' | 'medium' | 'low';
 
@@ -59,6 +64,24 @@ export interface ProductPhotoCandidate {
   origin: ProductDetectionOrigin;
   resultType: ProductDetectionResultType;
   confidence: ProductDetectionConfidence;
+}
+
+interface CatalogSearchApiCandidate {
+  source: string;
+  title: string;
+  brand?: string | null;
+  variant?: string | null;
+  species?: string | null;
+  pack_sizes?: Array<{ value: number; unit: string }>;
+}
+
+interface CatalogSearchApiResponse {
+  candidates?: CatalogSearchApiCandidate[];
+}
+
+interface CatalogMatchResult {
+  product: ResolvedProduct;
+  score: number;
 }
 
 const ALLOWED_CATEGORIES: ProductCategory[] = [
@@ -90,16 +113,21 @@ function normalizeCategory(category?: string | null, hint?: ProductCategory): Pr
 
 function hasUsefulVisionPayload(payload: ProductPhotoVisionPayload): boolean {
   return Boolean(
+    normalizeText(payload.product_name) ||
     normalizeText(payload.name) ||
     normalizeText(payload.probable_name) ||
     normalizeText(payload.brand) ||
     normalizeText(payload.weight) ||
+    payload.weight_value != null ||
+    normalizeText(payload.weight_unit) ||
     normalizeText(payload.species) ||
     normalizeText(payload.life_stage) ||
     normalizeText(payload.line) ||
+    normalizeText(payload.variant) ||
     normalizeText(payload.size) ||
     normalizeText(payload.flavor) ||
     normalizeText(payload.visible_text) ||
+    (payload.raw_text_blobs?.length ?? 0) > 0 ||
     payload.category,
   );
 }
@@ -122,6 +150,7 @@ function scorePhotoCandidate(args: {
   hasPayloadName: boolean;
   usedParser: boolean;
   fuzzyBrand: boolean;
+  catalogScore?: number;
   species?: string | null;
   lifeStage?: string | null;
 }): ProductDetectionConfidence {
@@ -134,82 +163,279 @@ function scorePhotoCandidate(args: {
   if (args.category === 'food' && (args.species || args.lifeStage)) score += 0.08;
   if (args.usedParser) score += 0.09;
   if (args.fuzzyBrand) score -= 0.07;
+  if (typeof args.catalogScore === 'number') score += Math.min(0.24, args.catalogScore * 0.24);
 
   const normalized = clampScore(score);
   return { score: normalized, level: toConfidenceLevel(normalized) };
 }
 
-export function resolvePhotoProductCandidate(
+function normalizeRawTextBlobs(payload: ProductPhotoVisionPayload): string[] {
+  const unique = new Set<string>();
+  for (const item of payload.raw_text_blobs ?? []) {
+    const normalized = normalizeText(item);
+    if (normalized) unique.add(normalized);
+  }
+  const visibleText = normalizeText(payload.visible_text);
+  if (visibleText) {
+    for (const chunk of visibleText.split(/\n+/)) {
+      const normalized = normalizeText(chunk);
+      if (normalized) unique.add(normalized);
+    }
+  }
+  return Array.from(unique).slice(0, 12);
+}
+
+function normalizeWeight(payload: ProductPhotoVisionPayload): string | undefined {
+  const direct = normalizeText(payload.weight);
+  if (direct) return direct;
+  const value = payload.weight_value;
+  const unit = normalizeText(payload.weight_unit)?.toLowerCase();
+  if (value == null || !unit) return undefined;
+  const normalizedValue = Number.isInteger(value) ? String(value) : String(value).replace('.', ',');
+  return `${normalizedValue} ${unit}`;
+}
+
+function toStructuredFoodInput(payload: ProductPhotoVisionPayload): StructuredFoodInput {
+  return {
+    brand: payload.brand,
+    productName: payload.product_name,
+    probableName: payload.probable_name,
+    species: payload.species,
+    lifeStage: payload.life_stage,
+    weight: normalizeWeight(payload) ?? payload.weight,
+    weightValue: payload.weight_value,
+    weightUnit: payload.weight_unit,
+    line: payload.line,
+    variant: payload.variant ?? payload.size,
+    flavor: payload.flavor,
+    size: payload.size,
+    visibleText: payload.visible_text,
+    reason: payload.reason,
+    rawTextBlobs: normalizeRawTextBlobs(payload),
+  };
+}
+
+function normalizeSpeciesToken(value?: string | null): string | undefined {
+  const normalized = normalizeText(value)?.toLowerCase();
+  if (!normalized) return undefined;
+  if (['dog', 'cao', 'cão', 'canine'].includes(normalized)) return 'dog';
+  if (['cat', 'gato', 'feline'].includes(normalized)) return 'cat';
+  if (['other', 'pet'].includes(normalized)) return 'other';
+  return normalized;
+}
+
+function normalizeLifeStageToken(value?: string | null): string | undefined {
+  const normalized = normalizeText(value)?.toLowerCase();
+  if (!normalized) return undefined;
+  if (['puppy', 'filhote', 'kitten'].includes(normalized)) return 'puppy';
+  if (['adult', 'adulto'].includes(normalized)) return 'adult';
+  if (['senior', 'sênior', 'mature'].includes(normalized)) return 'senior';
+  if (['all', 'all ages', 'todas as idades'].includes(normalized)) return 'all';
+  return normalized;
+}
+
+function composeGenericName(payload: ProductPhotoVisionPayload): string | undefined {
+  const parts = [
+    normalizeText(payload.brand),
+    normalizeText(payload.product_name),
+    normalizeText(payload.line),
+    normalizeText(payload.variant ?? payload.size),
+    normalizeText(payload.flavor),
+    normalizeWeight(payload),
+  ].filter(Boolean);
+  if (parts.length > 0) return parts.join(' ');
+  return normalizeRawTextBlobs(payload)[0]?.slice(0, 80);
+}
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter(token => token.length >= 2);
+}
+
+function formatPackSizes(packSizes?: Array<{ value: number; unit: string }>): string[] {
+  if (!packSizes?.length) return [];
+  return packSizes
+    .filter(size => Number.isFinite(size.value) && typeof size.unit === 'string')
+    .map(size => `${String(size.value).replace('.', ',')} ${size.unit.toLowerCase()}`);
+}
+
+function scoreCatalogCandidate(candidate: CatalogSearchApiCandidate, payload: ProductPhotoVisionPayload, query: string): number {
+  const queryTokens = tokenize(query);
+  const candidateText = [
+    candidate.title,
+    candidate.brand,
+    candidate.variant,
+    candidate.species,
+    ...formatPackSizes(candidate.pack_sizes),
+  ].filter(Boolean).join(' ');
+  const candidateTokens = new Set(tokenize(candidateText));
+
+  let score = 0;
+  if (queryTokens.length > 0) {
+    let overlap = 0;
+    for (const token of queryTokens) {
+      if (candidateTokens.has(token)) overlap += 1;
+    }
+    score += overlap / queryTokens.length;
+  }
+
+  const brand = normalizeText(payload.brand)?.toLowerCase();
+  const candidateBrand = normalizeText(candidate.brand)?.toLowerCase();
+  if (brand && candidateBrand && (candidateBrand.includes(brand) || brand.includes(candidateBrand))) {
+    score += 0.28;
+  }
+
+  const species = normalizeSpeciesToken(payload.species);
+  const candidateSpecies = normalizeSpeciesToken(candidate.species);
+  if (species && candidateSpecies && species === candidateSpecies) score += 0.12;
+
+  const weight = normalizeWeight(payload)?.toLowerCase();
+  if (weight && formatPackSizes(candidate.pack_sizes).some(pack => pack.toLowerCase() === weight || candidateText.toLowerCase().includes(weight))) {
+    score += 0.16;
+  }
+
+  const lifeStage = normalizeLifeStageToken(payload.life_stage);
+  const title = candidate.title.toLowerCase();
+  if (lifeStage === 'puppy' && /(filhote|puppy|kitten|junior)/.test(title)) score += 0.1;
+  if (lifeStage === 'adult' && /(adult|adulto)/.test(title)) score += 0.1;
+  if (lifeStage === 'senior' && /(senior|sênior|mature)/.test(title)) score += 0.1;
+
+  return clampScore(score);
+}
+
+async function searchInternalCatalogCandidate(
+  payload: ProductPhotoVisionPayload,
+  category: ProductCategory,
+  queries: string[],
+): Promise<CatalogMatchResult | null> {
+  const type = category === 'food' ? 'food' : 'product';
+  let bestMatch: CatalogMatchResult | null = null;
+
+  for (const query of queries.slice(0, 4)) {
+    if (!query.trim()) continue;
+    try {
+      const params = new URLSearchParams({ q: query, type, limit: '8' });
+      const response = await fetch(`${API_BASE_URL}/catalog/search/v2?${params.toString()}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(2400),
+      });
+      if (!response.ok) continue;
+      const data = (await response.json()) as CatalogSearchApiResponse;
+      for (const candidate of data.candidates ?? []) {
+        const score = scoreCatalogCandidate(candidate, payload, query);
+        if (score < 0.55) continue;
+        const packSizes = formatPackSizes(candidate.pack_sizes);
+        const weight = normalizeWeight(payload) ?? packSizes[0];
+        const resolved: ResolvedProduct = {
+          barcode: '',
+          name: candidate.title,
+          brand: normalizeText(candidate.brand) ?? normalizeText(payload.brand),
+          weight,
+          manufacturer: normalizeText(candidate.brand) ?? normalizeText(payload.brand),
+          presentation: weight,
+          category,
+          source: 'internal',
+        };
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = {
+            product: category === 'food' ? enrichFoodProduct(resolved) : resolved,
+            score,
+          };
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return bestMatch;
+}
+
+export async function resolvePhotoProductCandidate(
   payload: ProductPhotoVisionPayload,
   options?: { hint?: ProductCategory; barcode?: string },
-): ProductPhotoCandidate | null {
+): Promise<ProductPhotoCandidate | null> {
   if (!hasUsefulVisionPayload(payload)) return null;
 
   const category = normalizeCategory(payload.category, options?.hint);
   const brand = normalizeText(payload.brand);
+  const productName = normalizeText(payload.product_name);
   const probableName = normalizeText(payload.probable_name);
   const visibleText = normalizeText(payload.visible_text);
-  let weight = normalizeText(payload.weight);
+  const rawTextBlobs = normalizeRawTextBlobs(payload);
+  let weight = normalizeWeight(payload);
   const manufacturer = normalizeText(payload.manufacturer) || brand;
   const presentation = normalizeText(payload.presentation) || weight;
-  let name = normalizeText(payload.name) || probableName;
-  let origin: ProductDetectionOrigin = normalizeText(payload.name) ? 'ia' : 'partial_name';
+  let name = normalizeText(payload.name) || productName || probableName;
+  let origin: ProductDetectionOrigin = normalizeText(payload.name) ? 'ia' : productName ? 'ia' : 'partial_name';
   let usedParser = false;
   let fuzzyBrand = false;
+  const structuredFoodInput = toStructuredFoodInput(payload);
 
-  if (!name && category === 'food') {
+  if (category === 'food') {
     usedParser = true;
-    origin = 'parser';
-    const parsed = extractFoodFields(
-      [
-        payload.name,
-        probableName,
-        payload.brand,
-        payload.line,
-        payload.size,
-        payload.flavor,
-        payload.visible_text,
-        payload.reason,
-        payload.weight,
-      ].filter(Boolean).join(' '),
-    );
+    const parsed = extractFoodFields(structuredFoodInput);
     fuzzyBrand = parsed.brandMatchMode === 'fuzzy';
     weight = weight ?? parsed.weight;
-    name = buildPartialFoodName(
-      brand ?? parsed.brand,
-      probableName,
-      payload.species ?? parsed.species,
-      payload.life_stage ?? parsed.lifeStage,
-      payload.weight ?? parsed.weight,
-      payload.line ?? parsed.line,
-      payload.size,
-      payload.flavor,
-      visibleText,
-      payload.reason,
-    ) ?? undefined;
+    name = buildPartialFoodName(structuredFoodInput) ?? name;
+
+    const queries = buildFoodSearchQueries(structuredFoodInput);
+    if (queries.length > 0) {
+      const catalogMatch = await searchInternalCatalogCandidate(payload, category, queries);
+      if (catalogMatch) {
+        const confidence = scorePhotoCandidate({
+          payload,
+          category,
+          brand: catalogMatch.product.brand,
+          weight: catalogMatch.product.weight,
+          hasPayloadName: Boolean(normalizeText(payload.name) || productName),
+          usedParser,
+          fuzzyBrand,
+          catalogScore: catalogMatch.score,
+          species: payload.species,
+          lifeStage: payload.life_stage,
+        });
+        return {
+          product: {
+            ...catalogMatch.product,
+            barcode: options?.barcode ?? '',
+          },
+          origin: 'fuzzy_match',
+          resultType: confidence.score >= 0.84 ? 'complete' : 'partial',
+          confidence,
+        };
+      }
+    }
   }
 
   if (!name && category !== 'food') {
     const reasonHint = normalizeText(payload.reason)?.split('.')[0]?.trim();
-    if (brand) {
-      name = [brand, normalizeText(payload.line), weight].filter(Boolean).join(' ');
+    const genericName = composeGenericName(payload);
+    if (genericName) {
+      name = genericName;
+    } else if (brand) {
+      name = [brand, normalizeText(payload.line), normalizeText(payload.variant ?? payload.size), weight].filter(Boolean).join(' ');
     } else if (reasonHint && reasonHint.length > 4) {
       name = reasonHint.slice(0, 80);
-    } else if (visibleText) {
-      name = visibleText.split('\n')[0]?.trim().slice(0, 80) || undefined;
+    } else if (visibleText || rawTextBlobs.length > 0) {
+      name = rawTextBlobs[0]?.slice(0, 80) || visibleText?.split('\n')[0]?.trim().slice(0, 80) || undefined;
     }
   }
 
   if (!name && category === 'food') {
-    const fields = extractFoodFields(
-      [brand, probableName, visibleText, weight, payload.reason, payload.line, payload.size, payload.flavor].filter(Boolean).join(' '),
-    );
+    const fields = extractFoodFields(structuredFoodInput);
     usedParser = true;
     origin = 'parser';
     fuzzyBrand = fields.brandMatchMode === 'fuzzy';
     weight = weight ?? fields.weight;
     const finalBrand = brand ?? fields.brand;
-    name = [finalBrand, fields.line, payload.species ?? fields.species, payload.life_stage ?? fields.lifeStage, payload.size, weight]
+    name = [finalBrand, fields.productName, fields.line, fields.variant, payload.species ?? fields.species, payload.life_stage ?? fields.lifeStage, weight]
       .filter(Boolean)
       .join(' ')
       .trim() || undefined;
@@ -218,7 +444,9 @@ export function resolvePhotoProductCandidate(
   if (!name) {
     const genericPartial = [
       brand,
+      normalizeText(payload.product_name),
       normalizeText(payload.line),
+      normalizeText(payload.variant),
       normalizeText(payload.probable_name),
       normalizeText(payload.species),
       normalizeText(payload.life_stage),
@@ -248,7 +476,7 @@ export function resolvePhotoProductCandidate(
     category,
     brand: enriched.brand,
     weight: enriched.weight,
-    hasPayloadName: Boolean(normalizeText(payload.name)),
+    hasPayloadName: Boolean(normalizeText(payload.name) || productName),
     usedParser,
     fuzzyBrand,
     species: payload.species,

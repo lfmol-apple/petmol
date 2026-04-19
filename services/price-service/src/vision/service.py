@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 import json
 import logging
 from datetime import datetime
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,141 @@ class VisionService:
         text = str(value).strip()
         return text or None
 
+    @staticmethod
+    def _normalize_weight_value(value: Any) -> Optional[float]:
+        if value is None or value == "":
+            return None
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            return numeric if numeric > 0 else None
+        text = str(value).strip().replace(",", ".")
+        try:
+            numeric = float(text)
+            return numeric if numeric > 0 else None
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _normalize_weight_unit(value: Any) -> Optional[str]:
+        text = VisionService._normalize_optional_str(value)
+        if not text:
+            return None
+        normalized = text.lower().replace("grams", "g").replace("gram", "g").replace("kgs", "kg")
+        return normalized if normalized in {"g", "kg"} else None
+
+    @staticmethod
+    def _compose_weight(weight_value: Optional[float], weight_unit: Optional[str]) -> Optional[str]:
+        if weight_value is None or not weight_unit:
+            return None
+        if float(weight_value).is_integer():
+            value_text = str(int(weight_value))
+        else:
+            value_text = f"{weight_value:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        return f"{value_text} {weight_unit}"
+
+    @staticmethod
+    def _extract_weight_parts(*values: Any) -> tuple[Optional[float], Optional[str]]:
+        for value in values:
+            text = VisionService._normalize_optional_str(value)
+            if not text:
+                continue
+            match = re.search(r"(\d+(?:[\.,]\d+)?)\s*(kg|g)\b", text, re.IGNORECASE)
+            if not match:
+                continue
+            numeric = VisionService._normalize_weight_value(match.group(1))
+            unit = VisionService._normalize_weight_unit(match.group(2))
+            if numeric is not None and unit:
+                return numeric, unit
+        return None, None
+
+    @staticmethod
+    def _normalize_text_blobs(value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = value if isinstance(value, list) else [value]
+        normalized: List[str] = []
+        for item in raw_items:
+            if item is None:
+                continue
+            if isinstance(item, list):
+                raw_items.extend(item)
+                continue
+            text = str(item).strip()
+            if not text:
+                continue
+            text = re.sub(r"\s+", " ", text)
+            if text not in normalized:
+                normalized.append(text)
+        return normalized[:12]
+
+    @staticmethod
+    def _normalize_species(value: Any) -> Optional[str]:
+        text = VisionService._normalize_optional_str(value)
+        if not text:
+            return None
+        normalized = text.lower()
+        aliases = {
+            "dog": "dog",
+            "dogs": "dog",
+            "cao": "dog",
+            "cão": "dog",
+            "canine": "dog",
+            "cat": "cat",
+            "cats": "cat",
+            "gato": "cat",
+            "gatos": "cat",
+            "feline": "cat",
+            "other": "other",
+            "pet": "other",
+        }
+        return aliases.get(normalized)
+
+    @staticmethod
+    def _normalize_life_stage(value: Any) -> Optional[str]:
+        text = VisionService._normalize_optional_str(value)
+        if not text:
+            return None
+        normalized = text.lower()
+        aliases = {
+            "puppy": "puppy",
+            "kitten": "puppy",
+            "filhote": "puppy",
+            "adult": "adult",
+            "adulto": "adult",
+            "senior": "senior",
+            "sênior": "senior",
+            "all": "all",
+            "all ages": "all",
+            "todas as idades": "all",
+        }
+        return aliases.get(normalized)
+
+    @staticmethod
+    def _build_probable_name(
+        brand: Optional[str],
+        product_name: Optional[str],
+        line: Optional[str],
+        variant: Optional[str],
+        flavor: Optional[str],
+        species: Optional[str],
+        life_stage: Optional[str],
+        weight: Optional[str],
+    ) -> Optional[str]:
+        species_map = {"dog": "Cão", "cat": "Gato", "other": "Pet"}
+        stage_map = {"puppy": "Filhote", "adult": "Adulto", "senior": "Sênior", "all": "Todas as idades"}
+        parts = [
+            brand,
+            product_name,
+            line,
+            variant,
+            flavor,
+            species_map.get(species),
+            stage_map.get(life_stage),
+            weight,
+        ]
+        compact = [str(part).strip() for part in parts if part and str(part).strip()]
+        return " ".join(compact) or None
+
     async def identify_product_from_image(
         self,
         image_bytes: bytes,
@@ -64,7 +200,7 @@ class VisionService:
         """
         category_hint = (hint or "other").strip().lower()
         category_guidance = {
-            "food": "Para ração/alimento: (1) leia a MARCA exata na embalagem (ex: Royal Canin, Premier, Hills, Purina, Farmina, Guabi); (2) leia a LINHA específica do produto — geralmente abaixo da marca (ex: Veterinary Diet, Urinary, Digestive, Starter, Light, Indoor); (3) extraia espécie (cão/gato), faixa etária (filhote/adulto/sênior) e peso da embalagem. O name DEVE ser marca + linha, ex: 'Royal Canin Veterinary Diet Urinary Small Dog 1,5kg'.",
+            "food": "Para ração/alimento: trate a embalagem como CAMPOS VISUAIS. Extraia marca, nome principal do produto, linha, variante, sabor, espécie, faixa etária e peso separadamente. Não dependa da ordem linear do texto.",
             "medication": "Para medicamento, procure nome comercial, princípio ativo, concentração, laboratório/fabricante e apresentação. Exemplos: Apoquel, Prediderm, Amoxicilina, Simparic, Otomax, Dermotrat.",
             "antiparasite": "Para antiparasitário, procure marca comercial, faixa de peso e apresentação. Exemplos: Bravecto, NexGard, Simparica, Frontline, Revolution.",
             "dewormer": "Para vermífugo, procure nome comercial e apresentação. Exemplos: Drontal, Milbemax, Canex, Panacur.",
@@ -77,8 +213,8 @@ class VisionService:
 Você é um especialista em identificar produtos pet por imagem de embalagem.
 
 Objetivo:
-- Ler visualmente a foto da embalagem.
-- Identificar o produto mais provável.
+- Ler visualmente a foto da embalagem como HIERARQUIA VISUAL + CAMPOS ESTRUTURADOS.
+- Extrair campos utilizáveis mesmo quando o nome completo não estiver legível.
 - Priorizar produtos pet reais, especialmente ração, antipulgas, vermífugo, coleira, medicamento e higiene.
 - Se a imagem estiver ambígua ou ilegível, diga que não encontrou.
 
@@ -88,36 +224,34 @@ Contexto:
 - Diretriz específica: {category_guidance}
 
 Regras:
-1. PRIORIDADE MÁXIMA: retorne um candidato utilizável sempre que possível. Se conseguir ler qualquer combinação de marca + espécie + fase + peso, isso já é suficiente — preencha os campos que sabe.
-2. NÃO exija nome completo. Quando não tiver certeza do nome final, use probable_name para o melhor palpite e mantenha name como null se necessário.
-3. Use nomes comerciais reais, por exemplo: "Royal Canin Veterinary Diet Urinary Small Dog 1,5kg", "Golden Adulto Frango 15kg".
-4. Separe brand (ex: "Royal Canin") de name (nome completo incluindo a linha).
+1. PRIORIDADE MÁXIMA: retorne um candidato utilizável sempre que possível. Se conseguir ler qualquer combinação de marca + espécie + fase + peso + nome parcial, isso já é suficiente.
+2. NÃO trate a embalagem como string linear. Pense em campos independentes: marca, nome principal, linha, variante, sabor, espécie, fase e peso.
+3. NÃO priorize `name` como saída principal. O campo principal é `product_name`.
+4. Para ração, `product_name` deve refletir apenas o nome principal visível do produto; `line`, `variant`, `flavor`, `species`, `life_stage` e peso devem ir separados.
 5. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
-6. Extraia peso em weight (ex: "15 kg", "1,5 kg", "400 g") e apresentação em presentation (ex: "Saco 15kg").
-7. Leia texto visível da embalagem como OCR visual: marca, linha do produto, concentração, peso, espécie, faixa etária, indicação veterinária, sabor.
+6. Extraia o peso separadamente em `weight_value` e `weight_unit`.
+7. `raw_text_blobs` deve ser uma lista de blocos curtos de texto visível relevantes, em qualquer ordem.
 8. Se a categoria esperada estiver informada, use isso para priorizar candidatos e evitar cair em other.
 9. Para medication: retorne nome comercial OU princípio ativo + concentração se legível.
-10. Só retorne found=false E todos os campos null quando a imagem estiver realmente ilegível ou sem embalagem.
+10. Só retorne found=false e todos os campos relevantes null/vazios quando a imagem estiver realmente ilegível ou sem embalagem.
 11. Responda APENAS JSON válido, sem texto extra.
 
 Formato JSON obrigatório:
 {{
   "found": true,
-  "name": "Nome completo do produto",
-  "probable_name": "Melhor palpite quando o nome completo não estiver claro",
   "brand": "Marca",
+    "product_name": "Nome principal visível do produto",
   "category": "food",
-  "weight": "15 kg",
-  "size": "Porte/tamanho (ex: Mini, Small Breed, Raças Pequenas)",
-  "manufacturer": "Fabricante",
-  "presentation": "Saco 15 kg",
   "species": "dog",
   "life_stage": "adult",
-  "line": "Linha específica (ex: Veterinary Diet, Natural)",
+    "weight_value": 15,
+    "weight_unit": "kg",
+    "variant": "Raças Pequenas",
   "flavor": "Sabor (ex: Frango e Arroz)",
-  "visible_text": "Texto visível da embalagem (OCR visual resumido)",
+    "line": "Linha específica (ex: Veterinary Diet, Natural)",
+    "raw_text_blobs": ["Royal Canin", "Mini Adult", "Cães Adultos", "1,5 kg"],
   "confidence": 0.92,
-  "reason": "Resumo curto do que foi lido na embalagem"
+    "reason": "Resumo curto do que foi lido na embalagem"
 }}
 
 Valores válidos para species: "dog", "cat", "other", null
@@ -127,19 +261,17 @@ Se não souber um campo, use null. NÃO invente.
 Se a imagem for realmente ilegível:
 {{
   "found": false,
-  "name": null,
-  "probable_name": null,
   "brand": null,
+    "product_name": null,
   "category": null,
-  "weight": null,
-  "size": null,
-  "manufacturer": null,
-  "presentation": null,
-  "species": null,
-  "life_stage": null,
+    "species": null,
+    "life_stage": null,
+    "weight_value": null,
+    "weight_unit": null,
+    "variant": null,
+    "flavor": null,
   "line": null,
-  "flavor": null,
-  "visible_text": null,
+    "raw_text_blobs": [],
   "confidence": 0.0,
   "reason": "Imagem ilegível ou sem embalagem identificável"
 }}
@@ -165,73 +297,91 @@ Se a imagem for realmente ilegível:
             if category not in allowed_categories:
                 result["category"] = hint if hint in allowed_categories else "other"
 
-            name = self._normalize_optional_str(result.get("name"))
-            probable_name = self._normalize_optional_str(result.get("probable_name"))
             brand = self._normalize_optional_str(result.get("brand"))
-            weight = self._normalize_optional_str(result.get("weight"))
-            visible_text = self._normalize_optional_str(result.get("visible_text"))
+            product_name = self._normalize_optional_str(result.get("product_name"))
             line = self._normalize_optional_str(result.get("line"))
+            variant = self._normalize_optional_str(result.get("variant"))
             flavor = self._normalize_optional_str(result.get("flavor"))
-            size = self._normalize_optional_str(result.get("size"))
+            raw_text_blobs = self._normalize_text_blobs(result.get("raw_text_blobs"))
+            visible_text = self._normalize_optional_str(result.get("visible_text"))
+            if visible_text and visible_text not in raw_text_blobs:
+                raw_text_blobs.append(visible_text)
+            raw_text_blobs = raw_text_blobs[:12]
+
+            species = self._normalize_species(result.get("species"))
+            life_stage = self._normalize_life_stage(result.get("life_stage"))
+
+            weight_value = self._normalize_weight_value(result.get("weight_value"))
+            weight_unit = self._normalize_weight_unit(result.get("weight_unit"))
+            legacy_weight_value, legacy_weight_unit = self._extract_weight_parts(
+                result.get("weight"),
+                result.get("presentation"),
+                result.get("visible_text"),
+                raw_text_blobs,
+            )
+            if weight_value is None:
+                weight_value = legacy_weight_value
+            if not weight_unit:
+                weight_unit = legacy_weight_unit
+            weight = self._compose_weight(weight_value, weight_unit) or self._normalize_optional_str(result.get("weight"))
+
             manufacturer = self._normalize_optional_str(result.get("manufacturer"))
             presentation = self._normalize_optional_str(result.get("presentation"))
             reason = self._normalize_optional_str(result.get("reason"))
+            name = self._normalize_optional_str(result.get("name"))
+            probable_name = self._normalize_optional_str(result.get("probable_name"))
 
             useful_partial = bool(
                 brand or
-                result.get("species") or
-                result.get("life_stage") or
+                product_name or
+                species or
+                life_stage or
                 weight or
                 line or
-                size or
+                variant or
                 flavor or
-                probable_name or
-                visible_text
+                raw_text_blobs
             )
 
             if not probable_name and useful_partial:
-                species_map = {"dog": "Dog", "cat": "Cat", "other": "Pet"}
-                stage_map = {"puppy": "Puppy", "adult": "Adult", "senior": "Senior", "all": "All Ages"}
-                probable_parts = [
-                    brand,
-                    line,
-                    stage_map.get(result.get("life_stage")),
-                    species_map.get(result.get("species")),
-                    size,
-                    flavor,
-                    weight,
-                ]
-                probable_name = " ".join([str(part).strip() for part in probable_parts if part and str(part).strip()]) or None
+                probable_name = self._build_probable_name(
+                    brand=brand,
+                    product_name=product_name,
+                    line=line,
+                    variant=variant,
+                    flavor=flavor,
+                    species=species,
+                    life_stage=life_stage,
+                    weight=weight,
+                )
 
-            result["found"] = bool(result.get("found") or name or useful_partial)
+            result["found"] = bool(result.get("found") or product_name or name or useful_partial)
             result["confidence"] = float(result.get("confidence") or 0.0)
+            result["product_name"] = product_name
             result["name"] = name
             result["probable_name"] = probable_name
             result["brand"] = brand
             result["weight"] = weight
-            result["size"] = size
-            result["visible_text"] = visible_text
+            result["weight_value"] = weight_value
+            result["weight_unit"] = weight_unit
+            result["variant"] = variant
+            result["visible_text"] = "\n".join(raw_text_blobs) if raw_text_blobs else visible_text
+            result["raw_text_blobs"] = raw_text_blobs
+            result["size"] = variant
             result["manufacturer"] = manufacturer or brand or None
             result["presentation"] = presentation or weight or None
             result["reason"] = reason
 
-            valid_species = {"dog", "cat", "other"}
-            species = result.get("species")
-            result["species"] = species if species in valid_species else None
-
-            valid_stages = {"puppy", "adult", "senior", "all"}
-            life_stage = result.get("life_stage")
-            result["life_stage"] = life_stage if life_stage in valid_stages else None
+            result["species"] = species
+            result["life_stage"] = life_stage
 
             result["line"] = line
             result["flavor"] = flavor
 
-            if not result["name"] and result["probable_name"] and result["confidence"] >= 0.8:
-                # Quando a confiança está alta, promovemos probable_name para name
-                # para facilitar o preenchimento automático no app.
+            if not result["name"] and result["probable_name"] and result["confidence"] >= 0.82:
                 result["name"] = result["probable_name"]
 
-            if not result["confidence"] and (result["name"] or useful_partial):
+            if not result["confidence"] and (result["product_name"] or result["name"] or useful_partial):
                 result["confidence"] = 0.65
 
             if hint in allowed_categories and (result.get("category") == "other" or not result.get("category")):
@@ -239,27 +389,33 @@ Se a imagem for realmente ilegível:
 
             return_type = "complete" if result.get("name") else "partial" if useful_partial else "empty"
             logger.info(
-                "Gemini produto return_type=%s found=%s category=%s confidence=%.2f brand=%s",
+                "Gemini produto return_type=%s found=%s category=%s confidence=%.2f brand=%s product_name=%s",
                 return_type,
                 bool(result["found"]),
                 result.get("category"),
                 result["confidence"],
                 result.get("brand"),
+                result.get("product_name"),
             )
             return result
         except json.JSONDecodeError as e:
             logger.warning("Gemini produto return_type=empty reason=json_parse_error detail=%s", e)
             return {
                 "found": False,
+                "product_name": None,
                 "name": None,
                 "probable_name": None,
                 "brand": None,
                 "category": hint or "other",
                 "weight": None,
+                "weight_value": None,
+                "weight_unit": None,
+                "variant": None,
                 "size": None,
                 "manufacturer": None,
                 "presentation": None,
                 "visible_text": None,
+                "raw_text_blobs": [],
                 "species": None,
                 "life_stage": None,
                 "line": None,
@@ -273,15 +429,20 @@ Se a imagem for realmente ilegível:
                 logger.warning("Gemini produto return_type=timeout pet_id=%s detail=%s", pet_id, err_str)
                 return {
                     "found": False,
+                    "product_name": None,
                     "name": None,
                     "probable_name": None,
                     "brand": None,
                     "category": hint or "other",
                     "weight": None,
+                    "weight_value": None,
+                    "weight_unit": None,
+                    "variant": None,
                     "size": None,
                     "manufacturer": None,
                     "presentation": None,
                     "visible_text": None,
+                    "raw_text_blobs": [],
                     "species": None,
                     "life_stage": None,
                     "line": None,

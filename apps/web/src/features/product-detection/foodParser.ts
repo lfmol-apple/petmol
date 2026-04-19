@@ -84,17 +84,41 @@ const FOOD_LINE_RULES: Array<{ re: RegExp; value: string }> = [
 export interface FoodFields {
   brand?: string;
   brandMatchMode?: 'exact' | 'fuzzy';
+  productName?: string;
   line?: string;
+  variant?: string;
+  flavor?: string;
   species?: 'dog' | 'cat' | 'other';
   lifeStage?: 'puppy' | 'adult' | 'senior' | 'all';
   weight?: string;
+  weightValue?: number;
+  weightUnit?: 'kg' | 'g';
   port?: 'mini' | 'small' | 'medium' | 'large' | 'giant';
+  rawTextBlobs: string[];
   searchQuery: string;
 }
 
 export interface BrandMatch {
   brand: string;
   mode: 'exact' | 'fuzzy';
+}
+
+export interface StructuredFoodInput {
+  brand?: string | null;
+  productName?: string | null;
+  probableName?: string | null;
+  species?: string | null;
+  lifeStage?: string | null;
+  weight?: string | null;
+  weightValue?: number | null;
+  weightUnit?: string | null;
+  line?: string | null;
+  variant?: string | null;
+  flavor?: string | null;
+  size?: string | null;
+  visibleText?: string | null;
+  reason?: string | null;
+  rawTextBlobs?: Array<string | null | undefined> | null;
 }
 
 // ── Utilitários ────────────────────────────────────────────────────────────
@@ -110,6 +134,152 @@ function applyOcr(text: string): string {
 
 function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function compactParts(parts: Array<string | null | undefined>): string[] {
+  const unique = new Set<string>();
+  for (const part of parts) {
+    const text = typeof part === 'string' ? normalizeWhitespace(part) : '';
+    if (text) unique.add(text);
+  }
+  return Array.from(unique);
+}
+
+function normalizeSpecies(value?: string | null): FoodFields['species'] {
+  if (!value) return undefined;
+  const normalized = norm(value);
+  if (/\b(dog|cao|caoes|caes|canine|canino)\b/.test(normalized)) return 'dog';
+  if (/\b(cat|gato|gatos|feline|felino)\b/.test(normalized)) return 'cat';
+  if (/\b(other|pet|outro)\b/.test(normalized)) return 'other';
+  return undefined;
+}
+
+function normalizeLifeStage(value?: string | null): FoodFields['lifeStage'] {
+  if (!value) return undefined;
+  const normalized = norm(value);
+  if (/\b(filhote|puppy|puppies|kitten|junior)\b/.test(normalized)) return 'puppy';
+  if (/\b(adult|adulto)\b/.test(normalized)) return 'adult';
+  if (/\b(senior|s[eê]nior|mature|idos)\b/.test(normalized)) return 'senior';
+  if (/\b(all|all ages|all life|todas as idades|todas as fases)\b/.test(normalized)) return 'all';
+  return undefined;
+}
+
+function normalizeWeightUnit(value?: string | null): 'kg' | 'g' | undefined {
+  if (!value) return undefined;
+  const normalized = norm(value);
+  if (normalized === 'kg' || normalized === 'kgs') return 'kg';
+  if (normalized === 'g' || normalized === 'gram' || normalized === 'grams') return 'g';
+  return undefined;
+}
+
+function buildStructuredWeight(weightValue?: number | null, weightUnit?: string | null): string | undefined {
+  const numeric = typeof weightValue === 'number' && Number.isFinite(weightValue) && weightValue > 0
+    ? weightValue
+    : undefined;
+  const unit = normalizeWeightUnit(weightUnit);
+  if (!numeric || !unit) return undefined;
+  if (Number.isInteger(numeric)) return `${numeric} ${unit}`;
+  return `${String(numeric).replace('.', ',')} ${unit}`;
+}
+
+function splitVisibleText(text?: string | null): string[] {
+  if (!text) return [];
+  return text
+    .split(/[\n|•]+/)
+    .map(chunk => normalizeWhitespace(chunk))
+    .filter(Boolean);
+}
+
+function getStructuredBlobs(input: StructuredFoodInput): string[] {
+  return compactParts([
+    input.brand,
+    input.productName,
+    input.probableName,
+    input.line,
+    input.variant,
+    input.flavor,
+    input.size,
+    input.visibleText,
+    input.reason,
+    buildStructuredWeight(input.weightValue, input.weightUnit),
+    input.weight,
+    ...(input.rawTextBlobs ?? []),
+    ...splitVisibleText(input.visibleText),
+  ]);
+}
+
+function toStructuredInput(rawInput: string | StructuredFoodInput): StructuredFoodInput {
+  if (typeof rawInput === 'string') {
+    return {
+      visibleText: rawInput,
+      rawTextBlobs: splitVisibleText(rawInput),
+    };
+  }
+  return rawInput;
+}
+
+function extractWeightFromBlobs(blobs: string[]): { weight?: string; weightValue?: number; weightUnit?: 'kg' | 'g' } {
+  for (const blob of blobs) {
+    const normalized = normalizeFoodWeight(blob);
+    if (!normalized) continue;
+    const match = normalized.match(/\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i);
+    if (!match) continue;
+    return {
+      weight: normalized,
+      weightValue: Number(match[1].replace(',', '.')),
+      weightUnit: match[2].toLowerCase() as 'kg' | 'g',
+    };
+  }
+  return {};
+}
+
+function resolveFlavor(blobs: string[]): string | undefined {
+  const patterns = [
+    /\b(frango(?:\s+e\s+arroz)?)\b/i,
+    /\b(salmao|salm[aã]o)\b/i,
+    /\b(cordeiro)\b/i,
+    /\b(frutas?)\b/i,
+    /\b(carne)\b/i,
+    /\b(peixe)\b/i,
+  ];
+  for (const blob of blobs) {
+    for (const pattern of patterns) {
+      const match = blob.match(pattern);
+      if (match?.[1]) return normalizeWhitespace(match[1]);
+    }
+  }
+  return undefined;
+}
+
+function buildSearchParts(fields: Omit<FoodFields, 'searchQuery'>): string[] {
+  const lifeStageLabel = fields.lifeStage === 'puppy'
+    ? 'filhote'
+    : fields.lifeStage === 'senior'
+      ? 'senior'
+      : fields.lifeStage === 'adult'
+        ? 'adulto'
+        : fields.lifeStage === 'all'
+          ? 'todas as idades'
+          : undefined;
+  const speciesLabel = fields.species === 'dog'
+    ? 'cão'
+    : fields.species === 'cat'
+      ? 'gato'
+      : fields.species === 'other'
+        ? 'pet'
+        : undefined;
+
+  return compactParts([
+    fields.brand,
+    fields.productName,
+    fields.line,
+    fields.variant,
+    fields.flavor,
+    lifeStageLabel,
+    speciesLabel,
+    fields.port,
+    fields.weight,
+  ]);
 }
 
 function normalizeFoodWeight(raw: string | null | undefined): string | undefined {
@@ -171,59 +341,110 @@ export function fuzzyMatchBrand(text: string): string | undefined {
 }
 
 // ── Extração principal ─────────────────────────────────────────────────────
-export function extractFoodFields(rawText: string): FoodFields {
-  const corrected = applyOcr(rawText);
-  const sanitized = normalizeWhitespace(corrected);
+export function extractFoodFields(rawInput: string | StructuredFoodInput): FoodFields {
+  const input = toStructuredInput(rawInput);
+  const rawTextBlobs = getStructuredBlobs(input).map(blob => applyOcr(blob));
+  const sanitized = normalizeWhitespace(rawTextBlobs.join(' '));
 
-  const brandMatch = fuzzyMatchBrandDetails(sanitized);
+  const brandMatch = input.brand?.trim()
+    ? { brand: normalizeWhitespace(input.brand), mode: 'exact' as const }
+    : fuzzyMatchBrandDetails(sanitized);
   const brand = brandMatch?.brand;
+  const productName = compactParts([input.productName, input.probableName])[0];
   let line: string | undefined;
-  for (const { re, value } of FOOD_LINE_RULES) {
-    if (re.test(sanitized)) {
-      line = value;
-      break;
+  if (input.line?.trim()) {
+    line = normalizeWhitespace(input.line);
+  } else {
+    for (const blob of rawTextBlobs) {
+      for (const { re, value } of FOOD_LINE_RULES) {
+        if (re.test(blob)) {
+          line = value;
+          break;
+        }
+      }
+      if (line) break;
     }
   }
 
-  let species: FoodFields['species'];
-  for (const { re, value } of SPECIES_RULES) {
-    if (re.test(sanitized)) { species = value; break; }
+  const variant = compactParts([input.variant, input.size])[0];
+  const flavor = compactParts([input.flavor])[0] ?? resolveFlavor(rawTextBlobs);
+
+  let species: FoodFields['species'] = normalizeSpecies(input.species);
+  if (!species) {
+    for (const { re, value } of SPECIES_RULES) {
+      if (re.test(sanitized)) { species = value; break; }
+    }
   }
 
-  let lifeStage: FoodFields['lifeStage'];
-  for (const { re, value } of LIFE_STAGE_RULES) {
-    if (re.test(sanitized)) { lifeStage = value; break; }
+  let lifeStage: FoodFields['lifeStage'] = normalizeLifeStage(input.lifeStage);
+  if (!lifeStage) {
+    for (const { re, value } of LIFE_STAGE_RULES) {
+      if (re.test(sanitized)) { lifeStage = value; break; }
+    }
   }
 
-  const wm = sanitized.match(WEIGHT_RE);
-  const weight = normalizeFoodWeight(wm ? `${wm[1]} ${wm[2]}` : undefined);
+  const structuredWeight = normalizeFoodWeight(input.weight) ?? buildStructuredWeight(input.weightValue, input.weightUnit);
+  const blobWeight = extractWeightFromBlobs(rawTextBlobs);
+  const weight = structuredWeight ?? blobWeight.weight;
+  const weightValue = structuredWeight
+    ? Number(structuredWeight.match(WEIGHT_RE)?.[1]?.replace(',', '.'))
+    : blobWeight.weightValue;
+  const weightUnit = structuredWeight
+    ? normalizeWeightUnit(structuredWeight.match(WEIGHT_RE)?.[2])
+    : blobWeight.weightUnit;
 
   let port: FoodFields['port'];
   for (const { re, value } of PORT_RULES) {
     if (re.test(sanitized)) { port = value; break; }
   }
 
-  const parts: string[] = [];
-  if (brand) parts.push(brand);
-  if (line) parts.push(line);
-  if (lifeStage && lifeStage !== 'all') {
-    parts.push(lifeStage === 'puppy' ? 'filhote' : lifeStage === 'senior' ? 'senior' : 'adulto');
-  }
-  if (species) parts.push(species === 'dog' ? 'cão' : 'gato');
-  if (port) parts.push(port);
-  if (weight) parts.push(weight);
-  if (parts.length === 0) parts.push(sanitized.split('\n')[0].trim().slice(0, 60));
+  const parts = buildSearchParts({
+    brand,
+    brandMatchMode: brandMatch?.mode,
+    productName,
+    line,
+    variant,
+    flavor,
+    species,
+    lifeStage,
+    weight,
+    weightValue,
+    weightUnit,
+    port,
+    rawTextBlobs,
+  });
+  if (parts.length === 0 && rawTextBlobs[0]) parts.push(rawTextBlobs[0].slice(0, 60));
 
   return {
     brand,
     brandMatchMode: brandMatch?.mode,
+    productName,
     line,
+    variant,
+    flavor,
     species,
     lifeStage,
     weight,
+    weightValue,
+    weightUnit,
     port,
+    rawTextBlobs,
     searchQuery: parts.join(' '),
   };
+}
+
+export function buildFoodSearchQueries(rawInput: string | StructuredFoodInput): string[] {
+  const input = toStructuredInput(rawInput);
+  const fields = extractFoodFields(input);
+  const queries = compactParts([
+    [fields.brand, fields.productName, fields.line, fields.variant, fields.flavor, fields.weight].filter(Boolean).join(' '),
+    [fields.brand, fields.productName, fields.species, fields.lifeStage, fields.weight].filter(Boolean).join(' '),
+    [fields.brand, fields.line, fields.variant, fields.species, fields.weight].filter(Boolean).join(' '),
+    fields.searchQuery,
+    ...fields.rawTextBlobs.slice(0, 4),
+  ]);
+
+  return queries.map(query => normalizeWhitespace(String(query)).slice(0, 120)).filter(Boolean);
 }
 
 // ── Enriquecimento de produto já resolvido ─────────────────────────────────
@@ -245,7 +466,7 @@ export function enrichFoodProduct(product: ResolvedProduct): ResolvedProduct {
 
 // ── Fallback: monta nome parcial para confirmação assistida ───────────────
 export function buildPartialFoodName(
-  brand?: string | null,
+  inputOrBrand?: StructuredFoodInput | string | null,
   probableName?: string | null,
   species?: string | null,
   lifeStage?: string | null,
@@ -256,15 +477,29 @@ export function buildPartialFoodName(
   visibleText?: string | null,
   reason?: string | null,
 ): string | null {
-  const sourceText = [visibleText, probableName, reason].filter(Boolean).join(' ');
-  const extracted = extractFoodFields(sourceText);
-  const normalizedWeight = normalizeFoodWeight(weight) ?? extracted.weight;
-  const resolvedBrand = brand?.trim() || extracted.brand;
-  const resolvedSpecies = species?.trim() || extracted.species;
-  const resolvedLifeStage = lifeStage?.trim() || extracted.lifeStage;
-  const normalizedLine = line?.trim() || extracted.line;
-  const normalizedSize = size?.trim();
-  const normalizedFlavor = flavor?.trim();
+  const structuredInput: StructuredFoodInput = typeof inputOrBrand === 'object' && inputOrBrand !== null
+    ? inputOrBrand
+    : {
+      brand: typeof inputOrBrand === 'string' ? inputOrBrand : null,
+      probableName,
+      species,
+      lifeStage,
+      weight,
+      line,
+      size,
+      flavor,
+      visibleText,
+      reason,
+    };
+  const extracted = extractFoodFields(structuredInput);
+  const normalizedWeight = normalizeFoodWeight(structuredInput.weight) ?? buildStructuredWeight(structuredInput.weightValue, structuredInput.weightUnit) ?? extracted.weight;
+  const resolvedBrand = structuredInput.brand?.trim() || extracted.brand;
+  const resolvedProductName = structuredInput.productName?.trim() || structuredInput.probableName?.trim() || extracted.productName;
+  const resolvedSpecies = structuredInput.species?.trim() || extracted.species;
+  const resolvedLifeStage = structuredInput.lifeStage?.trim() || extracted.lifeStage;
+  const normalizedLine = structuredInput.line?.trim() || extracted.line;
+  const normalizedVariant = structuredInput.variant?.trim() || structuredInput.size?.trim() || extracted.variant;
+  const normalizedFlavor = structuredInput.flavor?.trim() || extracted.flavor;
   const speciesLabel = resolvedSpecies === 'dog'
     ? 'Cão'
     : resolvedSpecies === 'cat'
@@ -282,21 +517,22 @@ export function buildPartialFoodName(
 
   const parts = [
     resolvedBrand,
+    resolvedProductName,
     normalizedLine,
+    normalizedVariant,
     lifeStageLabel,
     speciesLabel,
-    normalizedSize,
     normalizedFlavor,
     normalizedWeight,
   ]
     .filter(Boolean)
     .map(part => normalizeWhitespace(String(part)));
 
-  if (parts.length === 0 && probableName?.trim()) {
-    parts.push(normalizeWhitespace(probableName).slice(0, 80));
+  if (parts.length === 0 && structuredInput.probableName?.trim()) {
+    parts.push(normalizeWhitespace(structuredInput.probableName).slice(0, 80));
   }
-  if (parts.length === 0 && sourceText.trim()) {
-    parts.push(normalizeWhitespace(sourceText).slice(0, 80));
+  if (parts.length === 0 && extracted.rawTextBlobs.length > 0) {
+    parts.push(normalizeWhitespace(extracted.rawTextBlobs.join(' ')).slice(0, 80));
   }
 
   return parts.length > 0 ? parts.join(' ') : null;

@@ -91,11 +91,15 @@ const ZXING_FORMATS = [
 
 interface PhotoProductIdentifyResponse {
   found: boolean;
+  product_name?: string | null;
   name?: string | null;
   probable_name?: string | null;
   brand?: string | null;
   category?: ProductCategory | null;
   weight?: string | null;
+  weight_value?: number | null;
+  weight_unit?: string | null;
+  variant?: string | null;
   size?: string | null;
   manufacturer?: string | null;
   presentation?: string | null;
@@ -106,6 +110,7 @@ interface PhotoProductIdentifyResponse {
   line?: string | null;
   flavor?: string | null;
   visible_text?: string | null;
+  raw_text_blobs?: string[] | null;
 }
 
 interface PhotoIdentifyOutcome {
@@ -120,19 +125,50 @@ interface PhotoIdentifyOutcome {
   lifeStage?: string;
   detectedWeight?: string;
   detectedBrand?: string;
+  assistedConfirmation?: boolean;
+  productName?: string;
+  rawTextBlobs?: string[];
 }
 
 const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024;
 
 function hasUsefulProductPartial(payload: PhotoProductIdentifyResponse): boolean {
   return Boolean(
+    payload.product_name?.trim() ||
     payload.brand?.trim() ||
     payload.weight?.trim() ||
+    payload.weight_value != null ||
+    payload.weight_unit?.trim() ||
     payload.species?.trim() ||
     payload.life_stage?.trim() ||
     payload.line?.trim() ||
+    payload.variant?.trim() ||
     payload.probable_name?.trim() ||
+    (payload.raw_text_blobs?.length ?? 0) > 0 ||
     payload.visible_text?.trim(),
+  );
+}
+
+function getDetectedWeight(payload: PhotoProductIdentifyResponse): string | undefined {
+  if (payload.weight?.trim()) return payload.weight.trim();
+  if (payload.weight_value != null && payload.weight_unit?.trim()) {
+    const value = Number.isInteger(payload.weight_value)
+      ? String(payload.weight_value)
+      : String(payload.weight_value).replace('.', ',');
+    return `${value} ${payload.weight_unit.trim().toLowerCase()}`;
+  }
+  return undefined;
+}
+
+function shouldOpenAssistedConfirmation(payload: PhotoProductIdentifyResponse): boolean {
+  const detectedWeight = getDetectedWeight(payload);
+  const partialProductName = payload.product_name?.trim() || payload.probable_name?.trim();
+  return Boolean(
+    payload.brand?.trim() &&
+    payload.species?.trim() &&
+    payload.life_stage?.trim() &&
+    detectedWeight &&
+    partialProductName,
   );
 }
 
@@ -259,7 +295,9 @@ export function ProductDetectionSheetGold({
   const decisionScoreRef = useRef<number | undefined>(undefined);
   const decisionResultTypeRef = useRef<ProductDetectionResultType>('fallback');
   const probableNameRef = useRef<string | undefined>(undefined);
+  const productNameRef = useRef<string | undefined>(undefined);
   const visibleTextRef = useRef<string | undefined>(undefined);
+  const rawTextBlobsRef = useRef<string[]>([]);
   const speciesRef = useRef<string | undefined>(undefined);
   const lifeStageRef = useRef<string | undefined>(undefined);
   const detectedWeightRef = useRef<string | undefined>(undefined);
@@ -322,33 +360,44 @@ export function ProductDetectionSheetGold({
 
       const payload = (await res.json()) as PhotoProductIdentifyResponse;
 
-      const resolved = resolvePhotoProductCandidate(payload, {
+      const resolved = await resolvePhotoProductCandidate(payload, {
         hint: hint ?? undefined,
         barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
       });
+
+      const assistedConfirmation = shouldOpenAssistedConfirmation(payload);
+      const detectedWeight = getDetectedWeight(payload);
+      const rawTextBlobs = (payload.raw_text_blobs ?? []).filter((value): value is string => Boolean(value?.trim()));
 
       if (!resolved) {
         if (!hasUsefulProductPartial(payload)) {
           return { product: null, errorCode: 'photo_ai_not_found' };
         }
 
-        const partialName = buildPartialFoodName(
-          payload.brand,
-          payload.probable_name,
-          payload.species,
-          payload.life_stage,
-          payload.weight,
-          payload.line,
-          payload.size,
-          payload.flavor,
-          payload.visible_text,
-          payload.reason,
-        ) || [
+        const partialName = buildPartialFoodName({
+          brand: payload.brand,
+          productName: payload.product_name,
+          probableName: payload.probable_name,
+          species: payload.species,
+          lifeStage: payload.life_stage,
+          weight: detectedWeight ?? payload.weight,
+          weightValue: payload.weight_value,
+          weightUnit: payload.weight_unit,
+          line: payload.line,
+          variant: payload.variant ?? payload.size,
+          size: payload.size,
+          flavor: payload.flavor,
+          visibleText: payload.visible_text,
+          reason: payload.reason,
+          rawTextBlobs,
+        }) || [
           payload.brand?.trim(),
+          payload.product_name?.trim(),
           payload.line?.trim(),
+          payload.variant?.trim(),
           payload.species?.trim(),
           payload.life_stage?.trim(),
-          payload.weight?.trim(),
+          detectedWeight,
         ].filter(Boolean).join(' ').trim();
 
         if (!partialName) {
@@ -361,9 +410,9 @@ export function ProductDetectionSheetGold({
             barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
             name: partialName,
             brand: payload.brand?.trim() || undefined,
-            weight: payload.weight?.trim() || undefined,
+            weight: detectedWeight,
             manufacturer: payload.manufacturer?.trim() || payload.brand?.trim() || undefined,
-            presentation: payload.presentation?.trim() || payload.weight?.trim() || undefined,
+            presentation: payload.presentation?.trim() || detectedWeight || undefined,
             category: fallbackCategory,
             found: true,
           },
@@ -373,10 +422,13 @@ export function ProductDetectionSheetGold({
           confidence: { score: 0.58, level: 'medium' },
           probableName: payload.probable_name?.trim() || partialName,
           visibleText: payload.visible_text?.trim() || undefined,
+          productName: payload.product_name?.trim() || undefined,
+          rawTextBlobs,
           species: payload.species?.trim() || undefined,
           lifeStage: payload.life_stage?.trim() || undefined,
-          detectedWeight: payload.weight?.trim() || undefined,
+          detectedWeight,
           detectedBrand: payload.brand?.trim() || undefined,
+          assistedConfirmation,
         };
       }
 
@@ -397,10 +449,13 @@ export function ProductDetectionSheetGold({
         confidence: resolved.confidence,
         probableName: payload.probable_name?.trim() || undefined,
         visibleText: payload.visible_text?.trim() || undefined,
+        productName: payload.product_name?.trim() || undefined,
+        rawTextBlobs,
         species: payload.species?.trim() || undefined,
         lifeStage: payload.life_stage?.trim() || undefined,
-        detectedWeight: payload.weight?.trim() || resolved.product.weight,
+        detectedWeight: detectedWeight ?? resolved.product.weight,
         detectedBrand: payload.brand?.trim() || resolved.product.brand,
+        assistedConfirmation,
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError') {
@@ -603,7 +658,9 @@ export function ProductDetectionSheetGold({
       decisionScoreRef.current = gtinConfidence.score;
       decisionResultTypeRef.current = 'complete';
       probableNameRef.current = undefined;
+      productNameRef.current = undefined;
       visibleTextRef.current = undefined;
+      rawTextBlobsRef.current = [];
       speciesRef.current = undefined;
       lifeStageRef.current = undefined;
       detectedWeightRef.current = final.weight;
@@ -835,7 +892,9 @@ export function ProductDetectionSheetGold({
         decisionScoreRef.current = gtinConfidence.score;
         decisionResultTypeRef.current = 'complete';
         probableNameRef.current = undefined;
+        productNameRef.current = undefined;
         visibleTextRef.current = undefined;
+        rawTextBlobsRef.current = [];
         speciesRef.current = undefined;
         lifeStageRef.current = undefined;
         detectedWeightRef.current = resolvedFromBarcode.weight;
@@ -866,6 +925,8 @@ export function ProductDetectionSheetGold({
       const resultType = identifiedFromPhoto.resultType ?? 'partial';
       decisionSourceRef.current = origin === 'parser'
         ? 'parser'
+        : origin === 'fuzzy_match'
+          ? 'fuzzy_match'
         : origin === 'ia'
           ? 'ai'
           : 'partial_name';
@@ -874,7 +935,9 @@ export function ProductDetectionSheetGold({
       decisionScoreRef.current = score;
       decisionResultTypeRef.current = resultType;
       probableNameRef.current = identifiedFromPhoto.probableName;
+      productNameRef.current = identifiedFromPhoto.productName;
       visibleTextRef.current = identifiedFromPhoto.visibleText;
+      rawTextBlobsRef.current = identifiedFromPhoto.rawTextBlobs ?? [];
       speciesRef.current = identifiedFromPhoto.species;
       lifeStageRef.current = identifiedFromPhoto.lifeStage;
       detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
@@ -891,7 +954,7 @@ export function ProductDetectionSheetGold({
         brand: nextProduct.brand ?? null,
       });
 
-      if (identifiedFromPhoto.confidence?.level === 'low' || resultType === 'fallback') {
+      if ((identifiedFromPhoto.confidence?.level === 'low' || resultType === 'fallback') && !identifiedFromPhoto.assistedConfirmation) {
         setQuery(finalName);
         setStep('manual');
       } else {
@@ -934,6 +997,7 @@ export function ProductDetectionSheetGold({
     decisionScoreRef.current = 0.4;
     decisionResultTypeRef.current = 'partial';
     probableNameRef.current = probableNameRef.current ?? name;
+    productNameRef.current = productNameRef.current ?? undefined;
     detectedBrandRef.current = detectedBrandRef.current ?? confirmed?.brand;
     detectedWeightRef.current = detectedWeightRef.current ?? confirmed?.weight;
     emitProductTelemetry('resolved', {
@@ -1634,6 +1698,24 @@ export function ProductDetectionSheetGold({
             )}
           </div>
         </div>
+
+        {!fromHistory && (productNameRef.current || speciesRef.current || lifeStageRef.current || detectedWeightRef.current || rawTextBlobsRef.current.length > 0) && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Confirmação assistida</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {productNameRef.current && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Nome: {productNameRef.current}</span>}
+              {confirmed.brand && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Marca: {confirmed.brand}</span>}
+              {speciesRef.current && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Espécie: {speciesRef.current}</span>}
+              {lifeStageRef.current && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Fase: {lifeStageRef.current}</span>}
+              {detectedWeightRef.current && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Peso: {detectedWeightRef.current}</span>}
+            </div>
+            {rawTextBlobsRef.current.length > 0 && (
+              <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                Texto lido: {rawTextBlobsRef.current.slice(0, 4).join(' • ')}
+              </p>
+            )}
+          </div>
+        )}
 
         <button
           type="button"
