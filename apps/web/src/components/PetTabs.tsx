@@ -1,7 +1,7 @@
 'use client';
 
-import { motion, PanInfo, useAnimation } from 'framer-motion';
-import { useEffect, useRef, useState } from 'react';
+import { useState, useRef } from 'react';
+import { useI18n } from '@/lib/I18nContext';
 
 interface Pet {
   id: number | string;
@@ -14,81 +14,118 @@ interface PetTabsProps {
   pets: Pet[];
   selectedPetId: number | string;
   onPetChange: (petId: number | string) => void;
-  renderItem: (pet: Pet) => React.ReactNode;
-  children?: React.ReactNode;
+  children: React.ReactNode;
 }
 
-export function PetTabs({ pets, selectedPetId, onPetChange, renderItem }: PetTabsProps) {
-  const controls = useAnimation();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [containerWidth, setContainerWidth] = useState(0);
+// Helper para converter caminho de foto em URL
+const getPhotoUrl = (photoPath: string | undefined | null): string | null => {
+  if (!photoPath) return null;
+  if (photoPath.startsWith('data:') || photoPath.startsWith('http')) return photoPath;
+  const configured = String(process.env.NEXT_PUBLIC_PHOTOS_BASE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? '')
+    .replace(/\/api\/?$/, '')
+    .replace(/\/$/, '');
+  const photosBase = configured || (typeof window !== 'undefined' ? window.location.origin : '');
+  const normalized = photoPath.replace(/^\/+/, '');
+  const path = normalized.startsWith('uploads/') ? `/${normalized}` : `/uploads/${normalized}`;
+  return `${photosBase}${path}`;
+};
 
-  useEffect(() => {
-    const index = pets.findIndex((p) => String(p.id) === String(selectedPetId));
-    if (index !== -1) {
-      setCurrentIndex(index);
-      controls.start({ x: `${-index * 100}%`, transition: { type: 'spring', stiffness: 300, damping: 30 } });
+export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsProps) {
+  const { t } = useI18n();
+  const swipeLockedRef = useRef(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const horizontalIntentRef = useRef<boolean | null>(null);
+  const [dragX, setDragX] = useState(0);
+
+  const currentIndex = pets.findIndex(p => p.id === selectedPetId);
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex >= 0 && currentIndex < pets.length - 1;
+
+  const triggerSwipe = (nextDirection: -1 | 1) => {
+    if (swipeLockedRef.current) return;
+
+    if (nextDirection === -1 && canGoPrev) {
+      swipeLockedRef.current = true;
+      onPetChange(pets[currentIndex - 1].id);
+      setTimeout(() => { swipeLockedRef.current = false; }, 180);
     }
-  }, [selectedPetId, pets, controls]);
-  
-  useEffect(() => {
-    const updateWidth = () => {
-      setContainerWidth(containerRef.current?.clientWidth ?? 0);
-    };
-  
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-  
-    return () => {
-      window.removeEventListener('resize', updateWidth);
-    };
-  }, []);
 
-  const handleDragEnd = (_: any, info: PanInfo) => {
-    const threshold = 100; // pixels
-    const velocityThreshold = 500; // px/s
-
-    if (info.offset.x < -threshold || info.velocity.x < -velocityThreshold) {
-      // Swipe Left -> Next Pet
-      if (currentIndex < pets.length - 1) {
-        onPetChange(pets[currentIndex + 1].id);
-      } else {
-        // Bounce back
-        controls.start({ x: `${-currentIndex * 100}%` });
-      }
-    } else if (info.offset.x > threshold || info.velocity.x > velocityThreshold) {
-      // Swipe Right -> Prev Pet
-      if (currentIndex > 0) {
-        onPetChange(pets[currentIndex - 1].id);
-      } else {
-        // Bounce back
-        controls.start({ x: `${-currentIndex * 100}%` });
-      }
-    } else {
-      // Stay on current
-      controls.start({ x: `${-currentIndex * 100}%` });
+    if (nextDirection === 1 && canGoNext) {
+      swipeLockedRef.current = true;
+      onPetChange(pets[currentIndex + 1].id);
+      setTimeout(() => { swipeLockedRef.current = false; }, 180);
     }
   };
 
+  const onTouchStartCapture = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartXRef.current = e.touches[0]?.clientX ?? null;
+    touchStartYRef.current = e.touches[0]?.clientY ?? null;
+    horizontalIntentRef.current = null;
+  };
+
+  const onTouchMoveCapture = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+
+    const dx = (e.touches[0]?.clientX ?? touchStartXRef.current) - touchStartXRef.current;
+    const dy = (e.touches[0]?.clientY ?? touchStartYRef.current) - touchStartYRef.current;
+
+    if (horizontalIntentRef.current === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+      horizontalIntentRef.current = Math.abs(dx) > Math.abs(dy);
+    }
+
+    if (horizontalIntentRef.current) {
+      e.stopPropagation();
+      setDragX(dx);
+    }
+  };
+
+  const onTouchEndCapture = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (
+      horizontalIntentRef.current &&
+      touchStartXRef.current !== null &&
+      (e.changedTouches?.[0]?.clientX ?? null) !== null
+    ) {
+      const endX = e.changedTouches[0].clientX;
+      const deltaX = endX - touchStartXRef.current;
+      if (Math.abs(deltaX) > 56) {
+        if (deltaX > 0) triggerSwipe(-1);
+        else triggerSwipe(1);
+      }
+    }
+
+    if (horizontalIntentRef.current) {
+      e.stopPropagation();
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    horizontalIntentRef.current = null;
+    setDragX(0);
+  };
+
   return (
-    <div className="w-full overflow-hidden" ref={containerRef}>
-      <motion.div
-        drag="x"
-        dragConstraints={{ left: -(pets.length - 1) * containerWidth, right: 0 }}
-        dragElastic={0.2}
-        onDragEnd={handleDragEnd}
-        animate={controls}
-        initial={{ x: `${-currentIndex * 100}%` }}
-        className="flex"
-        style={{ width: `${pets.length * 100}%`, touchAction: 'pan-y' }}
+    <div className="w-full">
+      <div
+        className="relative overflow-hidden"
+        style={{ transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)', touchAction: 'pan-y' }}
+        onTouchStartCapture={onTouchStartCapture}
+        onTouchMoveCapture={onTouchMoveCapture}
+        onTouchEndCapture={onTouchEndCapture}
+        onTouchCancelCapture={onTouchEndCapture}
       >
-        {pets.map((pet) => (
-          <div key={pet.id} className="w-full flex-shrink-0 px-4">
-            {renderItem(pet)}
-          </div>
-        ))}
-      </motion.div>
+        <div
+          key={selectedPetId}
+          className="w-full"
+          style={{
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            transform: `translateX(${dragX}px)`,
+            transition: dragX === 0 ? 'transform 0.2s ease-out' : 'none',
+          }}
+        >
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

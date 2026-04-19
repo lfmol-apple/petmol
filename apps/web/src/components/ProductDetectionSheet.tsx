@@ -16,8 +16,15 @@ import {
   type ScanHistoryEntry,
 } from '@/lib/productScanner';
 import { saveLocalProduct } from '@/features/product-detection/cache';
-import { confirmProductLookup } from '@/features/product-detection/resolver';
-import { extractFoodFields, buildPartialFoodName } from '@/features/product-detection/foodParser';
+import { trackEvent } from '@/lib/analytics/storage';
+import {
+  confirmProductLookup,
+  resolvePhotoProductCandidate,
+  scoreGtinResolution,
+  type ProductDetectionConfidence,
+  type ProductDetectionOrigin,
+  type ProductDetectionResultType,
+} from '@/features/product-detection/resolver';
 import { submitLearningConfirmation, findLocalCorrection, type ScanDecisionSource } from '@/features/product-detection/learningStore';
 
 type Step =
@@ -84,9 +91,11 @@ const ZXING_FORMATS = [
 interface PhotoProductIdentifyResponse {
   found: boolean;
   name?: string | null;
+  probable_name?: string | null;
   brand?: string | null;
   category?: ProductCategory | null;
   weight?: string | null;
+  size?: string | null;
   manufacturer?: string | null;
   presentation?: string | null;
   confidence?: number | null;
@@ -95,11 +104,21 @@ interface PhotoProductIdentifyResponse {
   life_stage?: string | null;
   line?: string | null;
   flavor?: string | null;
+  visible_text?: string | null;
 }
 
 interface PhotoIdentifyOutcome {
   product: ScannedProduct | null;
   errorCode: 'photo_ai_not_found' | 'photo_ai_error' | 'photo_ai_timeout' | 'photo_invalid_type' | 'photo_too_large' | null;
+  origin?: ProductDetectionOrigin;
+  resultType?: ProductDetectionResultType;
+  confidence?: ProductDetectionConfidence;
+  probableName?: string;
+  visibleText?: string;
+  species?: string;
+  lifeStage?: string;
+  detectedWeight?: string;
+  detectedBrand?: string;
 }
 
 const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024;
@@ -224,6 +243,14 @@ export function ProductDetectionSheetGold({
   const decisionSourceRef = useRef<ScanDecisionSource>('manual');
   const aiSuggestedNameRef = useRef<string | undefined>(undefined);
   const aiConfidenceRef = useRef<number | undefined>(undefined);
+  const decisionScoreRef = useRef<number | undefined>(undefined);
+  const decisionResultTypeRef = useRef<ProductDetectionResultType>('fallback');
+  const probableNameRef = useRef<string | undefined>(undefined);
+  const visibleTextRef = useRef<string | undefined>(undefined);
+  const speciesRef = useRef<string | undefined>(undefined);
+  const lifeStageRef = useRef<string | undefined>(undefined);
+  const detectedWeightRef = useRef<string | undefined>(undefined);
+  const detectedBrandRef = useRef<string | undefined>(undefined);
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
 
@@ -240,6 +267,19 @@ export function ProductDetectionSheetGold({
   const [detectedBarcode, setDetectedBarcode] = useState('');
   const [scannerError, setScannerError] = useState<string | null>(null);
   const [manualBarcode, setManualBarcode] = useState('');
+
+  const emitProductTelemetry = useCallback((eventType: string, payload: Record<string, unknown>) => {
+    const enriched = {
+      event_type: eventType,
+      ...payload,
+      pet_id: petId,
+      at: new Date().toISOString(),
+    };
+    console.info('[ProductScanner][Telemetry]', enriched);
+    void trackEvent('product_detection_pipeline', 'other', enriched, { petId }).catch(() => {
+      // Telemetria não pode bloquear o fluxo principal.
+    });
+  }, [petId]);
 
   const identifyProductFromPhoto = useCallback(async (file: File, barcodeFromPhoto?: string): Promise<PhotoIdentifyOutcome> => {
     try {
@@ -269,79 +309,36 @@ export function ProductDetectionSheetGold({
 
       const payload = (await res.json()) as PhotoProductIdentifyResponse;
 
-      let resolvedName = payload.name?.trim() ?? '';
+      const resolved = resolvePhotoProductCandidate(payload, {
+        hint: hint ?? undefined,
+        barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
+      });
 
-      // Fallback universal: se a IA não retornou nome completo mas tem dados úteis,
-      // montar nome parcial para confirmação assistida (funciona para todas as categorias)
-      if (!resolvedName) {
-        const effectiveCategory = payload.category || hint || 'other';
-        if (effectiveCategory === 'food') {
-          // Para ração: usar parser especializado (brand + espécie + fase + peso)
-          const partial = buildPartialFoodName(
-            payload.brand,
-            payload.species,
-            payload.life_stage,
-            payload.weight,
-            payload.reason,
-          );
-          if (partial) resolvedName = partial;
-        } else {
-          // Para outras categorias: brand é suficiente como candidato
-          const brandName = payload.brand?.trim();
-          const reasonHint = payload.reason?.trim().split('.')[0]; // primeira frase do reason
-          if (brandName) {
-            resolvedName = [brandName, payload.weight?.trim()].filter(Boolean).join(' ');
-          } else if (reasonHint && reasonHint.length > 4) {
-            resolvedName = reasonHint.slice(0, 80);
-          }
-        }
-      }
-
-      if (!resolvedName) {
+      if (!resolved) {
         return { product: null, errorCode: 'photo_ai_not_found' };
-      }
-
-      const resolvedCategory =
-        (payload.category && payload.category !== 'other' ? payload.category : hint) ??
-        payload.category ??
-        'other';
-
-      // Enriquecer campos de ração com heurística local
-      let resolvedWeight = payload.weight?.trim() || undefined;
-      let resolvedBrand = payload.brand?.trim() || undefined;
-      if (resolvedCategory === 'food') {
-        const foodFields = extractFoodFields(
-          [resolvedName, resolvedBrand, resolvedWeight].filter(Boolean).join(' '),
-        );
-        resolvedBrand = resolvedBrand ?? foodFields.brand;
-        resolvedWeight = resolvedWeight ?? foodFields.weight;
-      }
-
-      // Enriquecer o nome com line/flavor se disponíveis e não já incluídos
-      let finalName = resolvedName;
-      if (resolvedCategory === 'food') {
-        const linePart = payload.line?.trim();
-        const flavorPart = payload.flavor?.trim();
-        if (linePart && !finalName.toLowerCase().includes(linePart.toLowerCase())) {
-          finalName = `${finalName} ${linePart}`.trim();
-        }
-        if (flavorPart && !finalName.toLowerCase().includes(flavorPart.toLowerCase())) {
-          finalName = `${finalName} ${flavorPart}`.trim();
-        }
       }
 
       return {
         product: {
-          barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
-          name: finalName,
-          brand: resolvedBrand,
-          weight: resolvedWeight,
-          manufacturer: payload.manufacturer?.trim() || resolvedBrand,
-          presentation: payload.presentation?.trim() || resolvedWeight,
-          category: resolvedCategory,
+          barcode: resolved.product.barcode,
+          name: resolved.product.name,
+          brand: resolved.product.brand,
+          weight: resolved.product.weight,
+          manufacturer: resolved.product.manufacturer,
+          presentation: resolved.product.presentation,
+          category: resolved.product.category,
           found: true,
         },
         errorCode: null,
+        origin: resolved.origin,
+        resultType: resolved.resultType,
+        confidence: resolved.confidence,
+        probableName: payload.probable_name?.trim() || undefined,
+        visibleText: payload.visible_text?.trim() || undefined,
+        species: payload.species?.trim() || undefined,
+        lifeStage: payload.life_stage?.trim() || undefined,
+        detectedWeight: payload.weight?.trim() || resolved.product.weight,
+        detectedBrand: payload.brand?.trim() || resolved.product.brand,
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError') {
@@ -539,11 +536,27 @@ export function ProductDetectionSheetGold({
     if (final.found) {
       decisionSourceRef.current = 'gtin';
       aiSuggestedNameRef.current = undefined;
-      aiConfidenceRef.current = undefined;
+      const gtinConfidence = scoreGtinResolution();
+      aiConfidenceRef.current = gtinConfidence.score;
+      decisionScoreRef.current = gtinConfidence.score;
+      decisionResultTypeRef.current = 'complete';
+      probableNameRef.current = undefined;
+      visibleTextRef.current = undefined;
+      speciesRef.current = undefined;
+      lifeStageRef.current = undefined;
+      detectedWeightRef.current = final.weight;
+      detectedBrandRef.current = final.brand;
       setFromHistory(false);
       setConfirmed(final);
       setScannerError(null);
       setStep('confirm');
+      emitProductTelemetry('resolved', {
+        origin: 'gtin',
+        result: 'complete',
+        score: gtinConfidence.score,
+        category: final.category,
+        brand: final.brand ?? null,
+      });
       return;
     }
 
@@ -558,13 +571,31 @@ export function ProductDetectionSheetGold({
       });
       setScannerError(null);
       setStep('not-found');
+      decisionScoreRef.current = 0.2;
+      decisionResultTypeRef.current = 'fallback';
+      emitProductTelemetry('resolved', {
+        origin: 'gtin',
+        result: 'fallback',
+        score: 0.2,
+        category: hint ?? 'other',
+        brand: null,
+      });
       return;
     }
 
     setConfirmed({ barcode, name: '', category: hint ?? 'other', found: false });
     setScannerError('product_not_found');
     setStep('manual');
-  }, [clearResolveTimeout, hint]);
+    decisionScoreRef.current = 0.2;
+    decisionResultTypeRef.current = 'fallback';
+    emitProductTelemetry('resolved', {
+      origin: 'gtin',
+      result: 'fallback',
+      score: 0.2,
+      category: hint ?? 'other',
+      brand: null,
+    });
+  }, [clearResolveTimeout, emitProductTelemetry, hint]);
 
   const handleManualBarcodeLookup = useCallback(async () => {
     const barcode = manualBarcode.replace(/\D/g, '');
@@ -737,11 +768,27 @@ export function ProductDetectionSheetGold({
       if (resolvedFromBarcode.found) {
         decisionSourceRef.current = 'gtin';
         aiSuggestedNameRef.current = undefined;
-        aiConfidenceRef.current = undefined;
+        const gtinConfidence = scoreGtinResolution();
+        aiConfidenceRef.current = gtinConfidence.score;
+        decisionScoreRef.current = gtinConfidence.score;
+        decisionResultTypeRef.current = 'complete';
+        probableNameRef.current = undefined;
+        visibleTextRef.current = undefined;
+        speciesRef.current = undefined;
+        lifeStageRef.current = undefined;
+        detectedWeightRef.current = resolvedFromBarcode.weight;
+        detectedBrandRef.current = resolvedFromBarcode.brand;
         setScannerError(null);
         setFromHistory(false);
         setConfirmed(resolvedFromBarcode);
         setStep('confirm');
+        emitProductTelemetry('resolved', {
+          origin: 'gtin',
+          result: 'complete',
+          score: gtinConfidence.score,
+          category: resolvedFromBarcode.category,
+          brand: resolvedFromBarcode.brand ?? null,
+        });
         return;
       }
     }
@@ -752,14 +799,42 @@ export function ProductDetectionSheetGold({
       // Verificar se há correção prévia para o nome sugerido pela IA
       const corrected = findLocalCorrection(photoProduct.name, photoProduct.category);
       const finalName = corrected ?? photoProduct.name;
-      const wasPartial = !detectedPhotoBarcode && !!finalName;
-      decisionSourceRef.current = wasPartial ? 'partial_name' : 'ai';
+      const score = identifiedFromPhoto.confidence?.score ?? 0.62;
+      const origin = identifiedFromPhoto.origin ?? 'partial_name';
+      const resultType = identifiedFromPhoto.resultType ?? 'partial';
+      decisionSourceRef.current = origin === 'parser'
+        ? 'parser'
+        : origin === 'ia'
+          ? 'ai'
+          : 'partial_name';
       aiSuggestedNameRef.current = photoProduct.name; // nome original da IA (antes de correção)
-      aiConfidenceRef.current = undefined;
+      aiConfidenceRef.current = score;
+      decisionScoreRef.current = score;
+      decisionResultTypeRef.current = resultType;
+      probableNameRef.current = identifiedFromPhoto.probableName;
+      visibleTextRef.current = identifiedFromPhoto.visibleText;
+      speciesRef.current = identifiedFromPhoto.species;
+      lifeStageRef.current = identifiedFromPhoto.lifeStage;
+      detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
+      detectedBrandRef.current = identifiedFromPhoto.detectedBrand ?? photoProduct.brand;
       setScannerError(null);
       setFromHistory(false);
-      setConfirmed(corrected ? { ...photoProduct, name: finalName } : photoProduct);
-      setStep('confirm');
+      const nextProduct = corrected ? { ...photoProduct, name: finalName } : photoProduct;
+      setConfirmed(nextProduct);
+      emitProductTelemetry('resolved', {
+        origin,
+        result: resultType,
+        score,
+        category: nextProduct.category,
+        brand: nextProduct.brand ?? null,
+      });
+
+      if (identifiedFromPhoto.confidence?.level === 'low' || resultType === 'fallback') {
+        setQuery(finalName);
+        setStep('manual');
+      } else {
+        setStep('confirm');
+      }
       return;
     }
 
@@ -772,6 +847,15 @@ export function ProductDetectionSheetGold({
       found: false,
     } : null);
     setStep('not-found');
+    decisionScoreRef.current = 0.15;
+    decisionResultTypeRef.current = 'fallback';
+    emitProductTelemetry('resolved', {
+      origin: detectedPhotoBarcode ? 'gtin' : 'partial_name',
+      result: 'fallback',
+      score: 0.15,
+      category: hint ?? 'other',
+      brand: null,
+    });
   };
 
   const selectManual = (name: string) => {
@@ -784,6 +868,19 @@ export function ProductDetectionSheetGold({
     setFromHistory(false);
     setConfirmed(product);
     setStep('confirm');
+    decisionSourceRef.current = 'manual';
+    decisionScoreRef.current = 0.4;
+    decisionResultTypeRef.current = 'partial';
+    probableNameRef.current = probableNameRef.current ?? name;
+    detectedBrandRef.current = detectedBrandRef.current ?? confirmed?.brand;
+    detectedWeightRef.current = detectedWeightRef.current ?? confirmed?.weight;
+    emitProductTelemetry('resolved', {
+      origin: 'manual',
+      result: 'partial',
+      score: 0.4,
+      category: product.category,
+      brand: null,
+    });
   };
 
   const handleConfirm = () => {
@@ -811,9 +908,17 @@ export function ProductDetectionSheetGold({
         manufacturer: confirmed.manufacturer,
         presentation: confirmed.presentation ?? confirmed.weight,
         weight: confirmed.weight,
+        species: speciesRef.current,
+        life_stage: lifeStageRef.current,
         decision_source: decisionSourceRef.current,
+        decision_score: decisionScoreRef.current ?? aiConfidenceRef.current,
+        decision_result: decisionResultTypeRef.current,
         ai_suggested_name: aiSuggestedNameRef.current,
-        ai_confidence: aiConfidenceRef.current,
+        ai_confidence: aiConfidenceRef.current ?? decisionScoreRef.current,
+        probable_name: probableNameRef.current,
+        visible_text: visibleTextRef.current,
+        ocr_raw_text: visibleTextRef.current,
+        tutor_confirmed: true,
         pet_id: petId,
       });
     } else {
@@ -830,6 +935,14 @@ export function ProductDetectionSheetGold({
     }
 
     saveToScanHistory({ barcode: confirmed.barcode, product: confirmed, petId, category: confirmed.category });
+    emitProductTelemetry('confirmed', {
+      origin: decisionSourceRef.current,
+      result: decisionResultTypeRef.current,
+      score: decisionScoreRef.current ?? aiConfidenceRef.current ?? null,
+      category: confirmed.category,
+      brand: confirmed.brand ?? null,
+      confirmed_by_tutor: true,
+    });
     onProductConfirmed(confirmed);
   };
 
@@ -1008,11 +1121,21 @@ export function ProductDetectionSheetGold({
               type="button"
               onClick={async () => {
                 await stopScanner();
-                setStep('photo-capture');
+                openCameraPhotoPicker();
               }}
               className="rounded-2xl border border-white/15 bg-white/10 px-2 py-3 text-xs font-semibold text-white"
             >
-              Fotografar embalagem
+              📷 Tirar foto agora
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await stopScanner();
+                openGalleryPhotoPicker();
+              }}
+              className="rounded-2xl border border-white/15 bg-white/10 px-2 py-3 text-xs font-semibold text-white"
+            >
+              🖼️ Escolher do celular
             </button>
             <button
               type="button"
@@ -1022,14 +1145,7 @@ export function ProductDetectionSheetGold({
               }}
               className="rounded-2xl border border-white/15 bg-white/10 px-2 py-3 text-xs font-semibold text-white"
             >
-              Digitar produto
-            </button>
-            <button
-              type="button"
-              onClick={goBack}
-              className="rounded-2xl border border-white/15 bg-white/10 px-2 py-3 text-xs font-semibold text-white"
-            >
-              Fechar / Voltar
+              ✏️ Digitar produto
             </button>
           </div>
         </div>
@@ -1204,7 +1320,7 @@ export function ProductDetectionSheetGold({
         </p>
       </div>
 
-      {(cameraFailed || scannerError === 'lookup_timeout' || scannerError === 'product_not_found' || scannerError === 'manual_invalid_barcode' || scannerError === 'photo_barcode_not_found' || scannerError === 'photo_processing_error') && describeScannerError(scannerError) && (
+      {(cameraFailed || scannerError === 'lookup_timeout' || scannerError === 'product_not_found' || scannerError === 'manual_invalid_barcode' || scannerError === 'photo_barcode_not_found') && describeScannerError(scannerError) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {describeScannerError(scannerError)}
         </div>

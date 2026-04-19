@@ -1271,7 +1271,6 @@ export default function HomePage() {
             {(() => {
               const currentPet = pets.find(p => p.pet_id === selectedPetId);
               if (!currentPet) return null;
-              const { vaccines, parasiteControls, groomingRecords } = getPetCareCollections(currentPet);
               
               return (
                 <div className="max-w-md mx-auto space-y-2">

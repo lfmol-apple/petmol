@@ -3,7 +3,7 @@ import { getToken } from '@/lib/auth-token';
 import type { ProductCategory } from '@/lib/productScanner';
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
-export type ScanDecisionSource = 'gtin' | 'ai' | 'fuzzy_match' | 'partial_name' | 'manual';
+export type ScanDecisionSource = 'gtin' | 'ai' | 'parser' | 'fuzzy_match' | 'partial_name' | 'manual';
 
 export interface LearningConfirmPayload {
   barcode?: string;
@@ -16,8 +16,14 @@ export interface LearningConfirmPayload {
   species?: string;
   life_stage?: string;
   decision_source: ScanDecisionSource;
+  decision_score?: number;
+  decision_result?: 'complete' | 'partial' | 'fallback';
   ai_suggested_name?: string;
   ai_confidence?: number;
+  probable_name?: string;
+  visible_text?: string;
+  ocr_raw_text?: string;
+  tutor_confirmed?: boolean;
   pet_id?: string;
 }
 
@@ -35,6 +41,7 @@ export interface CatalogSearchResult {
 
 // ── Memória local de correções ─────────────────────────────────────────────
 const CORRECTIONS_KEY = 'petmol_product_corrections_v1';
+const LEARNING_EVENTS_KEY = 'petmol_product_learning_events_v1';
 
 interface LocalCorrection {
   barcode?: string;
@@ -42,6 +49,24 @@ interface LocalCorrection {
   corrected: string;
   category?: string;
   savedAt: string;
+}
+
+interface LocalLearningEvent {
+  code?: string;
+  name: string;
+  brand?: string;
+  category?: ProductCategory;
+  species?: string;
+  life_stage?: string;
+  weight?: string;
+  probable_name?: string;
+  visible_text?: string;
+  decision_source: ScanDecisionSource;
+  decision_score?: number;
+  decision_result?: 'complete' | 'partial' | 'fallback';
+  ai_suggested_name?: string;
+  tutor_confirmed: boolean;
+  createdAt: string;
 }
 
 export function saveLocalCorrection(correction: Omit<LocalCorrection, 'savedAt'>): void {
@@ -70,8 +95,37 @@ export function findLocalCorrection(suggested: string, category?: string): strin
   }
 }
 
+function saveLocalLearningEvent(event: Omit<LocalLearningEvent, 'createdAt'>): void {
+  try {
+    const raw = localStorage.getItem(LEARNING_EVENTS_KEY);
+    const existing: LocalLearningEvent[] = raw ? (JSON.parse(raw) as LocalLearningEvent[]) : [];
+    const updated = [{ ...event, createdAt: new Date().toISOString() }, ...existing].slice(0, 500);
+    localStorage.setItem(LEARNING_EVENTS_KEY, JSON.stringify(updated));
+  } catch {
+    // silent
+  }
+}
+
 // ── Confirmação com aprendizado ────────────────────────────────────────────
 export async function submitLearningConfirmation(payload: LearningConfirmPayload): Promise<void> {
+  const code = payload.barcode?.replace(/\D/g, '') ?? '';
+  saveLocalLearningEvent({
+    code: code || undefined,
+    name: payload.name,
+    brand: payload.brand,
+    category: payload.category,
+    species: payload.species,
+    life_stage: payload.life_stage,
+    weight: payload.weight,
+    probable_name: payload.probable_name,
+    visible_text: payload.visible_text,
+    decision_source: payload.decision_source,
+    decision_score: payload.decision_score ?? payload.ai_confidence,
+    decision_result: payload.decision_result,
+    ai_suggested_name: payload.ai_suggested_name,
+    tutor_confirmed: payload.tutor_confirmed ?? true,
+  });
+
   // Persistir correção local ANTES da chamada de rede (mesmo offline)
   const userChangedName =
     payload.ai_suggested_name &&
@@ -88,8 +142,6 @@ export async function submitLearningConfirmation(payload: LearningConfirmPayload
 
   const token = getToken();
   if (!token) return;
-
-  const code = payload.barcode?.replace(/\D/g, '') ?? '';
   if (!code || code.length < 8) return;
 
   try {
@@ -112,9 +164,15 @@ export async function submitLearningConfirmation(payload: LearningConfirmPayload
         confidence: payload.ai_confidence ?? 1.0,
         ai_suggested_name: userChangedName ? payload.ai_suggested_name : null,
         decision_source: payload.decision_source,
+        decision_score: payload.decision_score ?? payload.ai_confidence ?? null,
+        decision_result: payload.decision_result ?? null,
         species: payload.species ?? null,
         life_stage: payload.life_stage ?? null,
         weight: payload.weight ?? null,
+        probable_name: payload.probable_name ?? null,
+        visible_text: payload.visible_text ?? null,
+        ocr_raw_text: payload.ocr_raw_text ?? null,
+        tutor_confirmed: payload.tutor_confirmed ?? true,
         pet_id: payload.pet_id ?? null,
       }),
     });

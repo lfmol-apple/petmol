@@ -69,11 +69,17 @@ const WEIGHT_RE = /\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i;
 // ── Tipos ──────────────────────────────────────────────────────────────────
 export interface FoodFields {
   brand?: string;
+  brandMatchMode?: 'exact' | 'fuzzy';
   species?: 'dog' | 'cat' | 'other';
   lifeStage?: 'puppy' | 'adult' | 'senior' | 'all';
   weight?: string;
   port?: 'mini' | 'small' | 'medium' | 'large' | 'giant';
   searchQuery: string;
+}
+
+export interface BrandMatch {
+  brand: string;
+  mode: 'exact' | 'fuzzy';
 }
 
 // ── Utilitários ────────────────────────────────────────────────────────────
@@ -85,6 +91,21 @@ function applyOcr(text: string): string {
   let s = text;
   for (const [re, rep] of OCR_CORRECTIONS) s = s.replace(re, rep);
   return s;
+}
+
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeFoodWeight(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const cleaned = normalizeWhitespace(raw)
+    .replace(/(\d)\s*[,.:]\s*(\d)/g, '$1,$2')
+    .replace(/(\d)\s*([kK])\s*[gG]\b/g, '$1 kg')
+    .replace(/(\d)\s*[gG]\b/g, '$1 g');
+  const match = cleaned.match(/\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i);
+  if (!match) return undefined;
+  return `${match[1].replace('.', ',')} ${match[2].toLowerCase()}`;
 }
 
 function levenshtein(a: string, b: string): number {
@@ -104,45 +125,53 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-export function fuzzyMatchBrand(text: string): string | undefined {
+export function fuzzyMatchBrandDetails(text: string): BrandMatch | undefined {
   const n = norm(text);
   // exact substring match first (fastest)
   for (const brand of KNOWN_BRANDS) {
-    if (n.includes(norm(brand))) return brand;
+    if (n.includes(norm(brand))) return { brand, mode: 'exact' };
   }
   // 1-edit-distance fuzzy for brands ≥ 6 chars
   for (const brand of KNOWN_BRANDS) {
     if (brand.length < 6) continue;
     const nb = norm(brand);
     for (let i = 0; i <= n.length - nb.length + 1; i++) {
-      if (levenshtein(n.slice(i, i + nb.length), nb) <= 1) return brand;
+      if (levenshtein(n.slice(i, i + nb.length), nb) <= 1) {
+        return { brand, mode: 'fuzzy' };
+      }
     }
   }
   return undefined;
 }
 
+export function fuzzyMatchBrand(text: string): string | undefined {
+  return fuzzyMatchBrandDetails(text)?.brand;
+}
+
 // ── Extração principal ─────────────────────────────────────────────────────
 export function extractFoodFields(rawText: string): FoodFields {
   const corrected = applyOcr(rawText);
+  const sanitized = normalizeWhitespace(corrected);
 
-  const brand = fuzzyMatchBrand(corrected);
+  const brandMatch = fuzzyMatchBrandDetails(sanitized);
+  const brand = brandMatch?.brand;
 
   let species: FoodFields['species'];
   for (const { re, value } of SPECIES_RULES) {
-    if (re.test(corrected)) { species = value; break; }
+    if (re.test(sanitized)) { species = value; break; }
   }
 
   let lifeStage: FoodFields['lifeStage'];
   for (const { re, value } of LIFE_STAGE_RULES) {
-    if (re.test(corrected)) { lifeStage = value; break; }
+    if (re.test(sanitized)) { lifeStage = value; break; }
   }
 
-  const wm = corrected.match(WEIGHT_RE);
-  const weight = wm ? `${wm[1].replace(',', '.')} ${wm[2].toLowerCase()}` : undefined;
+  const wm = sanitized.match(WEIGHT_RE);
+  const weight = normalizeFoodWeight(wm ? `${wm[1]} ${wm[2]}` : undefined);
 
   let port: FoodFields['port'];
   for (const { re, value } of PORT_RULES) {
-    if (re.test(corrected)) { port = value; break; }
+    if (re.test(sanitized)) { port = value; break; }
   }
 
   const parts: string[] = [];
@@ -153,9 +182,17 @@ export function extractFoodFields(rawText: string): FoodFields {
   if (species) parts.push(species === 'dog' ? 'cão' : 'gato');
   if (port) parts.push(port);
   if (weight) parts.push(weight);
-  if (parts.length === 0) parts.push(corrected.split('\n')[0].trim().slice(0, 60));
+  if (parts.length === 0) parts.push(sanitized.split('\n')[0].trim().slice(0, 60));
 
-  return { brand, species, lifeStage, weight, port, searchQuery: parts.join(' ') };
+  return {
+    brand,
+    brandMatchMode: brandMatch?.mode,
+    species,
+    lifeStage,
+    weight,
+    port,
+    searchQuery: parts.join(' '),
+  };
 }
 
 // ── Enriquecimento de produto já resolvido ─────────────────────────────────
@@ -178,20 +215,58 @@ export function enrichFoodProduct(product: ResolvedProduct): ResolvedProduct {
 // ── Fallback: monta nome parcial para confirmação assistida ───────────────
 export function buildPartialFoodName(
   brand?: string | null,
+  probableName?: string | null,
   species?: string | null,
   lifeStage?: string | null,
   weight?: string | null,
+  line?: string | null,
+  size?: string | null,
+  flavor?: string | null,
+  visibleText?: string | null,
   reason?: string | null,
 ): string | null {
-  const parts: string[] = [];
-  if (brand?.trim()) parts.push(brand.trim());
-  if (lifeStage?.trim()) parts.push(lifeStage.trim());
-  if (species?.trim()) parts.push(species.trim() === 'dog' ? 'Cão' : species.trim() === 'cat' ? 'Gato' : species.trim());
-  if (weight?.trim()) parts.push(weight.trim());
-  if (parts.length === 0 && reason?.trim()) {
-    // Extrai primeira linha do reason como último recurso
-    const firstLine = reason.trim().split('\n')[0].slice(0, 80);
-    if (firstLine.length > 4) parts.push(firstLine);
+  const sourceText = [visibleText, probableName, reason].filter(Boolean).join(' ');
+  const extracted = extractFoodFields(sourceText);
+  const normalizedWeight = normalizeFoodWeight(weight) ?? extracted.weight;
+  const resolvedBrand = brand?.trim() || extracted.brand;
+  const resolvedSpecies = species?.trim() || extracted.species;
+  const resolvedLifeStage = lifeStage?.trim() || extracted.lifeStage;
+  const normalizedLine = line?.trim();
+  const normalizedSize = size?.trim();
+  const normalizedFlavor = flavor?.trim();
+  const speciesLabel = resolvedSpecies === 'dog'
+    ? 'Cão'
+    : resolvedSpecies === 'cat'
+      ? 'Gato'
+      : resolvedSpecies || undefined;
+  const lifeStageLabel = resolvedLifeStage === 'puppy'
+    ? 'Filhote'
+    : resolvedLifeStage === 'adult'
+      ? 'Adulto'
+      : resolvedLifeStage === 'senior'
+        ? 'Sênior'
+        : resolvedLifeStage === 'all'
+          ? 'Todas as idades'
+          : resolvedLifeStage || undefined;
+
+  const parts = [
+    resolvedBrand,
+    normalizedLine,
+    lifeStageLabel,
+    speciesLabel,
+    normalizedSize,
+    normalizedFlavor,
+    normalizedWeight,
+  ]
+    .filter(Boolean)
+    .map(part => normalizeWhitespace(String(part)));
+
+  if (parts.length === 0 && probableName?.trim()) {
+    parts.push(normalizeWhitespace(probableName).slice(0, 80));
   }
+  if (parts.length === 0 && sourceText.trim()) {
+    parts.push(normalizeWhitespace(sourceText).slice(0, 80));
+  }
+
   return parts.length > 0 ? parts.join(' ') : null;
 }

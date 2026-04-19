@@ -98,6 +98,58 @@ def run_pg_migrations(engine: Engine) -> None:
             "CREATE INDEX IF NOT EXISTS idx_notif_pend_user ON notification_pendencies (user_id)"
         ))
 
+        # Product learning memory (Apr 2026)
+        _pg_add_column_if_missing(conn, "product_correction_events", "brand", "TEXT")
+        _pg_add_column_if_missing(conn, "product_correction_events", "weight", "TEXT")
+        _pg_add_column_if_missing(conn, "product_correction_events", "probable_name", "TEXT")
+        _pg_add_column_if_missing(conn, "product_correction_events", "visible_text", "TEXT")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS product_learning_events (
+                id BIGSERIAL PRIMARY KEY,
+                barcode_normalized TEXT,
+                ocr_raw_text TEXT,
+                visible_text TEXT,
+                probable_name TEXT,
+                detected_brand TEXT,
+                detected_species TEXT,
+                detected_life_stage TEXT,
+                detected_weight TEXT,
+                resolved_name TEXT NOT NULL,
+                resolved_category TEXT,
+                decision_source TEXT,
+                decision_score DOUBLE PRECISION,
+                decision_result TEXT,
+                tutor_confirmed BOOLEAN DEFAULT TRUE,
+                tutor_corrected BOOLEAN DEFAULT FALSE,
+                corrected_name TEXT,
+                ai_suggested_name TEXT,
+                pet_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_learning_events_barcode ON product_learning_events (barcode_normalized)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_learning_events_created_at ON product_learning_events (created_at)"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS product_reliable_catalog (
+                id BIGSERIAL PRIMARY KEY,
+                canonical_key TEXT UNIQUE NOT NULL,
+                canonical_name TEXT NOT NULL,
+                aliases_json TEXT NOT NULL DEFAULT '[]',
+                gtins_json TEXT NOT NULL DEFAULT '[]',
+                brand TEXT,
+                category TEXT,
+                species TEXT,
+                life_stage TEXT,
+                weight TEXT,
+                confirmation_count INTEGER NOT NULL DEFAULT 0,
+                correction_count INTEGER NOT NULL DEFAULT 0,
+                last_confirmed_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_reliable_catalog_key ON product_reliable_catalog (canonical_key)"))
+
 
 def run_sqlite_migrations(engine: Engine) -> None:
     """Run idempotent migrations.
@@ -371,6 +423,58 @@ def run_sqlite_migrations(engine: Engine) -> None:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_notif_pend_user ON notification_pendencies (user_id)"
         ))
+
+        # Product learning memory (Apr 2026)
+        changed |= _sqlite_add_column_if_missing(conn, "product_correction_events", "brand", "TEXT")
+        changed |= _sqlite_add_column_if_missing(conn, "product_correction_events", "weight", "TEXT")
+        changed |= _sqlite_add_column_if_missing(conn, "product_correction_events", "probable_name", "TEXT")
+        changed |= _sqlite_add_column_if_missing(conn, "product_correction_events", "visible_text", "TEXT")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS product_learning_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                barcode_normalized TEXT,
+                ocr_raw_text TEXT,
+                visible_text TEXT,
+                probable_name TEXT,
+                detected_brand TEXT,
+                detected_species TEXT,
+                detected_life_stage TEXT,
+                detected_weight TEXT,
+                resolved_name TEXT NOT NULL,
+                resolved_category TEXT,
+                decision_source TEXT,
+                decision_score REAL,
+                decision_result TEXT,
+                tutor_confirmed BOOLEAN DEFAULT 1,
+                tutor_corrected BOOLEAN DEFAULT 0,
+                corrected_name TEXT,
+                ai_suggested_name TEXT,
+                pet_id TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_learning_events_barcode ON product_learning_events (barcode_normalized)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_learning_events_created_at ON product_learning_events (created_at)"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS product_reliable_catalog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                canonical_key TEXT NOT NULL UNIQUE,
+                canonical_name TEXT NOT NULL,
+                aliases_json TEXT NOT NULL DEFAULT '[]',
+                gtins_json TEXT NOT NULL DEFAULT '[]',
+                brand TEXT,
+                category TEXT,
+                species TEXT,
+                life_stage TEXT,
+                weight TEXT,
+                confirmation_count INTEGER NOT NULL DEFAULT 0,
+                correction_count INTEGER NOT NULL DEFAULT 0,
+                last_confirmed_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_product_reliable_catalog_key ON product_reliable_catalog (canonical_key)"))
 
         # `changed` is intentionally unused; kept for potential logging later.
         _ = changed

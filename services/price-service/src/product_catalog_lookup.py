@@ -95,10 +95,61 @@ class ProductCorrectionEvent(Base):
     decision_source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    brand: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     species: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     life_stage: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    weight: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    probable_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    visible_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pet_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class ProductLearningEvent(Base):
+    """Evento estruturado de leitura/confirmação para memória incremental."""
+    __tablename__ = "product_learning_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    barcode_normalized: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    ocr_raw_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    visible_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    probable_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    detected_brand: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    detected_species: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    detected_life_stage: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    detected_weight: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    resolved_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    resolved_category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    decision_source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    decision_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    decision_result: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    tutor_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    tutor_corrected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    corrected_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ai_suggested_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pet_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class ProductReliableCatalog(Base):
+    """Base confiável interna: canônico + aliases + GTINs + contadores de confiança."""
+    __tablename__ = "product_reliable_catalog"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    canonical_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    canonical_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    aliases_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    gtins_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    brand: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    species: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    life_stage: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    weight: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    confirmation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    correction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class LookupProductPayload(BaseModel):
@@ -158,6 +209,19 @@ def _safe_text(value: Any) -> Optional[str]:
     return None
 
 
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _norm_key(value: Optional[str]) -> str:
+    return "".join(ch.lower() for ch in (value or "").strip() if ch.isalnum() or ch.isspace()).strip()
+
+
 def _safe_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -208,6 +272,26 @@ def _deserialize_payload(value: Optional[str]) -> dict[str, Any]:
 
 def _serialize_payload(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False)
+
+
+def _safe_json_list(value: Optional[str]) -> list[str]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    except Exception:
+        return []
+    return []
+
+
+def _canonical_key(name: str, brand: Optional[str], category: Optional[str]) -> str:
+    return "|".join([
+        _norm_key(brand),
+        _norm_key(category),
+        _norm_key(name),
+    ])
 
 
 def _response_from_catalog_row(row: ProductCatalog, *, from_cache: bool) -> LookupResponse:
@@ -455,6 +539,12 @@ def save_confirmed_product_to_catalog(
     weight: Optional[str] = None,
     ai_confidence: Optional[float] = None,
     pet_id: Optional[str] = None,
+    probable_name: Optional[str] = None,
+    visible_text: Optional[str] = None,
+    ocr_raw_text: Optional[str] = None,
+    decision_score: Optional[float] = None,
+    decision_result: Optional[str] = None,
+    tutor_confirmed: bool = True,
 ) -> ProductCatalog:
     raw_payload: dict[str, Any] = {
         "name": name,
@@ -469,6 +559,12 @@ def save_confirmed_product_to_catalog(
         "species": species,
         "life_stage": life_stage,
         "weight": weight,
+        "probable_name": probable_name,
+        "visible_text": visible_text,
+        "ocr_raw_text": ocr_raw_text,
+        "decision_score": decision_score,
+        "decision_result": decision_result,
+        "tutor_confirmed": tutor_confirmed,
     }
     candidate = CatalogCandidate(
         name=name,
@@ -491,13 +587,89 @@ def save_confirmed_product_to_catalog(
                 decision_source=decision_source,
                 ai_confidence=ai_confidence,
                 category=category,
+                brand=brand,
                 species=species,
                 life_stage=life_stage,
+                weight=weight,
+                probable_name=probable_name,
+                visible_text=visible_text,
                 pet_id=pet_id,
             )
             db.add(correction)
         except Exception:
             pass
+
+    try:
+        learning_event = ProductLearningEvent(
+            barcode_normalized=normalize_gtin(gtin),
+            ocr_raw_text=_safe_text(ocr_raw_text),
+            visible_text=_safe_text(visible_text),
+            probable_name=_safe_text(probable_name),
+            detected_brand=_safe_text(brand),
+            detected_species=_safe_text(species),
+            detected_life_stage=_safe_text(life_stage),
+            detected_weight=_safe_text(weight),
+            resolved_name=name,
+            resolved_category=_normalize_category(category, name, brand),
+            decision_source=_safe_text(decision_source),
+            decision_score=_safe_float(decision_score) or _safe_float(ai_confidence),
+            decision_result=_safe_text(decision_result),
+            tutor_confirmed=bool(tutor_confirmed),
+            tutor_corrected=bool(was_corrected),
+            corrected_name=name if was_corrected else None,
+            ai_suggested_name=_safe_text(ai_suggested_name),
+            pet_id=_safe_text(pet_id),
+        )
+        db.add(learning_event)
+    except Exception:
+        pass
+
+    try:
+        key = _canonical_key(name, brand, category)
+        now = datetime.now(timezone.utc)
+        reliable = db.scalar(select(ProductReliableCatalog).where(ProductReliableCatalog.canonical_key == key))
+        if not reliable:
+            reliable = ProductReliableCatalog(
+                canonical_key=key,
+                canonical_name=name,
+                aliases_json="[]",
+                gtins_json="[]",
+                brand=_safe_text(brand),
+                category=_normalize_category(category, name, brand),
+                species=_safe_text(species),
+                life_stage=_safe_text(life_stage),
+                weight=_safe_text(weight),
+                confirmation_count=0,
+                correction_count=0,
+            )
+            db.add(reliable)
+            db.flush()
+
+        aliases = set(_safe_json_list(reliable.aliases_json))
+        gtins = set(_safe_json_list(reliable.gtins_json))
+        if ai_suggested_name and ai_suggested_name.strip():
+            aliases.add(ai_suggested_name.strip())
+        if probable_name and probable_name.strip():
+            aliases.add(probable_name.strip())
+        aliases.add(name.strip())
+
+        normalized_gtin = normalize_gtin(gtin)
+        if normalized_gtin:
+            gtins.add(normalized_gtin)
+
+        reliable.aliases_json = json.dumps(sorted(aliases), ensure_ascii=False)
+        reliable.gtins_json = json.dumps(sorted(gtins), ensure_ascii=False)
+        reliable.brand = reliable.brand or _safe_text(brand)
+        reliable.category = reliable.category or _normalize_category(category, name, brand)
+        reliable.species = reliable.species or _safe_text(species)
+        reliable.life_stage = reliable.life_stage or _safe_text(life_stage)
+        reliable.weight = reliable.weight or _safe_text(weight)
+        reliable.confirmation_count = int(reliable.confirmation_count or 0) + (1 if tutor_confirmed else 0)
+        reliable.correction_count = int(reliable.correction_count or 0) + (1 if was_corrected else 0)
+        reliable.last_confirmed_at = now
+        reliable.updated_at = now
+    except Exception:
+        pass
 
     return row
 

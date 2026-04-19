@@ -44,6 +44,13 @@ class VisionService:
             return text.replace("```", "").strip()
         return text
 
+    @staticmethod
+    def _normalize_optional_str(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
     async def identify_product_from_image(
         self,
         image_bytes: bytes,
@@ -81,8 +88,8 @@ Contexto:
 - Diretriz específica: {category_guidance}
 
 Regras:
-1. PRIORIDADE MÁXIMA: retorne um candidato utilizável sempre que possível. Se conseguir ler qualquer combinação de marca + espécie + fase + peso, isso já é suficiente — preencha os campos que sabe e deixe name como melhor palpite ou null se realmente não souber.
-2. NÃO exija nome completo para retornar found=true. Se souber a marca mas não a linha completa, retorne a marca como brand e o que souber como name.
+1. PRIORIDADE MÁXIMA: retorne um candidato utilizável sempre que possível. Se conseguir ler qualquer combinação de marca + espécie + fase + peso, isso já é suficiente — preencha os campos que sabe.
+2. NÃO exija nome completo. Quando não tiver certeza do nome final, use probable_name para o melhor palpite e mantenha name como null se necessário.
 3. Use nomes comerciais reais, por exemplo: "Royal Canin Veterinary Diet Urinary Small Dog 1,5kg", "Golden Adulto Frango 15kg".
 4. Separe brand (ex: "Royal Canin") de name (nome completo incluindo a linha).
 5. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
@@ -97,15 +104,18 @@ Formato JSON obrigatório:
 {{
   "found": true,
   "name": "Nome completo do produto",
+  "probable_name": "Melhor palpite quando o nome completo não estiver claro",
   "brand": "Marca",
   "category": "food",
   "weight": "15 kg",
+  "size": "Porte/tamanho (ex: Mini, Small Breed, Raças Pequenas)",
   "manufacturer": "Fabricante",
   "presentation": "Saco 15 kg",
   "species": "dog",
   "life_stage": "adult",
   "line": "Linha específica (ex: Veterinary Diet, Natural)",
   "flavor": "Sabor (ex: Frango e Arroz)",
+  "visible_text": "Texto visível da embalagem (OCR visual resumido)",
   "confidence": 0.92,
   "reason": "Resumo curto do que foi lido na embalagem"
 }}
@@ -118,15 +128,18 @@ Se a imagem for realmente ilegível:
 {{
   "found": false,
   "name": null,
+  "probable_name": null,
   "brand": null,
   "category": null,
   "weight": null,
+  "size": null,
   "manufacturer": null,
   "presentation": null,
   "species": null,
   "life_stage": null,
   "line": null,
   "flavor": null,
+  "visible_text": null,
   "confidence": 0.0,
   "reason": "Imagem ilegível ou sem embalagem identificável"
 }}
@@ -152,14 +165,41 @@ Se a imagem for realmente ilegível:
             if category not in allowed_categories:
                 result["category"] = hint if hint in allowed_categories else "other"
 
-            result["found"] = bool(result.get("found") and result.get("name"))
+            name = self._normalize_optional_str(result.get("name"))
+            probable_name = self._normalize_optional_str(result.get("probable_name"))
+            brand = self._normalize_optional_str(result.get("brand"))
+            weight = self._normalize_optional_str(result.get("weight"))
+            visible_text = self._normalize_optional_str(result.get("visible_text"))
+            line = self._normalize_optional_str(result.get("line"))
+            flavor = self._normalize_optional_str(result.get("flavor"))
+            size = self._normalize_optional_str(result.get("size"))
+            manufacturer = self._normalize_optional_str(result.get("manufacturer"))
+            presentation = self._normalize_optional_str(result.get("presentation"))
+            reason = self._normalize_optional_str(result.get("reason"))
+
+            useful_partial = bool(
+                brand or
+                result.get("species") or
+                result.get("life_stage") or
+                weight or
+                line or
+                size or
+                flavor or
+                probable_name or
+                visible_text
+            )
+
+            result["found"] = bool(result.get("found") or name or useful_partial)
             result["confidence"] = float(result.get("confidence") or 0.0)
-            result["name"] = result.get("name") or None
-            result["brand"] = result.get("brand") or None
-            result["weight"] = result.get("weight") or None
-            result["manufacturer"] = result.get("manufacturer") or result.get("brand") or None
-            result["presentation"] = result.get("presentation") or result.get("weight") or None
-            result["reason"] = result.get("reason") or None
+            result["name"] = name
+            result["probable_name"] = probable_name
+            result["brand"] = brand
+            result["weight"] = weight
+            result["size"] = size
+            result["visible_text"] = visible_text
+            result["manufacturer"] = manufacturer or brand or None
+            result["presentation"] = presentation or weight or None
+            result["reason"] = reason
 
             valid_species = {"dog", "cat", "other"}
             species = result.get("species")
@@ -169,57 +209,73 @@ Se a imagem for realmente ilegível:
             life_stage = result.get("life_stage")
             result["life_stage"] = life_stage if life_stage in valid_stages else None
 
-            result["line"] = result.get("line") or None
-            result["flavor"] = result.get("flavor") or None
+            result["line"] = line
+            result["flavor"] = flavor
 
-            if not result["found"] and result["name"]:
-                # O scanner precisa de um candidato para confirmação.
-                # Se a IA leu um nome minimamente útil, preferimos promover isso.
-                result["found"] = True
+            if not result["name"] and result["probable_name"] and result["confidence"] >= 0.8:
+                # Quando a confiança está alta, promovemos probable_name para name
+                # para facilitar o preenchimento automático no app.
+                result["name"] = result["probable_name"]
 
-            if not result["confidence"] and result["name"]:
+            if not result["confidence"] and (result["name"] or useful_partial):
                 result["confidence"] = 0.65
 
             if hint in allowed_categories and (result.get("category") == "other" or not result.get("category")):
                 result["category"] = hint
 
+            return_type = "complete" if result.get("name") else "partial" if useful_partial else "empty"
             logger.info(
-                "Gemini produto: found=%s category=%s confidence=%.2f name=%s",
-                result["found"],
+                "Gemini produto return_type=%s found=%s category=%s confidence=%.2f brand=%s",
+                return_type,
+                bool(result["found"]),
                 result.get("category"),
                 result["confidence"],
-                result.get("name"),
+                result.get("brand"),
             )
             return result
         except json.JSONDecodeError as e:
-            logger.error("Erro ao fazer parse da resposta do Gemini para produto: %s", e)
+            logger.warning("Gemini produto return_type=empty reason=json_parse_error detail=%s", e)
             return {
                 "found": False,
                 "name": None,
+                "probable_name": None,
                 "brand": None,
                 "category": hint or "other",
                 "weight": None,
+                "size": None,
                 "manufacturer": None,
                 "presentation": None,
+                "visible_text": None,
+                "species": None,
+                "life_stage": None,
+                "line": None,
+                "flavor": None,
                 "confidence": 0.0,
                 "reason": "Resposta inválida da IA",
             }
         except Exception as e:
             err_str = str(e)
             if "timeout" in err_str.lower() or "deadline" in err_str.lower():
-                logger.warning("Timeout Gemini ao identificar produto (pet_id=%s): %s", pet_id, err_str)
+                logger.warning("Gemini produto return_type=timeout pet_id=%s detail=%s", pet_id, err_str)
                 return {
                     "found": False,
                     "name": None,
+                    "probable_name": None,
                     "brand": None,
                     "category": hint or "other",
                     "weight": None,
+                    "size": None,
                     "manufacturer": None,
                     "presentation": None,
+                    "visible_text": None,
+                    "species": None,
+                    "life_stage": None,
+                    "line": None,
+                    "flavor": None,
                     "confidence": 0.0,
                     "reason": "Tempo limite da IA esgotado",
                 }
-            logger.error("Erro ao identificar produto com Gemini: %s", err_str, exc_info=True)
+            logger.error("Gemini produto return_type=exception pet_id=%s detail=%s", pet_id, err_str, exc_info=True)
             raise
     
     async def extract_vaccine_data(self, image_bytes: bytes, pet_id: str) -> Dict[str, Any]:

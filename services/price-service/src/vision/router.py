@@ -10,6 +10,7 @@ from datetime import datetime
 import base64
 import os
 import logging
+import asyncio
 
 from ..user_auth.deps import get_current_user
 from ..user_auth.models import User
@@ -49,9 +50,11 @@ class IdentifyProductPhotoRequest(BaseModel):
 class IdentifyProductPhotoResponse(BaseModel):
     found: bool
     name: Optional[str] = None
+    probable_name: Optional[str] = None
     brand: Optional[str] = None
     category: Optional[str] = None
     weight: Optional[str] = None
+    size: Optional[str] = None
     manufacturer: Optional[str] = None
     presentation: Optional[str] = None
     confidence: float = Field(..., description="Confiança da identificação (0-1)")
@@ -60,6 +63,10 @@ class IdentifyProductPhotoResponse(BaseModel):
     life_stage: Optional[str] = None
     line: Optional[str] = None
     flavor: Optional[str] = None
+    visible_text: Optional[str] = None
+
+
+PHOTO_AI_TIMEOUT_SECONDS = float(os.getenv("VISION_PRODUCT_TIMEOUT_SECONDS", "22"))
 
 
 @router.post("/extract-vaccine-card", response_model=ExtractVaccineCardResponse)
@@ -173,16 +180,43 @@ async def identify_product_photo(
             )
 
         vision_service = VisionService(api_key)
-        result = await vision_service.identify_product_from_image(
-            image_bytes=image_bytes,
-            pet_id=request.pet_id,
-            hint=request.hint,
-        )
+        try:
+            result = await asyncio.wait_for(
+                vision_service.identify_product_from_image(
+                    image_bytes=image_bytes,
+                    pet_id=request.pet_id,
+                    hint=request.hint,
+                ),
+                timeout=PHOTO_AI_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "identify-product-photo return_type=timeout pet=%s hint=%s timeout_seconds=%.1f",
+                request.pet_id,
+                request.hint,
+                PHOTO_AI_TIMEOUT_SECONDS,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Tempo limite da IA esgotado. Tente novamente."
+            )
 
-        has_name = bool(result.get("name"))
-        has_partial = bool(result.get("brand") or result.get("species") or result.get("life_stage"))
+        has_name = bool((result.get("name") or "").strip())
+        has_partial = bool(
+            (result.get("brand") or "").strip() or
+            (result.get("species") or "").strip() or
+            (result.get("life_stage") or "").strip() or
+            (result.get("weight") or "").strip() or
+            (result.get("line") or "").strip() or
+            (result.get("size") or "").strip() or
+            (result.get("flavor") or "").strip() or
+            (result.get("probable_name") or "").strip() or
+            (result.get("visible_text") or "").strip()
+        )
+        return_type = "full_name" if has_name else "partial_useful" if has_partial else "empty"
         logger.info(
-            "identify-product-photo result: pet=%s hint=%s found=%s name=%s partial=%s confidence=%.2f",
+            "identify-product-photo return_type=%s pet=%s hint=%s found=%s name=%s partial=%s confidence=%.2f",
+            return_type,
             request.pet_id,
             request.hint,
             result.get("found"),
@@ -203,9 +237,9 @@ async def identify_product_photo(
         err_str = str(e)
         is_timeout = "timeout" in err_str.lower() or "deadline" in err_str.lower()
         if is_timeout:
-            logger.warning("Timeout ao identificar produto por foto (pet=%s): %s", request.pet_id, err_str)
+            logger.warning("identify-product-photo return_type=timeout pet=%s error=%s", request.pet_id, err_str)
             raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Tempo limite da IA esgotado. Tente novamente.")
-        logger.error("Erro ao identificar produto por foto: %s", err_str, exc_info=True)
+        logger.error("identify-product-photo return_type=api_error pet=%s error=%s", request.pet_id, err_str, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Falha ao processar a imagem. Tente novamente."

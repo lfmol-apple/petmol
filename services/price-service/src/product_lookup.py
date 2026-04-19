@@ -46,6 +46,12 @@ class ProductLookupConfirmRequest(BaseModel):
     species: Optional[str] = Field(None, max_length=16)
     life_stage: Optional[str] = Field(None, max_length=16)
     weight: Optional[str] = Field(None, max_length=32)
+    probable_name: Optional[str] = Field(None, max_length=255)
+    visible_text: Optional[str] = None
+    ocr_raw_text: Optional[str] = None
+    decision_score: Optional[float] = None
+    decision_result: Optional[str] = Field(None, max_length=16)
+    tutor_confirmed: bool = True
     pet_id: Optional[str] = Field(None, max_length=128)
 
 
@@ -180,6 +186,12 @@ async def confirm_product_lookup(
             life_stage=payload.life_stage,
             weight=payload.weight,
             ai_confidence=payload.confidence if payload.confidence < 1.0 else None,
+            probable_name=payload.probable_name,
+            visible_text=payload.visible_text,
+            ocr_raw_text=payload.ocr_raw_text,
+            decision_score=payload.decision_score,
+            decision_result=payload.decision_result,
+            tutor_confirmed=payload.tutor_confirmed,
             pet_id=payload.pet_id,
         )
         db.commit()
