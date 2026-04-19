@@ -57,7 +57,7 @@ class VisionService:
         """
         category_hint = (hint or "other").strip().lower()
         category_guidance = {
-            "food": "Para ração/alimento, procure marca, linha, indicação veterinária, espécie e peso da embalagem. Exemplos: Royal Canin Veterinary, Premier, Hills, Purina, Farmina, Guabi.",
+            "food": "Para ração/alimento: (1) leia a MARCA exata na embalagem (ex: Royal Canin, Premier, Hills, Purina, Farmina, Guabi); (2) leia a LINHA específica do produto — geralmente abaixo da marca (ex: Veterinary Diet, Urinary, Digestive, Starter, Light, Indoor); (3) extraia espécie (cão/gato), faixa etária (filhote/adulto/sênior) e peso da embalagem. O name DEVE ser marca + linha, ex: 'Royal Canin Veterinary Diet Urinary Small Dog 1,5kg'.",
             "medication": "Para medicamento, procure nome comercial, princípio ativo, concentração, laboratório/fabricante e apresentação. Exemplos: Apoquel, Prediderm, Amoxicilina, Simparic, Otomax, Dermotrat.",
             "antiparasite": "Para antiparasitário, procure marca comercial, faixa de peso e apresentação. Exemplos: Bravecto, NexGard, Simparica, Frontline, Revolution.",
             "dewormer": "Para vermífugo, procure nome comercial e apresentação. Exemplos: Drontal, Milbemax, Canex, Panacur.",
@@ -127,7 +127,10 @@ Se não encontrar:
                 "data": image_bytes,
             }
 
-            response = self.model.generate_content([prompt, image_part])
+            response = self.model.generate_content(
+                [prompt, image_part],
+                request_options={"timeout": 20},
+            )
             response_text = self._strip_json_fences(response.text)
             result = json.loads(response_text)
 
@@ -151,7 +154,7 @@ Se não encontrar:
                 result["found"] = True
 
             if not result["confidence"] and result["name"]:
-                result["confidence"] = 0.35
+                result["confidence"] = 0.65
 
             if hint in allowed_categories and (result.get("category") == "other" or not result.get("category")):
                 result["category"] = hint
@@ -178,7 +181,21 @@ Se não encontrar:
                 "reason": "Resposta inválida da IA",
             }
         except Exception as e:
-            logger.error("Erro ao identificar produto com Gemini: %s", str(e), exc_info=True)
+            err_str = str(e)
+            if "timeout" in err_str.lower() or "deadline" in err_str.lower():
+                logger.warning("Timeout Gemini ao identificar produto (pet_id=%s): %s", pet_id, err_str)
+                return {
+                    "found": False,
+                    "name": None,
+                    "brand": None,
+                    "category": hint or "other",
+                    "weight": None,
+                    "manufacturer": None,
+                    "presentation": None,
+                    "confidence": 0.0,
+                    "reason": "Tempo limite da IA esgotado",
+                }
+            logger.error("Erro ao identificar produto com Gemini: %s", err_str, exc_info=True)
             raise
     
     async def extract_vaccine_data(self, image_bytes: bytes, pet_id: str) -> Dict[str, Any]:

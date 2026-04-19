@@ -221,6 +221,7 @@ export function ProductDetectionSheetGold({
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         credentials: 'include',
+        signal: AbortSignal.timeout(25000),
         body: JSON.stringify({
           image,
           pet_id: petId,
@@ -599,7 +600,7 @@ export function ProductDetectionSheetGold({
       try {
         const result = await scanner.scanFileV2(file, false);
         div.remove();
-        detectedPhotoBarcode = result.decodedText.replace(/\D/g, '');
+        detectedPhotoBarcode = result?.decodedText?.replace(/\D/g, '') ?? '';
       } catch {
         div.remove();
       }

@@ -358,13 +358,7 @@ function FoodActions({
   const handleFoodRestock = async (cost?: number) => {
     const today = localTodayISO();
     const key = `petmol_food_control_${petId}`;
-    try {
-      const raw = localStorage.getItem(key);
-      const data = raw ? JSON.parse(raw) : {};
-      data.last_purchase_date = today;
-      if (cost != null) data.last_cost = cost;
-      localStorage.setItem(key, JSON.stringify(data));
-    } catch { /* silent */ }
+    let apiSucceeded = false;
 
     try {
       const token = getAuthToken();
@@ -376,9 +370,21 @@ function FoodActions({
           credentials: 'include',
           body: JSON.stringify({ refill_date: today }),
         });
+        apiSucceeded = true;
       }
-    } catch { /* offline — localStorage saved above */ } finally {
+    } catch { /* offline fallback below */ } finally {
       setLoading(false);
+    }
+
+    // Write localStorage only after API success, or as offline fallback
+    if (apiSucceeded || !getAuthToken()) {
+      try {
+        const raw = localStorage.getItem(key);
+        const data = raw ? JSON.parse(raw) : {};
+        data.last_purchase_date = today;
+        if (cost != null) data.last_cost = cost;
+        localStorage.setItem(key, JSON.stringify(data));
+      } catch { /* silent */ }
     }
 
     trackV1Metric('food_restock_confirmed', {
