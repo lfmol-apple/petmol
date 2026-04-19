@@ -4,7 +4,7 @@ import { API_BASE_URL } from '@/lib/api';
 import { fetchFromCosmos } from './apis/cosmos';
 import { fetchFromGlobal } from './apis/global';
 import { buildFoodSearchQueries, buildPartialFoodName, enrichFoodProduct, extractFoodFields, type StructuredFoodInput } from './foodParser';
-import { compareDominantTerms, hasStrongDominantTerms, type DominantTerms } from './dominantTerms';
+import { buildDominantTerms, compareDominantTerms, detectContradiction, hasStrongDominantTerms, type DominantTerms } from './dominantTerms';
 import type { ProductCategory } from '@/lib/productScanner';
 
 export type { ResolvedProduct };
@@ -414,6 +414,7 @@ export async function resolvePhotoProductCandidate(
   let origin: ProductDetectionOrigin = normalizeText(payload.name) ? 'ia' : productName ? 'ia' : 'partial_name';
   let usedParser = false;
   let fuzzyBrand = false;
+  let aiContradicts = false;
   const structuredFoodInput = toStructuredFoodInput(payload);
   const parsedFoodFields = category === 'food' ? extractFoodFields(structuredFoodInput) : null;
   const dominantTerms = parsedFoodFields?.dominantTerms;
@@ -424,9 +425,60 @@ export async function resolvePhotoProductCandidate(
     if (!parsed) return null;
     fuzzyBrand = parsed.brandMatchMode === 'fuzzy';
     weight = weight ?? parsed.weight;
-    name = buildPartialFoodName(structuredFoodInput) ?? name;
 
-    const queries = buildFoodSearchQueries(structuredFoodInput);
+    // Guard: if the AI's product_name / full name contradicts what the scan actually shows,
+    // strip the conflicting part so we build a name from the real scan evidence only.
+    let safeInput = structuredFoodInput;
+    const hasDominantConstraints =
+      hasStrongDominantTerms(parsed.dominantTerms) ||
+      parsed.dominantTerms.audienceTerms.length > 0;
+
+    if (hasDominantConstraints) {
+      // ── Symmetric check ────────────────────────────────────────────────────
+      // Fires when BOTH sides name a term in the same bucket with no overlap.
+      // e.g. scan:puppy vs AI:adult, scan:dog vs AI:cat, scan:small-dog vs AI:maxi.
+      const aiTexts = [
+        structuredFoodInput.productName,
+        structuredFoodInput.probableName,
+        normalizeText(payload.name),
+      ].filter((t): t is string => Boolean(t));
+      const symmetricBlock = aiTexts.some(text => {
+        const terms = buildDominantTerms({ texts: [text] });
+        return detectContradiction(parsed.dominantTerms, terms).isHardBlock;
+      });
+
+      // ── Asymmetric check ───────────────────────────────────────────────────
+      // Fires when scan has a THERAPEUTIC term (urinary, renal, …) but the
+      // full AI name specifies audience/life-stage WITHOUT any therapeutic term.
+      // "Royal Canin Maxi Adult" for a Urinary S/O scan = hard block.
+      // Only applied to payload.name (the full AI name), not to sub-fields like
+      // product_name which legitimately omit the therapeutic line indicator.
+      let asymmetricBlock = false;
+      if (!symmetricBlock && parsed.dominantTerms.functionalTerms.length > 0) {
+        const fullAiName = normalizeText(payload.name);
+        if (fullAiName) {
+          const fullNameTerms = buildDominantTerms({ texts: [fullAiName] });
+          asymmetricBlock =
+            fullNameTerms.functionalTerms.length === 0 &&
+            (fullNameTerms.audienceTerms.length > 0 || fullNameTerms.lifeStageTerms.length > 0);
+        }
+      }
+
+      aiContradicts = symmetricBlock || asymmetricBlock;
+      if (aiContradicts) {
+        safeInput = { ...structuredFoodInput, productName: null, probableName: null };
+        origin = 'parser';
+      }
+    }
+
+    if (aiContradicts) {
+      // Use only safe evidence; do NOT fall back to the wrong AI name.
+      name = buildPartialFoodName(safeInput) ?? undefined;
+    } else {
+      name = buildPartialFoodName(structuredFoodInput) ?? name;
+    }
+
+    const queries = buildFoodSearchQueries(safeInput);
     if (queries.length > 0) {
       const catalogMatch = await searchInternalCatalogCandidate(payload, category, queries, parsed.dominantTerms);
       if (catalogMatch) {
@@ -527,15 +579,16 @@ export async function resolvePhotoProductCandidate(
     category,
     brand: enriched.brand,
     weight: enriched.weight,
-    hasPayloadName: Boolean(normalizeText(payload.name) || productName),
+    // When AI name was overridden due to contradiction, treat as if no AI name existed.
+    hasPayloadName: !aiContradicts && Boolean(normalizeText(payload.name) || productName),
     usedParser,
     fuzzyBrand,
     species: payload.species,
     lifeStage: payload.life_stage,
   });
-  const assistedConfirmation = category === 'food'
+  const assistedConfirmation = aiContradicts || (category === 'food'
     ? !normalizeText(payload.name) || confidence.level !== 'high'
-    : false;
+    : false);
   const resultType: ProductDetectionResultType = confidence.level === 'low'
     ? 'fallback'
     : category === 'food'

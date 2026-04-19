@@ -95,7 +95,8 @@ const DOMINANT_TAXONOMY: DominantTaxonomyEntry[] = [
     label: 'small dog',
     bucket: 'audience',
     strength: 'medium',
-    patterns: [/\bsmall\s*dog\b/i, /\bsmall\b/i, /\bpequeno\s*porte\b/i, /\bra[cç]as?\s*pequenas\b/i],
+    // NOTE: /\bsmall\b/ removed — too broad as hard block (catches "small bites", "small pouches")
+    patterns: [/\bsmall\s*dog\b/i, /\bpequeno\s*porte\b/i, /\bra[cç]as?\s*pequenas\b/i],
   },
   {
     key: 'medium',
@@ -235,7 +236,7 @@ export function compareDominantTerms(expected: DominantTerms, actual: DominantTe
     ['functionalTerms', 'strong'] as const,
     ['lifeStageTerms', 'strong'] as const,
     ['speciesTerms', 'strong'] as const,
-    ['audienceTerms', 'medium'] as const,
+    ['audienceTerms', 'strong'] as const,
   ];
 
   for (const [bucket, severity] of buckets) {
@@ -311,6 +312,50 @@ export function dominantTermBucketsSummary(terms: DominantTerms): string[] {
     ...terms.audienceTerms,
   ];
   return compactUnique(summary);
+}
+
+export interface ContradictionResult {
+  hasContradiction: boolean;
+  strongConflicts: string[];
+  mediumConflicts: string[];
+  /** true when any bucket has terms on both sides but they don't overlap */
+  isHardBlock: boolean;
+}
+
+/**
+ * Detects whether a candidate actively contradicts scan evidence.
+ * Unlike compareDominantTerms (which flags missing terms), this only fires when
+ * BOTH sides name a term in the same bucket and they are incompatible.
+ * Used to validate AI-suggested names against what the scan actually shows.
+ */
+export function detectContradiction(
+  inputTerms: DominantTerms,
+  candidateTerms: DominantTerms,
+): ContradictionResult {
+  const conflicts: string[] = [];
+
+  const buckets = [
+    'functionalTerms',
+    'lifeStageTerms',
+    'speciesTerms',
+    'audienceTerms',
+  ] as const;
+
+  for (const bucket of buckets) {
+    const input = inputTerms[bucket];
+    const candidate = candidateTerms[bucket];
+    if (input.length === 0 || candidate.length === 0) continue;
+    const hasOverlap = input.some(t => candidate.includes(t));
+    if (!hasOverlap) conflicts.push(...input);
+  }
+
+  const unique = [...new Set(conflicts)];
+  return {
+    hasContradiction: unique.length > 0,
+    strongConflicts: unique,
+    mediumConflicts: [],
+    isHardBlock: unique.length > 0,
+  };
 }
 
 export { MEDIUM_BUCKETS, STRONG_BUCKETS };
