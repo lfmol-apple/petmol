@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .config import get_settings
 from .db import Base
+from .gtin_client import GtinAuthError, GtinConfigError, GtinExternalError, get_product_by_gtin, get_product_image_url
 
 
 logger = logging.getLogger(__name__)
@@ -28,9 +29,10 @@ VALID_PRODUCT_CATEGORIES = {
     "other",
 }
 COSMOS_PROVIDER = "cosmos"
+GTIN_RSC_PROVIDER = "gtin_rsc"
 LOOKUP_QUEUE_STATUS_PENDING = "pending"
 LOOKUP_QUEUE_STATUS_RESOLVED = "resolved"
-LOOKUP_QUEUE_NOT_FOUND_REASON = "Produto não encontrado no Cosmos; enviado para fila"
+LOOKUP_QUEUE_NOT_FOUND_REASON = "Produto não encontrado nos provedores; enviado para fila"
 
 
 class ProductCatalog(Base):
@@ -329,6 +331,49 @@ async def fetch_product_from_cosmos(gtin: str) -> Optional[CatalogCandidate]:
     )
 
 
+async def fetch_product_from_gtin_provider(gtin: str) -> Optional[CatalogCandidate]:
+    try:
+        payload = await get_product_by_gtin(gtin)
+    except (GtinConfigError, GtinAuthError, GtinExternalError) as exc:
+        logger.info("[catalog-lookup] gtin_rsc skipped gtin=%s error=%s", gtin, exc)
+        return None
+    except Exception as exc:
+        logger.info("[catalog-lookup] gtin_rsc failed gtin=%s error=%s", gtin, exc)
+        return None
+
+    if not isinstance(payload, dict) or not payload:
+        return None
+
+    name = _safe_text(payload.get("nome") or payload.get("nome_acento") or payload.get("description") or payload.get("name"))
+    if not name:
+        return None
+
+    brand = _safe_text(payload.get("marca"))
+    if brand and brand.strip().lower() in {"desconhecido", "desconhecido ", "unknown"}:
+        brand = None
+
+    image_url = None
+    try:
+        image_url = await get_product_image_url(gtin)
+    except Exception as exc:
+        logger.info("[catalog-lookup] gtin_rsc image unavailable gtin=%s error=%s", gtin, exc)
+
+    image_url = image_url or _safe_text(payload.get("link_foto"))
+    ncm_code = _safe_text(payload.get("ncm"))
+    category_text = _safe_text(payload.get("categoria"))
+
+    return CatalogCandidate(
+        name=name,
+        brand=brand,
+        category=_normalize_category(category_text, name, brand, ncm_code),
+        ncm_code=ncm_code,
+        thumbnail_url=image_url,
+        source_primary=GTIN_RSC_PROVIDER,
+        source_confidence=85.0,
+        raw_payload=payload,
+    )
+
+
 def save_product_to_catalog(db: Session, gtin: str, candidate: Optional[CatalogCandidate], *, negative: bool = False) -> ProductCatalog:
     normalized = normalize_gtin(gtin)
     now = datetime.now(timezone.utc)
@@ -459,16 +504,27 @@ async def lookup_product_by_gtin(db: Session, gtin: str, *, context: str = "api_
         db.commit()
         return cached
 
-    cosmos_candidate = await fetch_product_from_cosmos(normalized) if is_cosmos_enabled() else None
+    provider_used: Optional[str] = None
+    candidate: Optional[CatalogCandidate] = None
 
+    cosmos_candidate = await fetch_product_from_cosmos(normalized) if is_cosmos_enabled() else None
     if cosmos_candidate:
-        row = save_product_to_catalog(db, normalized, cosmos_candidate)
+        candidate = cosmos_candidate
+        provider_used = COSMOS_PROVIDER
+    else:
+        gtin_candidate = await fetch_product_from_gtin_provider(normalized)
+        if gtin_candidate:
+            candidate = gtin_candidate
+            provider_used = GTIN_RSC_PROVIDER
+
+    if candidate:
+        row = save_product_to_catalog(db, normalized, candidate)
         _record_scan_event(
             db,
             barcode=gtin,
             barcode_normalized=normalized,
             found_in_cache=False,
-            external_source_used=COSMOS_PROVIDER,
+            external_source_used=provider_used,
             product_id=row.id,
             context=context,
         )
@@ -482,7 +538,7 @@ async def lookup_product_by_gtin(db: Session, gtin: str, *, context: str = "api_
         barcode=gtin,
         barcode_normalized=normalized,
         found_in_cache=False,
-        external_source_used=COSMOS_PROVIDER,
+        external_source_used=provider_used,
         product_id=queue_item.resolved_product_id,
         context=context,
     )
