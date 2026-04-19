@@ -1,4 +1,12 @@
 import type { ResolvedProduct } from './types';
+import {
+  buildDominantTerms,
+  dominantFunctionalLabel,
+  dominantPortFromAudience,
+  inferLifeStageFromDominantTerms,
+  inferSpeciesFromDominantTerms,
+  type DominantTerms,
+} from './dominantTerms';
 
 // ── Marcas conhecidas BR (ordem: mais específica primeiro) ─────────────────
 const KNOWN_BRANDS: string[] = [
@@ -45,40 +53,7 @@ const OCR_CORRECTIONS: Array<[RegExp, string]> = [
   [/\b0(?=[a-z])/gi, 'o'],  // zero seguido de letra → 'o'
 ];
 
-// ── Padrões semânticos ─────────────────────────────────────────────────────
-const SPECIES_RULES: Array<{ re: RegExp; value: 'dog' | 'cat' }> = [
-  { re: /\b(cachorro|cao|cão|caes|cães|dog|canino|canine)\b/i, value: 'dog' },
-  { re: /\b(gato|gatos|cat|cats|felino|felinos|feline)\b/i, value: 'cat' },
-];
-
-const LIFE_STAGE_RULES: Array<{ re: RegExp; value: 'puppy' | 'adult' | 'senior' | 'all' }> = [
-  { re: /\b(filhote|filhotes|puppy|puppies|junior|kitten|kittens)\b/i, value: 'puppy' },
-  { re: /\b(senior|s[eê]nior|idoso|idosa|geriatrico|ger[ií]atric|mature|7\+|11\+)\b/i, value: 'senior' },
-  { re: /\b(adulto|adultos|adult|adults)\b/i, value: 'adult' },
-  { re: /\b(todas as idades|all life|all ages|todas as fases|todas idades)\b/i, value: 'all' },
-];
-
-const PORT_RULES: Array<{ re: RegExp; value: 'mini' | 'small' | 'medium' | 'large' | 'giant' }> = [
-  { re: /\b(mini|toy|extra\s?small|\bxs\b)\b/i, value: 'mini' },
-  { re: /\b(small|pequeno\s?porte|pequenos?|peq\.?\s*porte)\b/i, value: 'small' },
-  { re: /\b(medium|m[eé]dio\s?porte|m[eé]dios?|med\.?\s*porte)\b/i, value: 'medium' },
-  { re: /\b(large|grande\s?porte|grandes?|gde\.?\s*porte)\b/i, value: 'large' },
-  { re: /\b(giant|gigante\s?porte|gigantes?)\b/i, value: 'giant' },
-];
-
 const WEIGHT_RE = /\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i;
-
-const FOOD_LINE_RULES: Array<{ re: RegExp; value: string }> = [
-  { re: /\burinary\s*(?:s[\/\\]?\s*o|so)\b/i, value: 'Urinary S/O' },
-  { re: /\brenal\b/i, value: 'Renal' },
-  { re: /\bgastro\s*intestinal\b/i, value: 'Gastro Intestinal' },
-  { re: /\bhepatic\b/i, value: 'Hepatic' },
-  { re: /\bderm(?:a|ato)\b/i, value: 'Dermatology' },
-  { re: /\bweight\s*control\b/i, value: 'Weight Control' },
-  { re: /\bmini\s*adult\b/i, value: 'Mini Adult' },
-  { re: /\bmedium\s*adult\b/i, value: 'Medium Adult' },
-  { re: /\bmaxi\s*adult\b/i, value: 'Maxi Adult' },
-];
 
 // ── Tipos ──────────────────────────────────────────────────────────────────
 export interface FoodFields {
@@ -94,6 +69,7 @@ export interface FoodFields {
   weightValue?: number;
   weightUnit?: 'kg' | 'g';
   port?: 'mini' | 'small' | 'medium' | 'large' | 'giant';
+  dominantTerms: DominantTerms;
   rawTextBlobs: string[];
   searchQuery: string;
 }
@@ -275,6 +251,8 @@ function buildSearchParts(fields: Omit<FoodFields, 'searchQuery'>): string[] {
     fields.line,
     fields.variant,
     fields.flavor,
+    ...fields.dominantTerms.strongTerms,
+    ...fields.dominantTerms.mediumTerms,
     lifeStageLabel,
     speciesLabel,
     fields.port,
@@ -345,43 +323,43 @@ export function extractFoodFields(rawInput: string | StructuredFoodInput): FoodF
   const input = toStructuredInput(rawInput);
   const rawTextBlobs = getStructuredBlobs(input).map(blob => applyOcr(blob));
   const sanitized = normalizeWhitespace(rawTextBlobs.join(' '));
+  const dominantTerms = buildDominantTerms({
+    texts: [
+      input.species,
+      input.lifeStage,
+      input.line,
+      input.variant,
+      input.flavor,
+      input.size,
+      input.visibleText,
+      input.reason,
+      ...rawTextBlobs,
+    ],
+    weakCandidates: [
+      input.line,
+      input.variant,
+      input.flavor,
+      input.size,
+      buildStructuredWeight(input.weightValue, input.weightUnit),
+      input.weight,
+    ],
+  });
 
   const brandMatch = input.brand?.trim()
     ? { brand: normalizeWhitespace(input.brand), mode: 'exact' as const }
     : fuzzyMatchBrandDetails(sanitized);
   const brand = brandMatch?.brand;
   const productName = compactParts([input.productName, input.probableName])[0];
-  let line: string | undefined;
-  if (input.line?.trim()) {
-    line = normalizeWhitespace(input.line);
-  } else {
-    for (const blob of rawTextBlobs) {
-      for (const { re, value } of FOOD_LINE_RULES) {
-        if (re.test(blob)) {
-          line = value;
-          break;
-        }
-      }
-      if (line) break;
-    }
-  }
+  const line = input.line?.trim()
+    ? normalizeWhitespace(input.line)
+    : dominantFunctionalLabel(dominantTerms.functionalTerms[0]);
 
   const variant = compactParts([input.variant, input.size])[0];
   const flavor = compactParts([input.flavor])[0] ?? resolveFlavor(rawTextBlobs);
 
-  let species: FoodFields['species'] = normalizeSpecies(input.species);
-  if (!species) {
-    for (const { re, value } of SPECIES_RULES) {
-      if (re.test(sanitized)) { species = value; break; }
-    }
-  }
+  const species: FoodFields['species'] = normalizeSpecies(input.species) ?? inferSpeciesFromDominantTerms(dominantTerms);
 
-  let lifeStage: FoodFields['lifeStage'] = normalizeLifeStage(input.lifeStage);
-  if (!lifeStage) {
-    for (const { re, value } of LIFE_STAGE_RULES) {
-      if (re.test(sanitized)) { lifeStage = value; break; }
-    }
-  }
+  const lifeStage: FoodFields['lifeStage'] = normalizeLifeStage(input.lifeStage) ?? inferLifeStageFromDominantTerms(dominantTerms);
 
   const structuredWeight = normalizeFoodWeight(input.weight) ?? buildStructuredWeight(input.weightValue, input.weightUnit);
   const blobWeight = extractWeightFromBlobs(rawTextBlobs);
@@ -393,10 +371,7 @@ export function extractFoodFields(rawInput: string | StructuredFoodInput): FoodF
     ? normalizeWeightUnit(structuredWeight.match(WEIGHT_RE)?.[2])
     : blobWeight.weightUnit;
 
-  let port: FoodFields['port'];
-  for (const { re, value } of PORT_RULES) {
-    if (re.test(sanitized)) { port = value; break; }
-  }
+  const port: FoodFields['port'] = dominantPortFromAudience(dominantTerms.audienceTerms);
 
   const parts = buildSearchParts({
     brand,
@@ -411,6 +386,7 @@ export function extractFoodFields(rawInput: string | StructuredFoodInput): FoodF
     weightValue,
     weightUnit,
     port,
+    dominantTerms,
     rawTextBlobs,
   });
   if (parts.length === 0 && rawTextBlobs[0]) parts.push(rawTextBlobs[0].slice(0, 60));
@@ -428,6 +404,7 @@ export function extractFoodFields(rawInput: string | StructuredFoodInput): FoodF
     weightValue,
     weightUnit,
     port,
+    dominantTerms,
     rawTextBlobs,
     searchQuery: parts.join(' '),
   };
@@ -440,6 +417,8 @@ export function buildFoodSearchQueries(rawInput: string | StructuredFoodInput): 
     [fields.brand, fields.productName, fields.line, fields.variant, fields.flavor, fields.weight].filter(Boolean).join(' '),
     [fields.brand, fields.productName, fields.species, fields.lifeStage, fields.weight].filter(Boolean).join(' '),
     [fields.brand, fields.line, fields.variant, fields.species, fields.weight].filter(Boolean).join(' '),
+    fields.dominantTerms.strongTerms.join(' '),
+    fields.dominantTerms.mediumTerms.join(' '),
     fields.searchQuery,
     ...fields.rawTextBlobs.slice(0, 4),
   ]);

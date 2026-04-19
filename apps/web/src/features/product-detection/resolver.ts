@@ -4,6 +4,7 @@ import { API_BASE_URL } from '@/lib/api';
 import { fetchFromCosmos } from './apis/cosmos';
 import { fetchFromGlobal } from './apis/global';
 import { buildFoodSearchQueries, buildPartialFoodName, enrichFoodProduct, extractFoodFields, type StructuredFoodInput } from './foodParser';
+import { compareDominantTerms, hasStrongDominantTerms, type DominantTerms } from './dominantTerms';
 import type { ProductCategory } from '@/lib/productScanner';
 
 export type { ResolvedProduct };
@@ -64,6 +65,10 @@ export interface ProductPhotoCandidate {
   origin: ProductDetectionOrigin;
   resultType: ProductDetectionResultType;
   confidence: ProductDetectionConfidence;
+  dominantTerms?: DominantTerms;
+  assistedConfirmation?: boolean;
+  strongTermConflicts?: string[];
+  mediumTermConflicts?: string[];
 }
 
 interface CatalogSearchApiCandidate {
@@ -82,6 +87,11 @@ interface CatalogSearchApiResponse {
 interface CatalogMatchResult {
   product: ResolvedProduct;
   score: number;
+  dominantTerms: DominantTerms;
+  strongTermMatches: string[];
+  mediumTermMatches: string[];
+  strongTermConflicts: string[];
+  mediumTermConflicts: string[];
 }
 
 const ALLOWED_CATEGORIES: ProductCategory[] = [
@@ -153,6 +163,10 @@ function scorePhotoCandidate(args: {
   catalogScore?: number;
   species?: string | null;
   lifeStage?: string | null;
+  strongConflictCount?: number;
+  mediumConflictCount?: number;
+  strongMatchCount?: number;
+  mediumMatchCount?: number;
 }): ProductDetectionConfidence {
   const baseAi = Number(args.payload.confidence ?? 0);
   let score = baseAi > 0 ? Math.min(0.65, baseAi * 0.65) : 0.2;
@@ -164,6 +178,10 @@ function scorePhotoCandidate(args: {
   if (args.usedParser) score += 0.09;
   if (args.fuzzyBrand) score -= 0.07;
   if (typeof args.catalogScore === 'number') score += Math.min(0.24, args.catalogScore * 0.24);
+  if (args.strongMatchCount) score += Math.min(0.18, args.strongMatchCount * 0.06);
+  if (args.mediumMatchCount) score += Math.min(0.1, args.mediumMatchCount * 0.03);
+  if (args.mediumConflictCount) score -= args.mediumConflictCount * 0.2;
+  if (args.strongConflictCount) score -= 0.65 + args.strongConflictCount * 0.12;
 
   const normalized = clampScore(score);
   return { score: normalized, level: toConfidenceLevel(normalized) };
@@ -312,6 +330,7 @@ async function searchInternalCatalogCandidate(
   payload: ProductPhotoVisionPayload,
   category: ProductCategory,
   queries: string[],
+  expectedDominantTerms: DominantTerms,
 ): Promise<CatalogMatchResult | null> {
   const type = category === 'food' ? 'food' : 'product';
   let bestMatch: CatalogMatchResult | null = null;
@@ -328,9 +347,23 @@ async function searchInternalCatalogCandidate(
       if (!response.ok) continue;
       const data = (await response.json()) as CatalogSearchApiResponse;
       for (const candidate of data.candidates ?? []) {
-        const score = scoreCatalogCandidate(candidate, payload, query);
-        if (score < 0.55) continue;
         const packSizes = formatPackSizes(candidate.pack_sizes);
+        const candidateFields = extractFoodFields({
+          brand: candidate.brand,
+          productName: candidate.title,
+          variant: candidate.variant,
+          species: candidate.species,
+          weight: packSizes[0],
+          rawTextBlobs: [candidate.title, candidate.brand, candidate.variant, candidate.species, ...packSizes],
+        });
+        const compatibility = compareDominantTerms(expectedDominantTerms, candidateFields.dominantTerms);
+        if (compatibility.strongConflicts.length > 0) continue;
+
+        let score = scoreCatalogCandidate(candidate, payload, query);
+        score += compatibility.strongMatches.length * 0.08;
+        score += compatibility.mediumMatches.length * 0.04;
+        score -= compatibility.mediumConflicts.length * 0.16;
+        if (score < 0.55) continue;
         const weight = normalizeWeight(payload) ?? packSizes[0];
         const resolved: ResolvedProduct = {
           barcode: '',
@@ -345,7 +378,12 @@ async function searchInternalCatalogCandidate(
         if (!bestMatch || score > bestMatch.score) {
           bestMatch = {
             product: category === 'food' ? enrichFoodProduct(resolved) : resolved,
-            score,
+            score: clampScore(score),
+            dominantTerms: candidateFields.dominantTerms,
+            strongTermMatches: compatibility.strongMatches,
+            mediumTermMatches: compatibility.mediumMatches,
+            strongTermConflicts: compatibility.strongConflicts,
+            mediumTermConflicts: compatibility.mediumConflicts,
           };
         }
       }
@@ -377,18 +415,23 @@ export async function resolvePhotoProductCandidate(
   let usedParser = false;
   let fuzzyBrand = false;
   const structuredFoodInput = toStructuredFoodInput(payload);
+  const parsedFoodFields = category === 'food' ? extractFoodFields(structuredFoodInput) : null;
+  const dominantTerms = parsedFoodFields?.dominantTerms;
 
   if (category === 'food') {
     usedParser = true;
-    const parsed = extractFoodFields(structuredFoodInput);
+    const parsed = parsedFoodFields;
+    if (!parsed) return null;
     fuzzyBrand = parsed.brandMatchMode === 'fuzzy';
     weight = weight ?? parsed.weight;
     name = buildPartialFoodName(structuredFoodInput) ?? name;
 
     const queries = buildFoodSearchQueries(structuredFoodInput);
     if (queries.length > 0) {
-      const catalogMatch = await searchInternalCatalogCandidate(payload, category, queries);
+      const catalogMatch = await searchInternalCatalogCandidate(payload, category, queries, parsed.dominantTerms);
       if (catalogMatch) {
+        const hasStrongCompatibility = !hasStrongDominantTerms(parsed.dominantTerms) || catalogMatch.strongTermMatches.length > 0;
+        const assistedConfirmation = !hasStrongCompatibility || catalogMatch.mediumTermConflicts.length > 0;
         const confidence = scorePhotoCandidate({
           payload,
           category,
@@ -400,6 +443,10 @@ export async function resolvePhotoProductCandidate(
           catalogScore: catalogMatch.score,
           species: payload.species,
           lifeStage: payload.life_stage,
+          strongConflictCount: catalogMatch.strongTermConflicts.length,
+          mediumConflictCount: catalogMatch.mediumTermConflicts.length,
+          strongMatchCount: catalogMatch.strongTermMatches.length,
+          mediumMatchCount: catalogMatch.mediumTermMatches.length,
         });
         return {
           product: {
@@ -407,8 +454,12 @@ export async function resolvePhotoProductCandidate(
             barcode: options?.barcode ?? '',
           },
           origin: 'fuzzy_match',
-          resultType: confidence.score >= 0.84 ? 'complete' : 'partial',
+          resultType: !assistedConfirmation && confidence.score >= 0.84 ? 'complete' : 'partial',
           confidence,
+          dominantTerms: parsed.dominantTerms,
+          assistedConfirmation,
+          strongTermConflicts: catalogMatch.strongTermConflicts,
+          mediumTermConflicts: catalogMatch.mediumTermConflicts,
         };
       }
     }
@@ -429,7 +480,7 @@ export async function resolvePhotoProductCandidate(
   }
 
   if (!name && category === 'food') {
-    const fields = extractFoodFields(structuredFoodInput);
+    const fields = parsedFoodFields ?? extractFoodFields(structuredFoodInput);
     usedParser = true;
     origin = 'parser';
     fuzzyBrand = fields.brandMatchMode === 'fuzzy';
@@ -482,17 +533,28 @@ export async function resolvePhotoProductCandidate(
     species: payload.species,
     lifeStage: payload.life_stage,
   });
+  const assistedConfirmation = category === 'food'
+    ? !normalizeText(payload.name) || confidence.level !== 'high'
+    : false;
   const resultType: ProductDetectionResultType = confidence.level === 'low'
     ? 'fallback'
-    : normalizeText(payload.name)
-      ? 'complete'
-      : 'partial';
+    : category === 'food'
+      ? assistedConfirmation
+        ? 'partial'
+        : 'complete'
+      : normalizeText(payload.name)
+        ? 'complete'
+        : 'partial';
 
   return {
     product: enriched,
     origin,
     resultType,
     confidence,
+    dominantTerms,
+    assistedConfirmation,
+    strongTermConflicts: [],
+    mediumTermConflicts: [],
   };
 }
 

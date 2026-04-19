@@ -25,7 +25,7 @@ import {
   type ProductDetectionOrigin,
   type ProductDetectionResultType,
 } from '@/features/product-detection/resolver';
-import { buildPartialFoodName } from '@/features/product-detection/foodParser';
+import { buildPartialFoodName, extractFoodFields } from '@/features/product-detection/foodParser';
 import { submitLearningConfirmation, findLocalCorrection, type ScanDecisionSource } from '@/features/product-detection/learningStore';
 
 type Step =
@@ -128,6 +128,10 @@ interface PhotoIdentifyOutcome {
   assistedConfirmation?: boolean;
   productName?: string;
   rawTextBlobs?: string[];
+  strongTerms?: string[];
+  mediumTerms?: string[];
+  weakTerms?: string[];
+  termConflicts?: string[];
 }
 
 const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024;
@@ -294,6 +298,7 @@ export function ProductDetectionSheetGold({
   const aiConfidenceRef = useRef<number | undefined>(undefined);
   const decisionScoreRef = useRef<number | undefined>(undefined);
   const decisionResultTypeRef = useRef<ProductDetectionResultType>('fallback');
+  const assistedConfirmationRef = useRef(false);
   const probableNameRef = useRef<string | undefined>(undefined);
   const productNameRef = useRef<string | undefined>(undefined);
   const visibleTextRef = useRef<string | undefined>(undefined);
@@ -302,6 +307,10 @@ export function ProductDetectionSheetGold({
   const lifeStageRef = useRef<string | undefined>(undefined);
   const detectedWeightRef = useRef<string | undefined>(undefined);
   const detectedBrandRef = useRef<string | undefined>(undefined);
+  const strongTermsRef = useRef<string[]>([]);
+  const mediumTermsRef = useRef<string[]>([]);
+  const weakTermsRef = useRef<string[]>([]);
+  const termConflictsRef = useRef<string[]>([]);
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
 
@@ -368,6 +377,23 @@ export function ProductDetectionSheetGold({
       const assistedConfirmation = shouldOpenAssistedConfirmation(payload);
       const detectedWeight = getDetectedWeight(payload);
       const rawTextBlobs = (payload.raw_text_blobs ?? []).filter((value): value is string => Boolean(value?.trim()));
+      const fallbackTerms = extractFoodFields({
+        brand: payload.brand,
+        productName: payload.product_name,
+        probableName: payload.probable_name,
+        species: payload.species,
+        lifeStage: payload.life_stage,
+        weight: detectedWeight ?? payload.weight,
+        weightValue: payload.weight_value,
+        weightUnit: payload.weight_unit,
+        line: payload.line,
+        variant: payload.variant ?? payload.size,
+        size: payload.size,
+        flavor: payload.flavor,
+        visibleText: payload.visible_text,
+        reason: payload.reason,
+        rawTextBlobs,
+      }).dominantTerms;
 
       if (!resolved) {
         if (!hasUsefulProductPartial(payload)) {
@@ -428,7 +454,11 @@ export function ProductDetectionSheetGold({
           lifeStage: payload.life_stage?.trim() || undefined,
           detectedWeight,
           detectedBrand: payload.brand?.trim() || undefined,
-          assistedConfirmation,
+          assistedConfirmation: assistedConfirmation || fallbackTerms.strongTerms.length > 0,
+          strongTerms: fallbackTerms.strongTerms,
+          mediumTerms: fallbackTerms.mediumTerms,
+          weakTerms: fallbackTerms.weakTerms,
+          termConflicts: [],
         };
       }
 
@@ -455,7 +485,11 @@ export function ProductDetectionSheetGold({
         lifeStage: payload.life_stage?.trim() || undefined,
         detectedWeight: detectedWeight ?? resolved.product.weight,
         detectedBrand: payload.brand?.trim() || resolved.product.brand,
-        assistedConfirmation,
+        assistedConfirmation: assistedConfirmation || resolved.assistedConfirmation,
+        strongTerms: resolved.dominantTerms?.strongTerms,
+        mediumTerms: resolved.dominantTerms?.mediumTerms,
+        weakTerms: resolved.dominantTerms?.weakTerms,
+        termConflicts: [...(resolved.strongTermConflicts ?? []), ...(resolved.mediumTermConflicts ?? [])],
       };
     } catch (error) {
       if (error instanceof Error && error.name === 'TimeoutError') {
@@ -657,6 +691,7 @@ export function ProductDetectionSheetGold({
       aiConfidenceRef.current = gtinConfidence.score;
       decisionScoreRef.current = gtinConfidence.score;
       decisionResultTypeRef.current = 'complete';
+      assistedConfirmationRef.current = false;
       probableNameRef.current = undefined;
       productNameRef.current = undefined;
       visibleTextRef.current = undefined;
@@ -665,6 +700,10 @@ export function ProductDetectionSheetGold({
       lifeStageRef.current = undefined;
       detectedWeightRef.current = final.weight;
       detectedBrandRef.current = final.brand;
+      strongTermsRef.current = [];
+      mediumTermsRef.current = [];
+      weakTermsRef.current = [];
+      termConflictsRef.current = [];
       setFromHistory(false);
       setConfirmed(final);
       setScannerError(null);
@@ -891,6 +930,7 @@ export function ProductDetectionSheetGold({
         aiConfidenceRef.current = gtinConfidence.score;
         decisionScoreRef.current = gtinConfidence.score;
         decisionResultTypeRef.current = 'complete';
+        assistedConfirmationRef.current = false;
         probableNameRef.current = undefined;
         productNameRef.current = undefined;
         visibleTextRef.current = undefined;
@@ -899,6 +939,10 @@ export function ProductDetectionSheetGold({
         lifeStageRef.current = undefined;
         detectedWeightRef.current = resolvedFromBarcode.weight;
         detectedBrandRef.current = resolvedFromBarcode.brand;
+        strongTermsRef.current = [];
+        mediumTermsRef.current = [];
+        weakTermsRef.current = [];
+        termConflictsRef.current = [];
         setScannerError(null);
         setFromHistory(false);
         setConfirmed(resolvedFromBarcode);
@@ -918,7 +962,9 @@ export function ProductDetectionSheetGold({
     if (identifiedFromPhoto.product) {
       const photoProduct = identifiedFromPhoto.product;
       // Verificar se há correção prévia para o nome sugerido pela IA
-      const corrected = findLocalCorrection(photoProduct.name, photoProduct.category);
+      const corrected = identifiedFromPhoto.assistedConfirmation || (identifiedFromPhoto.termConflicts?.length ?? 0) > 0
+        ? null
+        : findLocalCorrection(photoProduct.name, photoProduct.category);
       const finalName = corrected ?? photoProduct.name;
       const score = identifiedFromPhoto.confidence?.score ?? 0.62;
       const origin = identifiedFromPhoto.origin ?? 'partial_name';
@@ -934,6 +980,7 @@ export function ProductDetectionSheetGold({
       aiConfidenceRef.current = score;
       decisionScoreRef.current = score;
       decisionResultTypeRef.current = resultType;
+      assistedConfirmationRef.current = Boolean(identifiedFromPhoto.assistedConfirmation);
       probableNameRef.current = identifiedFromPhoto.probableName;
       productNameRef.current = identifiedFromPhoto.productName;
       visibleTextRef.current = identifiedFromPhoto.visibleText;
@@ -942,6 +989,10 @@ export function ProductDetectionSheetGold({
       lifeStageRef.current = identifiedFromPhoto.lifeStage;
       detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
       detectedBrandRef.current = identifiedFromPhoto.detectedBrand ?? photoProduct.brand;
+      strongTermsRef.current = identifiedFromPhoto.strongTerms ?? [];
+      mediumTermsRef.current = identifiedFromPhoto.mediumTerms ?? [];
+      weakTermsRef.current = identifiedFromPhoto.weakTerms ?? [];
+      termConflictsRef.current = identifiedFromPhoto.termConflicts ?? [];
       setScannerError(null);
       setFromHistory(false);
       const nextProduct = corrected ? { ...photoProduct, name: finalName } : photoProduct;
@@ -996,10 +1047,15 @@ export function ProductDetectionSheetGold({
     decisionSourceRef.current = 'manual';
     decisionScoreRef.current = 0.4;
     decisionResultTypeRef.current = 'partial';
+    assistedConfirmationRef.current = false;
     probableNameRef.current = probableNameRef.current ?? name;
     productNameRef.current = productNameRef.current ?? undefined;
     detectedBrandRef.current = detectedBrandRef.current ?? confirmed?.brand;
     detectedWeightRef.current = detectedWeightRef.current ?? confirmed?.weight;
+    strongTermsRef.current = [];
+    mediumTermsRef.current = [];
+    weakTermsRef.current = [];
+    termConflictsRef.current = [];
     emitProductTelemetry('resolved', {
       origin: 'manual',
       result: 'partial',
@@ -1661,6 +1717,8 @@ export function ProductDetectionSheetGold({
   const renderConfirm = () => {
     if (!confirmed) return null;
 
+    const showAutoFound = !fromHistory && !assistedConfirmationRef.current && decisionResultTypeRef.current === 'complete' && termConflictsRef.current.length === 0;
+
     return (
       <div className="space-y-4 p-5 pb-8">
         {fromHistory && (
@@ -1679,9 +1737,9 @@ export function ProductDetectionSheetGold({
           />
         )}
 
-        <div className="space-y-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-5">
+        <div className={`space-y-3 rounded-2xl border-2 p-5 ${showAutoFound ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
           <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">
-            {fromHistory ? 'Produto reconhecido' : '✓ Encontrei este produto'}
+            {fromHistory ? 'Produto reconhecido' : showAutoFound ? '✓ Encontrei este produto' : 'Confirmação assistida'}
           </p>
           <div>
             <p className="text-xl font-bold leading-tight text-gray-900">{confirmed.name || 'Produto identificado'}</p>
@@ -1699,7 +1757,7 @@ export function ProductDetectionSheetGold({
           </div>
         </div>
 
-        {!fromHistory && (productNameRef.current || speciesRef.current || lifeStageRef.current || detectedWeightRef.current || rawTextBlobsRef.current.length > 0) && (
+        {!fromHistory && (productNameRef.current || speciesRef.current || lifeStageRef.current || detectedWeightRef.current || rawTextBlobsRef.current.length > 0 || strongTermsRef.current.length > 0 || mediumTermsRef.current.length > 0 || weakTermsRef.current.length > 0 || termConflictsRef.current.length > 0) && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Confirmação assistida</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1709,6 +1767,26 @@ export function ProductDetectionSheetGold({
               {lifeStageRef.current && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Fase: {lifeStageRef.current}</span>}
               {detectedWeightRef.current && <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">Peso: {detectedWeightRef.current}</span>}
             </div>
+            {strongTermsRef.current.length > 0 && (
+              <p className="mt-3 text-xs leading-relaxed text-slate-600">
+                Termos fortes: {strongTermsRef.current.join(' • ')}
+              </p>
+            )}
+            {mediumTermsRef.current.length > 0 && (
+              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                Termos médios: {mediumTermsRef.current.join(' • ')}
+              </p>
+            )}
+            {weakTermsRef.current.length > 0 && (
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                Termos fracos: {weakTermsRef.current.slice(0, 4).join(' • ')}
+              </p>
+            )}
+            {termConflictsRef.current.length > 0 && (
+              <p className="mt-3 text-xs font-semibold leading-relaxed text-rose-600">
+                Conflito detectado: {termConflictsRef.current.join(' • ')}
+              </p>
+            )}
             {rawTextBlobsRef.current.length > 0 && (
               <p className="mt-3 text-xs leading-relaxed text-slate-500">
                 Texto lido: {rawTextBlobsRef.current.slice(0, 4).join(' • ')}
