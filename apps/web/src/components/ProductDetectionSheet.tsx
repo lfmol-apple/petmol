@@ -93,6 +93,8 @@ interface PhotoProductIdentifyResponse {
   reason?: string | null;
   species?: string | null;
   life_stage?: string | null;
+  line?: string | null;
+  flavor?: string | null;
 }
 
 interface PhotoIdentifyOutcome {
@@ -245,16 +247,30 @@ export function ProductDetectionSheetGold({
 
       let resolvedName = payload.name?.trim() ?? '';
 
-      // Fallback para ração: montar nome parcial a partir de campos disponíveis
-      if (!resolvedName && hint === 'food') {
-        const partial = buildPartialFoodName(
-          payload.brand,
-          payload.species,
-          payload.life_stage,
-          payload.weight,
-          payload.reason,
-        );
-        if (partial) resolvedName = partial;
+      // Fallback universal: se a IA não retornou nome completo mas tem dados úteis,
+      // montar nome parcial para confirmação assistida (funciona para todas as categorias)
+      if (!resolvedName) {
+        const effectiveCategory = payload.category || hint || 'other';
+        if (effectiveCategory === 'food') {
+          // Para ração: usar parser especializado (brand + espécie + fase + peso)
+          const partial = buildPartialFoodName(
+            payload.brand,
+            payload.species,
+            payload.life_stage,
+            payload.weight,
+            payload.reason,
+          );
+          if (partial) resolvedName = partial;
+        } else {
+          // Para outras categorias: brand é suficiente como candidato
+          const brandName = payload.brand?.trim();
+          const reasonHint = payload.reason?.trim().split('.')[0]; // primeira frase do reason
+          if (brandName) {
+            resolvedName = [brandName, payload.weight?.trim()].filter(Boolean).join(' ');
+          } else if (reasonHint && reasonHint.length > 4) {
+            resolvedName = reasonHint.slice(0, 80);
+          }
+        }
       }
 
       if (!resolvedName) {
@@ -277,10 +293,23 @@ export function ProductDetectionSheetGold({
         resolvedWeight = resolvedWeight ?? foodFields.weight;
       }
 
+      // Enriquecer o nome com line/flavor se disponíveis e não já incluídos
+      let finalName = resolvedName;
+      if (resolvedCategory === 'food') {
+        const linePart = payload.line?.trim();
+        const flavorPart = payload.flavor?.trim();
+        if (linePart && !finalName.toLowerCase().includes(linePart.toLowerCase())) {
+          finalName = `${finalName} ${linePart}`.trim();
+        }
+        if (flavorPart && !finalName.toLowerCase().includes(flavorPart.toLowerCase())) {
+          finalName = `${finalName} ${flavorPart}`.trim();
+        }
+      }
+
       return {
         product: {
           barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
-          name: resolvedName,
+          name: finalName,
           brand: resolvedBrand,
           weight: resolvedWeight,
           manufacturer: payload.manufacturer?.trim() || resolvedBrand,

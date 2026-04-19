@@ -56,6 +56,10 @@ class IdentifyProductPhotoResponse(BaseModel):
     presentation: Optional[str] = None
     confidence: float = Field(..., description="Confiança da identificação (0-1)")
     reason: Optional[str] = None
+    species: Optional[str] = None
+    life_stage: Optional[str] = None
+    line: Optional[str] = None
+    flavor: Optional[str] = None
 
 
 @router.post("/extract-vaccine-card", response_model=ExtractVaccineCardResponse)
@@ -175,6 +179,18 @@ async def identify_product_photo(
             hint=request.hint,
         )
 
+        has_name = bool(result.get("name"))
+        has_partial = bool(result.get("brand") or result.get("species") or result.get("life_stage"))
+        logger.info(
+            "identify-product-photo result: pet=%s hint=%s found=%s name=%s partial=%s confidence=%.2f",
+            request.pet_id,
+            request.hint,
+            result.get("found"),
+            "yes" if has_name else "no",
+            "yes" if has_partial else "no",
+            result.get("confidence", 0.0),
+        )
+
         return IdentifyProductPhotoResponse(**result)
     except base64.binascii.Error:
         raise HTTPException(
@@ -184,7 +200,12 @@ async def identify_product_photo(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Erro ao identificar produto por foto: {str(e)}", exc_info=True)
+        err_str = str(e)
+        is_timeout = "timeout" in err_str.lower() or "deadline" in err_str.lower()
+        if is_timeout:
+            logger.warning("Timeout ao identificar produto por foto (pet=%s): %s", request.pet_id, err_str)
+            raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Tempo limite da IA esgotado. Tente novamente.")
+        logger.error("Erro ao identificar produto por foto: %s", err_str, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Falha ao processar a imagem. Tente novamente."

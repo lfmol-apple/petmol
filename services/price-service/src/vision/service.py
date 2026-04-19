@@ -81,16 +81,17 @@ Contexto:
 - Diretriz específica: {category_guidance}
 
 Regras:
-1. O frontend precisa de um candidato para confirmação. Se você conseguir ler QUALQUER nome plausível de produto, marca ou linha da embalagem, prefira retornar um melhor palpite em vez de found=false.
-2. Use nomes comerciais claros, por exemplo: "Royal Canin Veterinary Diet Urinary Small Dog".
-3. Se conseguir, separe brand e name.
-4. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
-5. Se houver peso/apresentação visível, extraia em weight e presentation.
-6. Leia texto visível da embalagem como OCR visual: marca, linha, concentração, peso, espécie, faixa etária, indicação veterinária.
-7. Se a categoria esperada estiver informada, use isso para priorizar candidatos dessa categoria e evitar cair em other.
-8. Para medication: se houver nome comercial OU princípio ativo legível, retorne esse texto em name mesmo com confiança moderada.
-9. Só retorne found=false quando a imagem estiver realmente ilegível, cortada demais ou sem embalagem útil.
-10. Responda APENAS JSON válido.
+1. PRIORIDADE MÁXIMA: retorne um candidato utilizável sempre que possível. Se conseguir ler qualquer combinação de marca + espécie + fase + peso, isso já é suficiente — preencha os campos que sabe e deixe name como melhor palpite ou null se realmente não souber.
+2. NÃO exija nome completo para retornar found=true. Se souber a marca mas não a linha completa, retorne a marca como brand e o que souber como name.
+3. Use nomes comerciais reais, por exemplo: "Royal Canin Veterinary Diet Urinary Small Dog 1,5kg", "Golden Adulto Frango 15kg".
+4. Separe brand (ex: "Royal Canin") de name (nome completo incluindo a linha).
+5. A categoria deve ser uma destas: food, medication, antiparasite, dewormer, collar, hygiene, other.
+6. Extraia peso em weight (ex: "15 kg", "1,5 kg", "400 g") e apresentação em presentation (ex: "Saco 15kg").
+7. Leia texto visível da embalagem como OCR visual: marca, linha do produto, concentração, peso, espécie, faixa etária, indicação veterinária, sabor.
+8. Se a categoria esperada estiver informada, use isso para priorizar candidatos e evitar cair em other.
+9. Para medication: retorne nome comercial OU princípio ativo + concentração se legível.
+10. Só retorne found=false E todos os campos null quando a imagem estiver realmente ilegível ou sem embalagem.
+11. Responda APENAS JSON válido, sem texto extra.
 
 Formato JSON obrigatório:
 {{
@@ -98,19 +99,22 @@ Formato JSON obrigatório:
   "name": "Nome completo do produto",
   "brand": "Marca",
   "category": "food",
-  "weight": "4 kg",
-  "manufacturer": "Fabricante ou marca",
-  "presentation": "Saco 4 kg",
+  "weight": "15 kg",
+  "manufacturer": "Fabricante",
+  "presentation": "Saco 15 kg",
   "species": "dog",
   "life_stage": "adult",
+  "line": "Linha específica (ex: Veterinary Diet, Natural)",
+  "flavor": "Sabor (ex: Frango e Arroz)",
   "confidence": 0.92,
   "reason": "Resumo curto do que foi lido na embalagem"
 }}
 
 Valores válidos para species: "dog", "cat", "other", null
 Valores válidos para life_stage: "puppy", "adult", "senior", "all", null
+Se não souber um campo, use null. NÃO invente.
 
-Se não encontrar:
+Se a imagem for realmente ilegível:
 {{
   "found": false,
   "name": null,
@@ -121,8 +125,10 @@ Se não encontrar:
   "presentation": null,
   "species": null,
   "life_stage": null,
+  "line": null,
+  "flavor": null,
   "confidence": 0.0,
-  "reason": "Não foi possível identificar com segurança"
+  "reason": "Imagem ilegível ou sem embalagem identificável"
 }}
 """
 
@@ -134,7 +140,7 @@ Se não encontrar:
                 "data": image_bytes,
             }
 
-            response = self.model.generate_content(
+            response = await self.model.generate_content_async(
                 [prompt, image_part],
                 request_options={"timeout": 20},
             )
@@ -162,6 +168,9 @@ Se não encontrar:
             valid_stages = {"puppy", "adult", "senior", "all"}
             life_stage = result.get("life_stage")
             result["life_stage"] = life_stage if life_stage in valid_stages else None
+
+            result["line"] = result.get("line") or None
+            result["flavor"] = result.get("flavor") or None
 
             if not result["found"] and result["name"]:
                 # O scanner precisa de um candidato para confirmação.
