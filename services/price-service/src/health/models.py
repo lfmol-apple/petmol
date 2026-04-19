@@ -69,6 +69,7 @@ class FeedingPlan(Base):
     
     # Additional info
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    items_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="[]")
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

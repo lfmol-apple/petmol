@@ -4,8 +4,10 @@ PETMOL Health Module - API Router
 Health endpoints with authentication and pet ownership validation.
 Integrates with existing backend structure.
 """
+import json
+
 from datetime import date, datetime, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,6 +34,8 @@ from .schemas import (
     FeedingPlanResponse,
     FeedingPlanData,
     FeedingEstimate,
+    FeedingPlanItemData,
+    FeedingPlanItemPayload,
     FeedingSnapshot,
     CountriesResponse,
     CountryInfo,
@@ -88,6 +92,165 @@ def _vaccine_record_to_response(record: VaccineRecord) -> VaccineResponse:
         record_type=record.record_type or "confirmed_application",
         alert_days_before=record.alert_days_before,
         reminder_time=record.reminder_time,
+    )
+
+
+def _parse_feeding_date(value: Optional[str], field_name: str) -> Optional[date]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid date format for {field_name}. Use YYYY-MM-DD",
+        ) from exc
+
+
+def _normalize_feeding_items_from_request(request: FeedingPlanCreateRequest) -> List[Dict[str, Any]]:
+    raw_items = request.items or []
+    normalized: List[Dict[str, Any]] = []
+
+    for index, item in enumerate(raw_items):
+        _parse_feeding_date(item.last_refill_date, f"items[{index}].last_refill_date")
+        brand = (item.food_brand or "").strip() or None
+        normalized.append({
+            "id": item.id or str(uuid4()),
+            "label": (item.label or brand or f"Produto {index + 1}").strip(),
+            "food_brand": brand,
+            "package_size_kg": item.package_size_kg,
+            "daily_amount_g": item.daily_amount_g,
+            "last_refill_date": item.last_refill_date,
+            "mode": item.mode or request.mode,
+            "barcode": (item.barcode or "").strip() or None,
+            "category": (item.category or "").strip() or None,
+            "notes": (item.notes or "").strip() or None,
+            "is_primary": bool(item.is_primary),
+        })
+
+    if not normalized:
+        _parse_feeding_date(request.last_refill_date, "last_refill_date")
+        brand = (request.food_brand or "").strip() or None
+        normalized.append({
+            "id": str(uuid4()),
+            "label": brand or "Produto 1",
+            "food_brand": brand,
+            "package_size_kg": request.package_size_kg,
+            "daily_amount_g": request.daily_amount_g,
+            "last_refill_date": request.last_refill_date,
+            "mode": request.mode,
+            "barcode": None,
+            "category": None,
+            "notes": None,
+            "is_primary": True,
+        })
+
+    primary_index = next((index for index, item in enumerate(normalized) if item["is_primary"]), 0)
+    for index, item in enumerate(normalized):
+        item["is_primary"] = index == primary_index
+
+    return normalized
+
+
+def _fallback_feeding_item_from_plan(plan: FeedingPlan) -> Dict[str, Any]:
+    return {
+        "id": str(uuid4()),
+        "label": (plan.food_brand or "Produto 1").strip() or "Produto 1",
+        "food_brand": plan.food_brand,
+        "package_size_kg": plan.package_size_kg,
+        "daily_amount_g": plan.daily_amount_g,
+        "last_refill_date": plan.last_refill_date.isoformat() if plan.last_refill_date else None,
+        "mode": plan.mode,
+        "barcode": None,
+        "category": None,
+        "notes": None,
+        "is_primary": True,
+    }
+
+
+def _parse_feeding_items_from_plan(plan: FeedingPlan) -> List[Dict[str, Any]]:
+    parsed: List[Dict[str, Any]] = []
+    if plan.items_json:
+        try:
+            raw_items = json.loads(plan.items_json)
+            if isinstance(raw_items, list):
+                for index, raw_item in enumerate(raw_items):
+                    if not isinstance(raw_item, dict):
+                        continue
+                    brand = str(raw_item.get("food_brand") or "").strip() or None
+                    parsed.append({
+                        "id": str(raw_item.get("id") or uuid4()),
+                        "label": str(raw_item.get("label") or brand or f"Produto {index + 1}").strip(),
+                        "food_brand": brand,
+                        "package_size_kg": raw_item.get("package_size_kg"),
+                        "daily_amount_g": raw_item.get("daily_amount_g"),
+                        "last_refill_date": raw_item.get("last_refill_date"),
+                        "mode": str(raw_item.get("mode") or plan.mode or "kibble"),
+                        "barcode": str(raw_item.get("barcode") or "").strip() or None,
+                        "category": str(raw_item.get("category") or "").strip() or None,
+                        "notes": str(raw_item.get("notes") or "").strip() or None,
+                        "is_primary": bool(raw_item.get("is_primary")),
+                    })
+        except (TypeError, ValueError, json.JSONDecodeError):
+            parsed = []
+
+    if not parsed:
+        parsed = [_fallback_feeding_item_from_plan(plan)]
+
+    primary_index = next((index for index, item in enumerate(parsed) if item["is_primary"]), 0)
+    for index, item in enumerate(parsed):
+        item["is_primary"] = index == primary_index
+
+    return parsed
+
+
+def _get_primary_feeding_item(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return next((item for item in items if item.get("is_primary")), items[0])
+
+
+def _serialize_feeding_items(items: List[Dict[str, Any]]) -> str:
+    return json.dumps(items, ensure_ascii=False)
+
+
+def _build_feeding_item_data(items: List[Dict[str, Any]]) -> List[FeedingPlanItemData]:
+    return [
+        FeedingPlanItemData(
+            id=str(item.get("id") or uuid4()),
+            label=item.get("label"),
+            food_brand=item.get("food_brand"),
+            package_size_kg=item.get("package_size_kg"),
+            daily_amount_g=item.get("daily_amount_g"),
+            last_refill_date=item.get("last_refill_date"),
+            mode=str(item.get("mode") or "kibble"),
+            barcode=item.get("barcode"),
+            category=item.get("category"),
+            notes=item.get("notes"),
+            is_primary=bool(item.get("is_primary")),
+        )
+        for item in items
+    ]
+
+
+def _build_feeding_plan_data(plan: FeedingPlan, items: List[Dict[str, Any]]) -> FeedingPlanData:
+    return FeedingPlanData(
+        pet_id=plan.pet_id,
+        species=plan.species,
+        country_code=plan.country_code,
+        food_brand=plan.food_brand,
+        package_size_kg=plan.package_size_kg,
+        daily_amount_g=plan.daily_amount_g,
+        last_refill_date=plan.last_refill_date.isoformat() if plan.last_refill_date else None,
+        safety_buffer_days=plan.safety_buffer_days,
+        meals_per_day=plan.meals_per_day,
+        mode=plan.mode,
+        notes=plan.notes,
+        enabled=plan.enabled,
+        no_consumption_control=plan.no_consumption_control,
+        next_purchase_date=plan.next_purchase_date.isoformat() if plan.next_purchase_date else None,
+        manual_reminder_days_before=plan.manual_reminder_days_before,
+        items=_build_feeding_item_data(items),
+        created_at=plan.created_at.isoformat(),
+        updated_at=plan.updated_at.isoformat(),
     )
 
 
@@ -447,6 +610,7 @@ async def get_health_snapshot(
     feeding_plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id).first()
     
     if feeding_plan:
+        feeding_items = _parse_feeding_items_from_plan(feeding_plan)
         # Calculate estimates
         estimated_end, _, days_total = calculate_food_stock_estimates(
             package_size_kg=feeding_plan.package_size_kg,
@@ -468,6 +632,7 @@ async def get_health_snapshot(
             food_brand=feeding_plan.food_brand,
             mode=feeding_plan.mode,
             enabled=feeding_plan.enabled,
+            items=_build_feeding_item_data(feeding_items),
         )
     
     return HealthSnapshotResponse(
@@ -503,29 +668,17 @@ async def create_or_update_feeding_plan(
     # Validate pet belongs to user
     pet = _check_pet_ownership(pet_id, current_user, db)
     
-    # Parse last_refill_date if provided
-    last_refill_date_obj = None
-    if request.last_refill_date:
-        try:
-            last_refill_date_obj = datetime.strptime(request.last_refill_date, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid date format for last_refill_date. Use YYYY-MM-DD"
-            )
+    items_payload = _normalize_feeding_items_from_request(request)
+    primary_item = _get_primary_feeding_item(items_payload)
+    last_refill_date_obj = _parse_feeding_date(primary_item.get("last_refill_date"), "last_refill_date")
 
     # Parse next_purchase_date if provided (manual mode)
-    next_purchase_date_obj = None
-    if request.next_purchase_date:
-        try:
-            next_purchase_date_obj = datetime.strptime(request.next_purchase_date, "%Y-%m-%d").date()
-        except ValueError:
-            pass  # ignore invalid date, field is optional
+    next_purchase_date_obj = _parse_feeding_date(request.next_purchase_date, "next_purchase_date") if request.next_purchase_date else None
     
     # Calculate estimates if possible
     estimated_end, next_reminder, _ = calculate_food_stock_estimates(
-        package_size_kg=request.package_size_kg,
-        daily_amount_g=request.daily_amount_g,
+        package_size_kg=primary_item.get("package_size_kg"),
+        daily_amount_g=primary_item.get("daily_amount_g"),
         last_refill_date=last_refill_date_obj,
         safety_buffer_days=request.safety_buffer_days,
         enabled=request.enabled,
@@ -539,13 +692,13 @@ async def create_or_update_feeding_plan(
         # Update existing plan
         existing_plan.species = request.species
         existing_plan.country_code = request.country_code
-        existing_plan.food_brand = request.food_brand
-        existing_plan.package_size_kg = request.package_size_kg
-        existing_plan.daily_amount_g = request.daily_amount_g
+        existing_plan.food_brand = primary_item.get("food_brand")
+        existing_plan.package_size_kg = primary_item.get("package_size_kg")
+        existing_plan.daily_amount_g = primary_item.get("daily_amount_g")
         existing_plan.last_refill_date = last_refill_date_obj
         existing_plan.safety_buffer_days = request.safety_buffer_days
         existing_plan.meals_per_day = request.meals_per_day
-        existing_plan.mode = request.mode
+        existing_plan.mode = str(primary_item.get("mode") or request.mode)
         existing_plan.notes = request.notes
         existing_plan.enabled = request.enabled
         existing_plan.no_consumption_control = request.no_consumption_control
@@ -553,6 +706,7 @@ async def create_or_update_feeding_plan(
         existing_plan.next_reminder_date = next_reminder
         existing_plan.next_purchase_date = next_purchase_date_obj
         existing_plan.manual_reminder_days_before = request.manual_reminder_days_before
+        existing_plan.items_json = _serialize_feeding_items(items_payload)
         
         plan = existing_plan
     else:
@@ -562,13 +716,13 @@ async def create_or_update_feeding_plan(
             pet_id=pet_id,
             species=request.species,
             country_code=request.country_code,
-            food_brand=request.food_brand,
-            package_size_kg=request.package_size_kg,
-            daily_amount_g=request.daily_amount_g,
+            food_brand=primary_item.get("food_brand"),
+            package_size_kg=primary_item.get("package_size_kg"),
+            daily_amount_g=primary_item.get("daily_amount_g"),
             last_refill_date=last_refill_date_obj,
             safety_buffer_days=request.safety_buffer_days,
             meals_per_day=request.meals_per_day,
-            mode=request.mode,
+            mode=str(primary_item.get("mode") or request.mode),
             notes=request.notes,
             enabled=request.enabled,
             no_consumption_control=request.no_consumption_control,
@@ -576,32 +730,15 @@ async def create_or_update_feeding_plan(
             next_reminder_date=next_reminder,
             next_purchase_date=next_purchase_date_obj,
             manual_reminder_days_before=request.manual_reminder_days_before,
+            items_json=_serialize_feeding_items(items_payload),
         )
         db.add(plan)
     
     db.commit()
     db.refresh(plan)
     
-    # Build response
-    plan_data = FeedingPlanData(
-        pet_id=plan.pet_id,
-        species=plan.species,
-        country_code=plan.country_code,
-        food_brand=plan.food_brand,
-        package_size_kg=plan.package_size_kg,
-        daily_amount_g=plan.daily_amount_g,
-        last_refill_date=plan.last_refill_date.isoformat() if plan.last_refill_date else None,
-        safety_buffer_days=plan.safety_buffer_days,
-        meals_per_day=plan.meals_per_day,
-        mode=plan.mode,
-        notes=plan.notes,
-        enabled=plan.enabled,
-        no_consumption_control=plan.no_consumption_control,
-        next_purchase_date=plan.next_purchase_date.isoformat() if plan.next_purchase_date else None,
-        manual_reminder_days_before=plan.manual_reminder_days_before,
-        created_at=plan.created_at.isoformat(),
-        updated_at=plan.updated_at.isoformat(),
-    )
+    plan_items = _parse_feeding_items_from_plan(plan)
+    plan_data = _build_feeding_plan_data(plan, plan_items)
     
     # Build estimate (only if enabled and not manual mode)
     estimate = None
@@ -642,26 +779,8 @@ async def get_feeding_plan(
             detail="Plano de alimentação não encontrado para este pet"
         )
     
-    # Build response
-    plan_data = FeedingPlanData(
-        pet_id=plan.pet_id,
-        species=plan.species,
-        country_code=plan.country_code,
-        food_brand=plan.food_brand,
-        package_size_kg=plan.package_size_kg,
-        daily_amount_g=plan.daily_amount_g,
-        last_refill_date=plan.last_refill_date.isoformat() if plan.last_refill_date else None,
-        safety_buffer_days=plan.safety_buffer_days,
-        meals_per_day=plan.meals_per_day,
-        mode=plan.mode,
-        notes=plan.notes,
-        enabled=plan.enabled,
-        no_consumption_control=plan.no_consumption_control,
-        next_purchase_date=plan.next_purchase_date.isoformat() if plan.next_purchase_date else None,
-        manual_reminder_days_before=plan.manual_reminder_days_before,
-        created_at=plan.created_at.isoformat(),
-        updated_at=plan.updated_at.isoformat(),
-    )
+    plan_items = _parse_feeding_items_from_plan(plan)
+    plan_data = _build_feeding_plan_data(plan, plan_items)
     
     # Recalculate estimate with fresh data
     today = date.today()

@@ -77,7 +77,10 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
       const raw = localStorage.getItem(`petmol_food_control_${pet.pet_id}`);
       if (raw) {
         const cached = JSON.parse(raw);
-        const brand = cached.food_brand ?? cached.brand ?? '';
+        const primaryItem = Array.isArray(cached.items)
+          ? cached.items.find((item: { is_primary?: boolean }) => item?.is_primary) ?? cached.items[0]
+          : null;
+        const brand = cached.food_brand ?? cached.brand ?? primaryItem?.food_brand ?? '';
         if (brand) setFoodBrand(brand);
       }
     } catch { /* silent */ }

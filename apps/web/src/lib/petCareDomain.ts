@@ -304,6 +304,9 @@ function processGrooming(p: PetCareDomainParams): PetCareReminder[] {
 function processFood(p: PetCareDomainParams): PetCareReminder[] {
   const plan = p.feedingPlan;
   if (!plan) return [];
+  const primaryItem = Array.isArray(plan.items)
+    ? plan.items.find((item) => Boolean(item?.is_primary)) ?? plan.items[0]
+    : null;
 
   const manualPurchaseDate = parseLocalDate(plan.next_purchase_date);
   const manualReminderOffsetRaw = Number(
@@ -335,7 +338,7 @@ function processFood(p: PetCareDomainParams): PetCareReminder[] {
   if (!nextDate) return [];
 
   const diff = diffFromToday(nextDate);
-  const brand = (plan.food_brand || plan.brand || '').trim() || undefined;
+  const brand = (plan.food_brand || plan.brand || primaryItem?.food_brand || '').trim() || undefined;
 
   return [{
     key: makeKey(p.pet_id, 'food', 'purchase', 'active-plan', dateToLocalISO(nextDate)),
