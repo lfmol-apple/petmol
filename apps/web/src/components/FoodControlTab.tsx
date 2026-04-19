@@ -17,6 +17,7 @@ import { requestUserDecision } from '@/features/interactions/userPromptChannel';
 interface SimpleFoodData {
   id: string;
   brand: string;
+  trackingMethod: 'weight' | 'duration';
   packageSizeKg: string;
   durationDays: string;
   startDate: string;
@@ -30,6 +31,7 @@ interface PersistedFoodItem {
   id?: string;
   label?: string;
   food_brand?: string | null;
+  tracking_method?: 'weight' | 'duration' | null;
   package_size_kg?: number | null;
   daily_amount_g?: number | null;
   last_refill_date?: string | null;
@@ -80,6 +82,7 @@ function createEmptyFoodItem(isPrimary = false): SimpleFoodData {
   return {
     id: makeItemId(),
     brand: '',
+    trackingMethod: 'weight',
     packageSizeKg: '',
     durationDays: '',
     startDate: localTodayISO(),
@@ -118,6 +121,7 @@ function getPrimaryItem(items: SimpleFoodData[]): SimpleFoodData {
 }
 
 function getResolvedDailyConsumption(item: SimpleFoodData): number | null {
+  if (item.trackingMethod === 'duration') return null;
   const dailyConsumption = parseFloat(item.dailyConsumptionG);
   if (Number.isFinite(dailyConsumption) && dailyConsumption > 0) return dailyConsumption;
   const packageSizeKg = parseFloat(item.packageSizeKg);
@@ -126,6 +130,19 @@ function getResolvedDailyConsumption(item: SimpleFoodData): number | null {
     return Math.round((packageSizeKg * 1000) / durationDays);
   }
   return null;
+}
+
+function getTrackingMethod(value: unknown, fallback: 'weight' | 'duration' = 'weight'): 'weight' | 'duration' {
+  return value === 'duration' || value === 'weight' ? value : fallback;
+}
+
+function getDurationDaysFromDates(startDate: string, endDate: string | null | undefined): string {
+  if (!startDate || !endDate) return '';
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+  const diff = Math.round((end.getTime() - start.getTime()) / 86400000);
+  return diff > 0 ? String(diff) : '';
 }
 
 function getItemMetrics(item: SimpleFoodData): {
@@ -139,9 +156,11 @@ function getItemMetrics(item: SimpleFoodData): {
   const parsedPackageSizeKg = Number.isFinite(packageSizeKg) && packageSizeKg > 0 ? packageSizeKg : null;
   const dailyConsumptionG = getResolvedDailyConsumption(item);
   const manualDays = parseInt(item.durationDays, 10);
-  const days = dailyConsumptionG && parsedPackageSizeKg
-    ? Math.round((parsedPackageSizeKg * 1000) / dailyConsumptionG)
-    : (Number.isFinite(manualDays) && manualDays > 0 ? manualDays : null);
+  const days = item.trackingMethod === 'duration'
+    ? (Number.isFinite(manualDays) && manualDays > 0 ? manualDays : null)
+    : dailyConsumptionG && parsedPackageSizeKg
+      ? Math.round((parsedPackageSizeKg * 1000) / dailyConsumptionG)
+      : (Number.isFinite(manualDays) && manualDays > 0 ? manualDays : null);
   const localEndDate = item.startDate && days ? addDays(item.startDate, days) : null;
   const localDaysLeft = localEndDate
     ? Math.round((new Date(`${localEndDate}T00:00:00`).getTime() - Date.now()) / 86400000)
@@ -159,14 +178,16 @@ function normalizeLoadedItems(source: unknown): SimpleFoodData[] {
   if (!source || typeof source !== 'object') return [createEmptyFoodItem(true)];
   const record = source as { items?: PersistedFoodItem[]; [key: string]: unknown };
   const rawItems = Array.isArray(record.items) ? record.items : [];
+  const primaryFallbackTracking = getTrackingMethod(record.no_consumption_control === true ? 'duration' : null, 'weight');
   const fromItems = rawItems.map((item) => ({
     id: item.id || makeItemId(),
     brand: item.food_brand ?? '',
+    trackingMethod: getTrackingMethod(item.tracking_method, item.is_primary ? primaryFallbackTracking : 'weight'),
     packageSizeKg: item.package_size_kg != null ? String(item.package_size_kg) : '',
     durationDays:
       item.package_size_kg && item.daily_amount_g
         ? String(Math.round((item.package_size_kg * 1000) / item.daily_amount_g))
-        : '',
+        : (item.is_primary ? getDurationDaysFromDates((item.last_refill_date ?? localTodayISO()).split('T')[0], typeof record.next_purchase_date === 'string' ? record.next_purchase_date : null) : ''),
     startDate: (item.last_refill_date ?? localTodayISO()).split('T')[0],
     dailyConsumptionG: item.daily_amount_g != null ? String(item.daily_amount_g) : '',
     barcode: item.barcode ?? undefined,
@@ -181,11 +202,20 @@ function normalizeLoadedItems(source: unknown): SimpleFoodData[] {
     brand: typeof record.food_brand === 'string'
       ? record.food_brand
       : (typeof record.brand === 'string' ? record.brand : ''),
+    trackingMethod: getTrackingMethod(record.no_consumption_control === true ? 'duration' : null, 'weight'),
     packageSizeKg:
       typeof record.package_size_kg === 'number'
         ? String(record.package_size_kg)
         : (typeof record.packageSizeKg === 'string' ? record.packageSizeKg : ''),
-    durationDays: typeof record.durationDays === 'string' ? record.durationDays : '',
+    durationDays:
+      typeof record.durationDays === 'string'
+        ? record.durationDays
+        : getDurationDaysFromDates(
+            typeof record.last_refill_date === 'string'
+              ? record.last_refill_date.split('T')[0]
+              : (typeof record.startDate === 'string' ? record.startDate.split('T')[0] : localTodayISO()),
+            typeof record.next_purchase_date === 'string' ? record.next_purchase_date : null,
+          ),
     startDate:
       typeof record.last_refill_date === 'string'
         ? record.last_refill_date.split('T')[0]
@@ -207,6 +237,7 @@ function buildItemsPayload(items: SimpleFoodData[]): PersistedFoodItem[] {
     id: item.id,
     label: item.brand.trim() || `Produto ${index + 1}`,
     food_brand: item.brand.trim() || null,
+    tracking_method: item.trackingMethod,
     package_size_kg: getItemMetrics(item).packageSizeKg,
     daily_amount_g: getItemMetrics(item).dailyConsumptionG,
     last_refill_date: item.startDate || null,
@@ -383,6 +414,62 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     ? `/api/handoff/shopping?query=${encodeURIComponent(commerceSnapshot.searchQuery)}&fallback=${encodeURIComponent(googleShoppingUrl(commerceSnapshot.searchQuery))}`
     : null;
 
+  const buildPlanPayload = (sourceItems: SimpleFoodData[]) => {
+    const normalizedSourceItems = ensurePrimaryItem(sourceItems);
+    const requestItems = buildItemsPayload(normalizedSourceItems);
+    const primaryRequestItem = requestItems.find((item) => item.is_primary) ?? requestItems[0];
+    const primarySourceItem = getPrimaryItem(normalizedSourceItems);
+    const primarySourceMetrics = getItemMetrics(primarySourceItem);
+    const isDurationMode = primarySourceItem.trackingMethod === 'duration';
+    const nextPurchaseDate = isDurationMode && primarySourceMetrics.days && primarySourceItem.startDate
+      ? addDays(primarySourceItem.startDate, primarySourceMetrics.days)
+      : null;
+    const packageSizeKg = isDurationMode ? null : (primaryRequestItem?.package_size_kg ?? null);
+    const dailyAmountG = isDurationMode ? null : (primaryRequestItem?.daily_amount_g ?? null);
+
+    return {
+      normalizedSourceItems,
+      requestItems,
+      primaryRequestItem,
+      primarySourceItem,
+      isDurationMode,
+      nextPurchaseDate,
+      packageSizeKg,
+      dailyAmountG,
+      localPayload: {
+        food_brand: primaryRequestItem?.food_brand ?? '',
+        brand: primaryRequestItem?.food_brand ?? '',
+        package_size_kg: packageSizeKg,
+        daily_amount_g: dailyAmountG,
+        last_refill_date: primaryRequestItem?.last_refill_date ?? null,
+        next_purchase_date: nextPurchaseDate,
+        no_consumption_control: isDurationMode,
+        manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
+        reminder_time: reminderTime || '09:00',
+        barcode: primaryRequestItem?.barcode ?? null,
+        category: primaryRequestItem?.category ?? null,
+        items: requestItems,
+      },
+      requestBody: {
+        species: species ?? 'dog',
+        country_code: countryCode ?? 'BR',
+        food_brand: primaryRequestItem?.food_brand ?? '',
+        package_size_kg: packageSizeKg,
+        daily_amount_g: dailyAmountG,
+        last_refill_date: primaryRequestItem?.last_refill_date ?? null,
+        safety_buffer_days: 3,
+        mode: 'kibble',
+        enabled: true,
+        notes: buildNotes(requestItems),
+        no_consumption_control: isDurationMode,
+        next_purchase_date: nextPurchaseDate,
+        manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
+        reminder_time: reminderTime || '09:00',
+        items: requestItems,
+      },
+    };
+  };
+
   // ─── Save ─────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
@@ -391,21 +478,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     setSaveFeedback(hasExisting ? 'Alteracoes salvas com sucesso.' : 'Controle de alimentacao salvo com sucesso.');
     setApiError(null);
 
-    const requestItems = buildItemsPayload(normalizedItems);
-    const primaryRequestItem = requestItems.find((item) => item.is_primary) ?? requestItems[0];
-    const dailyG = primaryRequestItem?.daily_amount_g ?? null;
-    const localPayload = {
-      food_brand: primaryRequestItem?.food_brand ?? '',
-      brand: primaryRequestItem?.food_brand ?? '',
-      package_size_kg: primaryRequestItem?.package_size_kg ?? null,
-      daily_amount_g: dailyG,
-      last_refill_date: primaryRequestItem?.last_refill_date ?? null,
-      manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
-      reminder_time: reminderTime || '09:00',
-      barcode: primaryRequestItem?.barcode ?? null,
-      category: primaryRequestItem?.category ?? null,
-      items: requestItems,
-    };
+    const { requestItems, primaryRequestItem, localPayload, requestBody } = buildPlanPayload(normalizedItems);
 
     // ── 1. Salvar no localStorage PRIMEIRO (otimista) ─────────────────────
     try {
@@ -442,23 +515,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         credentials: 'include',
-        body: JSON.stringify({
-          species: species ?? 'dog',
-          country_code: countryCode ?? 'BR',
-          food_brand: primaryRequestItem?.food_brand ?? '',
-          package_size_kg: primaryRequestItem?.package_size_kg ?? null,
-          daily_amount_g: dailyG,
-          last_refill_date: primaryRequestItem?.last_refill_date ?? null,
-          safety_buffer_days: 3,
-          mode: 'kibble',
-          enabled: true,
-          notes: buildNotes(requestItems),
-          no_consumption_control: false,
-          next_purchase_date: null,
-          manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
-          reminder_time: reminderTime || '09:00',
-          items: requestItems,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (res.ok) {
@@ -541,9 +598,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     const nextItems = ensurePrimaryItem(normalizedItems.map((item) => (
       item.isPrimary ? { ...item, startDate: today } : item
     )));
-    const nextPrimaryItem = getPrimaryItem(nextItems);
-    const nextRequestItems = buildItemsPayload(nextItems);
-    const nextPrimaryRequestItem = nextRequestItems.find((item) => item.is_primary) ?? nextRequestItems[0];
+    const { localPayload, requestBody, primarySourceItem } = buildPlanPayload(nextItems);
 
     setSaving(true);
     setApiError(null);
@@ -556,38 +611,29 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
       localStorage.setItem(storageKey, JSON.stringify({
         ...existing,
-        food_brand: nextPrimaryRequestItem?.food_brand ?? '',
-        brand: nextPrimaryRequestItem?.food_brand ?? '',
-        package_size_kg: nextPrimaryRequestItem?.package_size_kg ?? null,
-        daily_amount_g: nextPrimaryRequestItem?.daily_amount_g ?? null,
-        last_refill_date: today,
-        manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
-        reminder_time: reminderTime || '09:00',
-        barcode: nextPrimaryRequestItem?.barcode ?? null,
-        category: nextPrimaryRequestItem?.category ?? null,
-        items: nextRequestItems,
+        ...localPayload,
       }));
     } catch { /* silent */ }
 
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan/restock`, {
+      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         credentials: 'include',
-        body: JSON.stringify({ refill_date: today }),
+        body: JSON.stringify(requestBody),
       });
 
       if (res.ok) {
         const json = await res.json();
         setApiEstimate({
-          estimated_end_date: json.estimated_end_date ?? null,
-          estimated_days_left: json.estimated_days_left ?? null,
+          estimated_end_date: json.estimate?.estimated_end_date ?? null,
+          estimated_days_left: json.estimate?.estimated_days_left ?? null,
         });
-        setRestockFeedback(`Novo ciclo registrado para ${nextPrimaryItem.brand || 'o produto principal'}.`);
+        setRestockFeedback(`Novo ciclo registrado para ${primarySourceItem.brand || 'o produto principal'}.`);
       } else {
         setRestockFeedback('Novo ciclo registrado localmente. Tente sincronizar depois.');
       }
@@ -811,6 +857,39 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                     onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
                   />
 
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-gray-600">Como deseja controlar este alimento?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'weight' }))}
+                        className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                          item.trackingMethod === 'weight'
+                            ? 'border-amber-300 bg-amber-50 text-amber-900'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        ⚖️ Por peso
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'duration' }))}
+                        className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                          item.trackingMethod === 'duration'
+                            ? 'border-amber-300 bg-amber-50 text-amber-900'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        ⏳ Por duração
+                      </button>
+                    </div>
+                    {item.isPrimary && (
+                      <p className="text-[11px] text-gray-500">
+                        O item principal continua controlando os lembretes e pushes de reposição.
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Marca / Produto</label>
                     <input
@@ -822,62 +901,84 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Pacote (kg)</label>
-                      <input
-                        type="number"
-                        min={0.1}
-                        step={0.5}
-                        value={item.packageSizeKg}
-                        onChange={e => updateItem(item.id, (current) => ({ ...current, packageSizeKg: e.target.value }))}
-                        placeholder="Ex: 15"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                      />
+                  {item.trackingMethod === 'weight' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Pacote (kg)</label>
+                          <input
+                            type="number"
+                            min={0.1}
+                            step={0.5}
+                            value={item.packageSizeKg}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, packageSizeKg: e.target.value }))}
+                            placeholder="Ex: 15"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Consumo/dia (g)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={item.dailyConsumptionG}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, dailyConsumptionG: e.target.value }))}
+                            placeholder="Ex: 300"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
+                        <input
+                          type="date"
+                          value={item.startDate}
+                          onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Duração (dias)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={item.durationDays}
+                          onChange={e => updateItem(item.id, (current) => ({ ...current, durationDays: e.target.value }))}
+                          placeholder="Ex: 30"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
+                        <input
+                          type="date"
+                          value={item.startDate}
+                          onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Duração (dias)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={item.durationDays}
-                        onChange={e => updateItem(item.id, (current) => ({ ...current, durationDays: e.target.value }))}
-                        placeholder="Ex: 30"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                      />
-                    </div>
-                  </div>
+                  )}
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Consumo/dia (g)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={item.dailyConsumptionG}
-                        onChange={e => updateItem(item.id, (current) => ({ ...current, dailyConsumptionG: e.target.value }))}
-                        placeholder="Ex: 300"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
-                      <input
-                        type="date"
-                        value={item.startDate}
-                        onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  {item.isPrimary && pkgKg && dailyConsumptionG && (
+                  {item.isPrimary && item.trackingMethod === 'weight' && pkgKg && dailyConsumptionG && (
                     <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
                       <span>📦</span>
                       <span className="text-xs font-semibold text-amber-800">
                         Duração estimada: ~{Math.round((pkgKg * 1000) / dailyConsumptionG)} dias (após salvar, data exata calculada pelo servidor)
+                      </span>
+                    </div>
+                  )}
+
+                  {item.isPrimary && item.trackingMethod === 'duration' && itemMetrics.days != null && (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span>⏳</span>
+                      <span className="text-xs font-semibold text-amber-800">
+                        O sistema vai usar {itemMetrics.days} dias para programar o próximo lembrete de reposição.
                       </span>
                     </div>
                   )}

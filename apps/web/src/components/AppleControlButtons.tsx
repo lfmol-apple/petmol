@@ -84,101 +84,98 @@ export function AppleControlButtons({
 
   return (
     <>
-      {/* 4 Botões Principais - Grid 2x2 (Visual Simplificado Baby) */}
+      {/* 6 Botões Principais - Grid 2x3 compacto para caber na primeira dobra */}
       <div className="relative">
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-2.5">
           {/* 1. SAÚDE - Azul Vacina (Mais Vivo) / Fixo */}
           <button
             onClick={onHealthClick}
-            className="group relative overflow-hidden bg-gradient-to-br from-blue-100 to-blue-200 border-blue-300 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 border rounded-xl p-3 min-h-[82px]"
+            className="group relative overflow-hidden rounded-xl border border-blue-300 bg-gradient-to-br from-blue-100 to-blue-200 p-3 min-h-[74px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorHealth, alertHealth) && <AlertBadge tone={colorHealth} />}
-            <span className="absolute top-2 right-2 text-2xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
-            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
-              <h3 className="text-base font-semibold leading-tight truncate text-sky-900">
+            <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[15px] font-semibold leading-tight text-sky-900">
                 {t('home.health.title')}
               </h3>
-              <p className="text-xs text-sky-700 opacity-70 line-clamp-1 mt-0.5 leading-tight">{t('home.health.vaccines')}</p>
+              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-sky-700 opacity-70">{t('home.health.vaccines')}</p>
             </div>
           </button>
 
           {/* 2. HIGIENE - Verde Vibrante (Original) */}
           <button
             onClick={onBanhoTosaClick}
-            className="group relative overflow-hidden bg-gradient-to-br from-green-100 to-green-200 hover:from-green-200 hover:to-green-300 border border-green-300 rounded-xl p-3 min-h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-green-300 bg-gradient-to-br from-green-100 to-green-200 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-green-200 hover:to-green-300"
           >
             {shouldShowAlert(colorGrooming, alertGrooming) && <AlertBadge tone={colorGrooming} />}
-            <span className="absolute top-2 right-2 text-2xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
-            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
-              <h3 className="text-base font-semibold text-green-900 leading-tight truncate">
+            <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[15px] font-semibold leading-tight text-green-900">
                 {t('home.hygiene')}
               </h3>
-              <p className="text-xs text-green-700 opacity-70 line-clamp-1 mt-0.5 leading-tight">{t('home.hygiene.desc')}</p>
+              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-green-700 opacity-70">{t('home.hygiene.desc')}</p>
             </div>
           </button>
 
           {/* 3. ALIMENTAÇÃO - Laranja Vibrante (Original) */}
           <button
             onClick={onAlimentacaoClick}
-            className="group relative overflow-hidden bg-gradient-to-br from-orange-100 to-amber-200 hover:from-orange-200 hover:to-amber-300 border border-orange-200 rounded-xl p-3 min-h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-orange-200 bg-gradient-to-br from-orange-100 to-amber-200 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-orange-200 hover:to-amber-300"
           >
             {shouldShowAlert(colorFood, alertFood) && <AlertBadge tone={colorFood} />}
-            <span className="absolute top-2 right-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
-              <span className="text-2xl">🥣</span>
+            <span className="absolute right-2 top-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
+              <span className="text-xl">🥣</span>
             </span>
-            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
-              <h3 className="text-base font-bold text-amber-950 leading-tight truncate">{t('home.food.title')}</h3>
-              <p className="text-xs text-amber-800 line-clamp-1 mt-0.5 leading-tight">{t('home.food.desc')}</p>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[15px] font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
+              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-amber-800">{t('home.food.desc')}</p>
             </div>
           </button>
 
           {/* 4. SHOPPING - Azul Marca (Original) */}
           <button
             onClick={() => setShowShoppingSheet(true)}
-            className="group relative overflow-hidden bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] hover:from-[#1d4ed8] hover:to-[#6d28d9] rounded-xl p-3 min-h-[82px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-[#1d4ed8] hover:to-[#6d28d9]"
           >
             {alertShopping && <AlertBadge tone="critical" />}
-            <span className="absolute top-2 right-2 text-2xl pointer-events-none transition-transform group-hover:scale-110" style={{ filter: 'brightness(0) invert(1)' }}>🛒</span>
-            <div className="flex flex-col justify-center h-full pr-8 text-left pt-4">
-              <h3 className="text-base font-bold text-white leading-tight truncate drop-shadow-sm">{t('home.shopping.title')}</h3>
-              <p className="text-xs text-white/80 line-clamp-1 mt-0.5 leading-tight">{t('home.shopping.desc')}</p>
+            <span className="absolute right-2 top-2 text-xl pointer-events-none transition-transform group-hover:scale-110" style={{ filter: 'brightness(0) invert(1)' }}>🛒</span>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[15px] font-bold leading-tight text-white drop-shadow-sm">{t('home.shopping.title')}</h3>
+              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-white/80">{t('home.shopping.desc')}</p>
             </div>
           </button>
-        </div>
-      </div>
 
-      {/* EMERGÊNCIA VETERINÁRIA - Full Width (Visual Referência) */}
-      <button
-        onClick={() => setShowEmergencySheet(true)}
-        className="group relative w-full overflow-hidden bg-gradient-to-r from-red-600 via-red-500 to-rose-500 hover:from-red-700 hover:via-red-600 hover:to-rose-600 rounded-xl p-3 min-h-[56px] mt-3 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] shadow-red-200 shadow-md mb-4"
-      >
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
-          <span className="absolute w-8 h-8 rounded-full bg-white/20 animate-ping"></span>
-          <span className="relative text-xl">🚨</span>
-        </span>
-        <div className="flex flex-col justify-center h-full pl-10 pr-12 text-left">
-          <h3 className="text-sm font-bold text-white leading-tight tracking-wide drop-shadow">Emergência Veterinária</h3>
-          <p className="text-xs text-white/80 mt-0.5 leading-tight">Clínicas e hospitais abertos <span className="font-bold text-yellow-200">24h</span> perto de você</p>
-        </div>
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 text-lg transition-transform group-hover:translate-x-1">›</span>
-      </button>
+        <button
+          onClick={() => setShowEmergencySheet(true)}
+          className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-red-600 via-red-500 to-rose-500 p-3 min-h-[68px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] shadow-md shadow-red-200 hover:from-red-700 hover:via-red-600 hover:to-rose-600"
+        >
+          <span className="absolute left-2.5 top-2.5 flex items-center justify-center">
+            <span className="absolute h-7 w-7 rounded-full bg-white/20 animate-ping"></span>
+            <span className="relative text-lg">🚨</span>
+          </span>
+          <div className="flex h-full flex-col justify-center pl-7 pr-6 text-left">
+            <h3 className="truncate text-[14px] font-bold leading-tight text-white drop-shadow">Emergência</h3>
+            <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-white/80">Clínicas e hospitais 24h perto de você</p>
+          </div>
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg text-white/70 transition-transform group-hover:translate-x-1">›</span>
+        </button>
 
-      {/* Botões inferiores: Histórico (Ref Pattern) */}
-      <div className="mt-3">
-        {/* GUARDAR DOCUMENTOS (Antigo Histórico) */}
         <button
           onClick={onDocumentosClick}
-          className="group relative w-full overflow-hidden bg-gradient-to-r from-slate-700 to-slate-800 rounded-2xl p-2.5 min-h-[60px] flex items-center gap-3 hover:shadow-xl active:scale-[0.98] transition-all duration-300 border border-slate-600/50"
+          className="group relative overflow-hidden rounded-xl border border-slate-600/50 bg-gradient-to-r from-slate-700 to-slate-800 p-3 min-h-[68px] transition-all duration-300 hover:shadow-xl active:scale-[0.98]"
         >
-          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center backdrop-blur-sm transition-transform group-hover:scale-110">
-            <span className="text-xl pointer-events-none">📁</span>
+          <div className="flex h-full items-center gap-2.5 text-left">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-transform group-hover:scale-110">
+              <span className="pointer-events-none text-lg">📁</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-[14px] font-bold leading-tight text-white">Documentos</h3>
+              <p className="mt-0.5 line-clamp-2 text-[10px] font-semibold leading-tight text-slate-300 opacity-80">Seu cofre digital de saúde pet</p>
+            </div>
+            <span className="text-lg text-white/30 transition-transform group-hover:translate-x-1">›</span>
           </div>
-          <div className="flex flex-col text-left">
-            <h3 className="text-sm font-bold text-white leading-tight">Guardar Documentos</h3>
-            <p className="text-xs text-slate-300 font-bold opacity-80 mt-0.5">Seu cofre digital de saúde pet</p>
-          </div>
-          <span className="ml-auto text-white/30 text-xl group-hover:translate-x-1 transition-transform">›</span>
         </button>
+        </div>
       </div>
 
       <HomeShoppingSheet open={showShoppingSheet} onClose={() => setShowShoppingSheet(false)} />

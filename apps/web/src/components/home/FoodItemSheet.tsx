@@ -97,7 +97,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
     <ModalPortal>
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-4"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
       {/* Backdrop */}
@@ -105,7 +105,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-t-[28px] sm:rounded-[28px] shadow-premium border border-white/60 flex max-h-[92dvh] flex-col overflow-hidden animate-scaleIn"
+        className="relative w-full max-w-md min-h-0 bg-white/95 backdrop-blur-xl rounded-[28px] shadow-premium border border-white/60 flex max-h-[92dvh] flex-col overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -131,7 +131,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
         </div>
 
         {/* Content — FoodControlTab scrolls inside */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {mode === 'view' ? (
             <>
               <FoodControlTab
