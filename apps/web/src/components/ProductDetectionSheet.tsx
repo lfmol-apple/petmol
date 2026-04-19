@@ -17,6 +17,8 @@ import {
 } from '@/lib/productScanner';
 import { saveLocalProduct } from '@/features/product-detection/cache';
 import { confirmProductLookup } from '@/features/product-detection/resolver';
+import { extractFoodFields, buildPartialFoodName } from '@/features/product-detection/foodParser';
+import { submitLearningConfirmation, findLocalCorrection, type ScanDecisionSource } from '@/features/product-detection/learningStore';
 
 type Step =
   | 'entry'
@@ -89,6 +91,8 @@ interface PhotoProductIdentifyResponse {
   presentation?: string | null;
   confidence?: number | null;
   reason?: string | null;
+  species?: string | null;
+  life_stage?: string | null;
 }
 
 interface PhotoIdentifyOutcome {
@@ -193,6 +197,10 @@ export function ProductDetectionSheetGold({
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeResolveRef = useRef(0);
+  // learning: rastreia como o produto foi resolvido e qual era a sugestão original da IA
+  const decisionSourceRef = useRef<ScanDecisionSource>('manual');
+  const aiSuggestedNameRef = useRef<string | undefined>(undefined);
+  const aiConfidenceRef = useRef<number | undefined>(undefined);
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
 
@@ -234,19 +242,50 @@ export function ProductDetectionSheetGold({
       }
 
       const payload = (await res.json()) as PhotoProductIdentifyResponse;
-      if (!payload.name?.trim()) {
+
+      let resolvedName = payload.name?.trim() ?? '';
+
+      // Fallback para ração: montar nome parcial a partir de campos disponíveis
+      if (!resolvedName && hint === 'food') {
+        const partial = buildPartialFoodName(
+          payload.brand,
+          payload.species,
+          payload.life_stage,
+          payload.weight,
+          payload.reason,
+        );
+        if (partial) resolvedName = partial;
+      }
+
+      if (!resolvedName) {
         return { product: null, errorCode: 'photo_ai_not_found' };
+      }
+
+      const resolvedCategory =
+        (payload.category && payload.category !== 'other' ? payload.category : hint) ??
+        payload.category ??
+        'other';
+
+      // Enriquecer campos de ração com heurística local
+      let resolvedWeight = payload.weight?.trim() || undefined;
+      let resolvedBrand = payload.brand?.trim() || undefined;
+      if (resolvedCategory === 'food') {
+        const foodFields = extractFoodFields(
+          [resolvedName, resolvedBrand, resolvedWeight].filter(Boolean).join(' '),
+        );
+        resolvedBrand = resolvedBrand ?? foodFields.brand;
+        resolvedWeight = resolvedWeight ?? foodFields.weight;
       }
 
       return {
         product: {
           barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
-          name: payload.name.trim(),
-          brand: payload.brand?.trim() || undefined,
-          weight: payload.weight?.trim() || undefined,
-          manufacturer: payload.manufacturer?.trim() || undefined,
-          presentation: payload.presentation?.trim() || payload.weight?.trim() || undefined,
-          category: (payload.category && payload.category !== 'other' ? payload.category : hint) ?? payload.category ?? 'other',
+          name: resolvedName,
+          brand: resolvedBrand,
+          weight: resolvedWeight,
+          manufacturer: payload.manufacturer?.trim() || resolvedBrand,
+          presentation: payload.presentation?.trim() || resolvedWeight,
+          category: resolvedCategory,
           found: true,
         },
         errorCode: null,
@@ -432,6 +471,9 @@ export function ProductDetectionSheetGold({
     };
 
     if (final.found) {
+      decisionSourceRef.current = 'gtin';
+      aiSuggestedNameRef.current = undefined;
+      aiConfidenceRef.current = undefined;
       setFromHistory(false);
       setConfirmed(final);
       setScannerError(null);
@@ -619,6 +661,9 @@ export function ProductDetectionSheetGold({
       };
 
       if (resolvedFromBarcode.found) {
+        decisionSourceRef.current = 'gtin';
+        aiSuggestedNameRef.current = undefined;
+        aiConfidenceRef.current = undefined;
         setScannerError(null);
         setFromHistory(false);
         setConfirmed(resolvedFromBarcode);
@@ -629,9 +674,17 @@ export function ProductDetectionSheetGold({
 
     const identifiedFromPhoto = await identifyProductFromPhoto(file, detectedPhotoBarcode || undefined);
     if (identifiedFromPhoto.product) {
+      const photoProduct = identifiedFromPhoto.product;
+      // Verificar se há correção prévia para o nome sugerido pela IA
+      const corrected = findLocalCorrection(photoProduct.name, photoProduct.category);
+      const finalName = corrected ?? photoProduct.name;
+      const wasPartial = !detectedPhotoBarcode && !!finalName;
+      decisionSourceRef.current = wasPartial ? 'partial_name' : 'ai';
+      aiSuggestedNameRef.current = photoProduct.name; // nome original da IA (antes de correção)
+      aiConfidenceRef.current = undefined;
       setScannerError(null);
       setFromHistory(false);
-      setConfirmed(identifiedFromPhoto.product);
+      setConfirmed(corrected ? { ...photoProduct, name: finalName } : photoProduct);
       setStep('confirm');
       return;
     }
@@ -671,6 +724,26 @@ export function ProductDetectionSheetGold({
         category: confirmed.category,
         source: 'cache',
       });
+      // Aplicar memória de correção: se o tutor corrigiu este nome antes, sugerir o valor correto
+      const previousCorrection = findLocalCorrection(confirmed.name, confirmed.category);
+      if (previousCorrection && previousCorrection !== confirmed.name) {
+        // Não forçar — apenas registrar que havia uma correção prévia; o tutor já confirmou este nome
+      }
+      void submitLearningConfirmation({
+        barcode: confirmed.barcode,
+        name: confirmed.name,
+        brand: confirmed.brand,
+        category: confirmed.category,
+        manufacturer: confirmed.manufacturer,
+        presentation: confirmed.presentation ?? confirmed.weight,
+        weight: confirmed.weight,
+        decision_source: decisionSourceRef.current,
+        ai_suggested_name: aiSuggestedNameRef.current,
+        ai_confidence: aiConfidenceRef.current,
+        pet_id: petId,
+      });
+    } else {
+      // Produto sem barcode confirmado (AI/manual sem GTIN): usar confirmProductLookup legacy
       void confirmProductLookup({
         barcode: confirmed.barcode,
         name: confirmed.name,

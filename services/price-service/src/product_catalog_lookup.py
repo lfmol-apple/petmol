@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import httpx
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, select
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, or_, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .config import get_settings
@@ -81,6 +81,23 @@ class ProductLookupQueue(Base):
     last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products_catalog.id"), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class ProductCorrectionEvent(Base):
+    """Registra quando um tutor corrigiu o nome sugerido pela IA/scanner."""
+    __tablename__ = "product_correction_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    barcode_normalized: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    suggested_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    corrected_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    decision_source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    species: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    life_stage: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    pet_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
@@ -430,8 +447,16 @@ def save_confirmed_product_to_catalog(
     presentation: Optional[str],
     source: str,
     notes: Optional[str] = None,
+    # learning fields
+    ai_suggested_name: Optional[str] = None,
+    decision_source: Optional[str] = None,
+    species: Optional[str] = None,
+    life_stage: Optional[str] = None,
+    weight: Optional[str] = None,
+    ai_confidence: Optional[float] = None,
+    pet_id: Optional[str] = None,
 ) -> ProductCatalog:
-    raw_payload = {
+    raw_payload: dict[str, Any] = {
         "name": name,
         "brand": brand,
         "category": category,
@@ -440,6 +465,10 @@ def save_confirmed_product_to_catalog(
         "notes": notes,
         "source": source,
         "confirmed_by": "user",
+        "decision_source": decision_source,
+        "species": species,
+        "life_stage": life_stage,
+        "weight": weight,
     }
     candidate = CatalogCandidate(
         name=name,
@@ -450,7 +479,53 @@ def save_confirmed_product_to_catalog(
         raw_payload=raw_payload,
     )
     row = save_product_to_catalog(db, gtin, candidate)
+
+    # Registrar evento de correção quando tutor mudou o nome sugerido pela IA
+    was_corrected = ai_suggested_name and ai_suggested_name.strip().lower() != name.strip().lower()
+    if was_corrected:
+        try:
+            correction = ProductCorrectionEvent(
+                barcode_normalized=normalize_gtin(gtin),
+                suggested_name=ai_suggested_name,
+                corrected_name=name,
+                decision_source=decision_source,
+                ai_confidence=ai_confidence,
+                category=category,
+                species=species,
+                life_stage=life_stage,
+                pet_id=pet_id,
+            )
+            db.add(correction)
+        except Exception:
+            pass
+
     return row
+
+
+def search_catalog_by_text(
+    db: Session,
+    *,
+    q: str,
+    category: Optional[str] = None,
+    limit: int = 5,
+) -> list[ProductCatalog]:
+    """Busca textual no catálogo próprio. Prioriza produtos confirmados por usuário (confidence=1.0)."""
+    if not q or not q.strip():
+        return []
+    terms = q.strip().split()[:4]  # máximo 4 termos para evitar LIKE lento
+    stmt = select(ProductCatalog).where(ProductCatalog.name.isnot(None))
+    for term in terms:
+        pattern = f"%{term}%"
+        stmt = stmt.where(
+            or_(
+                ProductCatalog.name.ilike(pattern),
+                ProductCatalog.brand.ilike(pattern),
+            )
+        )
+    if category and category in VALID_PRODUCT_CATEGORIES:
+        stmt = stmt.where(ProductCatalog.category == category)
+    stmt = stmt.order_by(ProductCatalog.source_confidence.desc()).limit(limit)
+    return list(db.execute(stmt).scalars().all())
 
 
 def _record_scan_event(

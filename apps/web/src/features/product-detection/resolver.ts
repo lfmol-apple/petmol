@@ -3,6 +3,7 @@ import type { ResolvedProduct } from './types';
 import { API_BASE_URL } from '@/lib/api';
 import { fetchFromCosmos } from './apis/cosmos';
 import { fetchFromGlobal } from './apis/global';
+import { enrichFoodProduct } from './foodParser';
 
 export type { ResolvedProduct };
 export { getLocalProduct, saveLocalProduct } from './cache';
@@ -115,22 +116,25 @@ async function resolveFreshProduct(barcode: string): Promise<ResolvedProduct | n
       source: normalizeSource(data.source),
     };
 
-    saveLocalProduct(barcode, product);
-    return product;
+    const enriched = enrichFoodProduct(product);
+    saveLocalProduct(barcode, enriched);
+    return enriched;
   }
 
   const cosmosProduct = await fetchFromCosmos(barcode);
   if (cosmosProduct) {
     console.info('[ProductScanner] cosmosFallbackHit', { barcode });
-    saveLocalProduct(barcode, cosmosProduct);
-    return cosmosProduct;
+    const enriched = enrichFoodProduct(cosmosProduct);
+    saveLocalProduct(barcode, enriched);
+    return enriched;
   }
 
   const globalProduct = await fetchFromGlobal(barcode);
   if (globalProduct) {
     console.info('[ProductScanner] globalFallbackHit', { barcode });
-    saveLocalProduct(barcode, globalProduct);
-    return globalProduct;
+    const enriched = enrichFoodProduct(globalProduct);
+    saveLocalProduct(barcode, enriched);
+    return enriched;
   }
 
   return null;

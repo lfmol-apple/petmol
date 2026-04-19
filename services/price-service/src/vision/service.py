@@ -101,9 +101,14 @@ Formato JSON obrigatório:
   "weight": "4 kg",
   "manufacturer": "Fabricante ou marca",
   "presentation": "Saco 4 kg",
+  "species": "dog",
+  "life_stage": "adult",
   "confidence": 0.92,
   "reason": "Resumo curto do que foi lido na embalagem"
 }}
+
+Valores válidos para species: "dog", "cat", "other", null
+Valores válidos para life_stage: "puppy", "adult", "senior", "all", null
 
 Se não encontrar:
 {{
@@ -114,6 +119,8 @@ Se não encontrar:
   "weight": null,
   "manufacturer": null,
   "presentation": null,
+  "species": null,
+  "life_stage": null,
   "confidence": 0.0,
   "reason": "Não foi possível identificar com segurança"
 }}
@@ -147,6 +154,14 @@ Se não encontrar:
             result["manufacturer"] = result.get("manufacturer") or result.get("brand") or None
             result["presentation"] = result.get("presentation") or result.get("weight") or None
             result["reason"] = result.get("reason") or None
+
+            valid_species = {"dog", "cat", "other"}
+            species = result.get("species")
+            result["species"] = species if species in valid_species else None
+
+            valid_stages = {"puppy", "adult", "senior", "all"}
+            life_stage = result.get("life_stage")
+            result["life_stage"] = life_stage if life_stage in valid_stages else None
 
             if not result["found"] and result["name"]:
                 # O scanner precisa de um candidato para confirmação.

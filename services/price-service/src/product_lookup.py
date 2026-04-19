@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from .product_catalog_lookup import (
     lookup_product_by_gtin,
     normalize_gtin,
     save_confirmed_product_to_catalog,
+    search_catalog_by_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +40,25 @@ class ProductLookupConfirmRequest(BaseModel):
     source: str = Field("user_confirmed", max_length=64)
     confidence: float = 1.0
     notes: Optional[str] = None
+    # learning fields
+    ai_suggested_name: Optional[str] = Field(None, max_length=255)
+    decision_source: Optional[str] = Field(None, max_length=32)
+    species: Optional[str] = Field(None, max_length=16)
+    life_stage: Optional[str] = Field(None, max_length=16)
+    weight: Optional[str] = Field(None, max_length=32)
+    pet_id: Optional[str] = Field(None, max_length=128)
+
+
+class CatalogSearchResult(BaseModel):
+    barcode: str
+    name: str
+    brand: Optional[str] = None
+    category: str = "other"
+    weight: Optional[str] = None
+    species: Optional[str] = None
+    life_stage: Optional[str] = None
+    source: str = "petmol_db"
+    confidence: float = 0.0
 
 
 class ProductLookupResponse(BaseModel):
@@ -153,6 +174,13 @@ async def confirm_product_lookup(
             presentation=payload.presentation.strip() if payload.presentation else None,
             source=payload.source,
             notes=payload.notes,
+            ai_suggested_name=payload.ai_suggested_name,
+            decision_source=payload.decision_source,
+            species=payload.species,
+            life_stage=payload.life_stage,
+            weight=payload.weight,
+            ai_confidence=payload.confidence if payload.confidence < 1.0 else None,
+            pet_id=payload.pet_id,
         )
         db.commit()
         db.refresh(row)
@@ -171,3 +199,33 @@ async def confirm_product_lookup(
         db.rollback()
         logger.exception("[product-lookup] confirm handled error: %s", exc)
         return _not_found("", "product-lookup", "erro tratado")
+
+
+@router.get("/products/catalog/search", response_model=dict)
+def catalog_search(
+    q: str = Query(..., min_length=2, max_length=120),
+    category: Optional[str] = Query(default=None),
+    limit: int = Query(default=5, ge=1, le=20),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Busca textual no catálogo próprio do PETMOL. Retorna produtos com maior confiança primeiro."""
+    rows = search_catalog_by_text(db, q=q, category=category, limit=limit)
+    results = []
+    for row in rows:
+        raw: dict = {}
+        try:
+            raw = json.loads(row.raw_payload or "{}") if row.raw_payload else {}
+        except Exception:
+            pass
+        results.append({
+            "barcode": row.barcode_normalized,
+            "name": row.name,
+            "brand": row.brand,
+            "category": row.category or "other",
+            "weight": raw.get("weight"),
+            "species": raw.get("species"),
+            "life_stage": raw.get("life_stage"),
+            "source": row.source_primary,
+            "confidence": row.source_confidence,
+        })
+    return {"results": results, "total": len(results)}
