@@ -612,7 +612,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   }, [commerceSnapshot?.status, onStateChange, primaryItem.brand, showForm]);
 
   return (
-    <div className="p-4 space-y-3 pb-8">
+    <div className="p-3 space-y-3 pb-6 sm:p-4 sm:pb-8">
 
       {/* ── VIEW MODE ─────────────────────────────────────────────────────── */}
       {!showForm && (
@@ -646,15 +646,15 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
               return (
                 <div
                   key={item.id}
-                  className={`rounded-2xl border p-4 space-y-2 ${
+                  className={`rounded-2xl border p-3 space-y-2 ${
                     isTracked && currentDaysLeft !== null && currentDaysLeft < 0 ? 'bg-red-50 border-red-200' :
                     isTracked && currentDaysLeft !== null && currentDaysLeft <= 5 ? 'bg-orange-50 border-orange-200' :
                     isTracked ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-200'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xl flex-shrink-0">🥣</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <span className="mt-0.5 text-lg flex-shrink-0">🥣</span>
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900 text-sm leading-tight">{item.brand || `Produto ${index + 1}`}</p>
                         <p className="text-[11px] text-gray-500">
@@ -662,14 +662,14 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
                         isTracked ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
                       }`}>
                         {isTracked ? 'Principal' : 'Adicional'}
                       </span>
                       {isTracked && currentDaysLeft !== null && (
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${
                           currentDaysLeft < 0 ? 'bg-red-100 text-red-700' :
                           currentDaysLeft <= 5 ? 'bg-orange-100 text-orange-700' :
                           'bg-green-100 text-green-700'
@@ -691,13 +691,13 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                       />
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-1 text-xs text-gray-500 mt-0.5">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 mt-0.5">
                     {item.packageSizeKg && <span>📦 {item.packageSizeKg} kg</span>}
                     {item.startDate && <span>📅 Início: {fmtDate(item.startDate)}</span>}
                     {currentEndDate && isTracked && (
-                      <span className="col-span-2">⏳ Prev. término: {fmtDate(currentEndDate)}</span>
+                      <span>⏳ Prev. término: {fmtDate(currentEndDate)}</span>
                     )}
-                    {!isTracked && item.category && <span className="col-span-2">🏷️ {item.category}</span>}
+                    {!isTracked && item.category && <span>🏷️ {item.category}</span>}
                   </div>
                 </div>
               );
@@ -730,20 +730,20 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             <button
               onClick={handleRegisterNextFeeding}
               disabled={saving}
-              className="py-3 rounded-2xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
+              className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-[11px] font-semibold leading-tight text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
             >
-              📦 Próxima alimentação
+              📦 Adicionar alimento
             </button>
             <button
               onClick={() => setFormOpen(true)}
-              className="py-3 rounded-2xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 active:opacity-70"
+              className="min-h-[56px] rounded-2xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-[11px] font-semibold leading-tight text-amber-800 hover:bg-amber-100 active:opacity-70"
             >
               ✏️ Editar alimentação
             </button>
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="py-3 rounded-2xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50"
+              className="min-h-[56px] rounded-2xl border border-red-200 bg-red-50 px-2 py-2.5 text-[11px] font-semibold leading-tight text-red-700 hover:bg-red-100 disabled:opacity-50"
             >
               🗑 Excluir
             </button>
@@ -764,7 +764,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             </button>
           )}
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3 sm:p-4">
             <div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
               Você pode cadastrar vários produtos ao mesmo tempo. O item marcado como principal controla a previsão e os lembretes.
             </div>
@@ -772,20 +772,20 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             {orderPrimaryFirst(normalizedItems).map((item, index) => {
               const itemMetrics = getItemMetrics(item);
               return (
-                <div key={item.id} className="rounded-2xl border border-slate-200 p-3 space-y-3 bg-slate-50">
-                  <div className="flex items-center justify-between gap-2">
+                <div key={item.id} className="rounded-2xl border border-slate-200 p-3 space-y-2.5 bg-slate-50">
+                  <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-sm font-bold text-slate-900">{item.brand || `Produto ${index + 1}`}</p>
                       <p className="text-[11px] text-slate-500">
                         {item.isPrimary ? 'Produto principal monitorado' : 'Produto adicional'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {!item.isPrimary && (
                         <button
                           type="button"
                           onClick={() => setPrimaryItem(item.id)}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
+                          className="min-h-[36px] px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
                         >
                           Usar no monitoramento
                         </button>
@@ -794,7 +794,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                         <button
                           type="button"
                           onClick={() => removeFoodItem(item.id)}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
+                          className="min-h-[36px] px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
                         >
                           Remover
                         </button>
@@ -894,7 +894,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             <button
               type="button"
               onClick={addFoodItem}
-              className="w-full py-3 rounded-2xl text-sm font-semibold bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200"
+              className="w-full min-h-[52px] rounded-2xl text-sm font-semibold bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200"
             >
               + Adicionar outro produto
             </button>

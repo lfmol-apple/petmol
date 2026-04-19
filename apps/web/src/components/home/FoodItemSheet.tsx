@@ -97,7 +97,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
     <ModalPortal>
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
       {/* Backdrop */}
@@ -105,11 +105,11 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden animate-scaleIn"
+        className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-t-[28px] sm:rounded-[28px] shadow-premium border border-white/60 flex max-h-[92dvh] flex-col overflow-hidden animate-scaleIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 pb-3 pt-1 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 flex-shrink-0">
           <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-amber-700">
               <path d="M3 13h18"/><path d="M5 13a7 7 0 0014 0"/><path d="M8 7V5M12 7V4M16 7V5"/>
@@ -158,18 +158,18 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
 
               {/* Action buttons */}
               {shouldShowCommerceActions && (
-                <div className="px-4 pb-8 -mt-4 flex flex-col gap-2">
+                <div className="px-4 pb-6 -mt-2 flex flex-col gap-2">
                   <button
                     onClick={() => setMode('buy')}
-                    className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] shadow-sm"
+                    className="w-full flex items-center justify-between rounded-2xl border border-blue-400/30 bg-blue-300 px-4 py-3 hover:bg-blue-400/40 transition-all active:scale-[0.98] shadow-sm"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
                         🛒
                       </div>
                       <div className="text-left">
-                        <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
-                        <p className="text-[12px] text-blue-700/70">Ver onde encontrar ração</p>
+                        <p className="text-[13px] font-bold text-blue-900">Preciso comprar</p>
+                        <p className="text-[11px] text-blue-700/70">Ver onde encontrar ração</p>
                       </div>
                     </div>
                     <span className="text-blue-400 text-lg font-bold">›</span>
@@ -179,15 +179,15 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                     <button
                       onClick={() => setSnoozeOpen(true)}
                       disabled={snoozing}
-                      className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
+                      className="w-full flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
                           ⏸️
                         </div>
                         <div className="text-left">
-                          <p className="text-[14px] font-bold text-gray-700">Adiar lembrete</p>
-                          <p className="text-[12px] text-gray-500">Escolher por quantos dias</p>
+                          <p className="text-[13px] font-bold text-gray-700">Adiar lembrete</p>
+                          <p className="text-[11px] text-gray-500">Escolher por quantos dias</p>
                         </div>
                       </div>
                       <span className="text-gray-400 text-lg font-bold">›</span>
