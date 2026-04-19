@@ -99,8 +99,10 @@ interface PhotoProductIdentifyResponse {
 
 interface PhotoIdentifyOutcome {
   product: ScannedProduct | null;
-  errorCode: 'photo_ai_not_found' | 'photo_ai_error' | null;
+  errorCode: 'photo_ai_not_found' | 'photo_ai_error' | 'photo_ai_timeout' | 'photo_invalid_type' | 'photo_too_large' | null;
 }
+
+const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024;
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -115,6 +117,18 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('file_reader_failed'));
     reader.readAsDataURL(file);
   });
+}
+
+function validateProductPhotoFile(file: File): string | null {
+  if (!file.type.startsWith('image/')) {
+    return 'photo_invalid_type';
+  }
+
+  if (file.size > MAX_PRODUCT_PHOTO_BYTES) {
+    return 'photo_too_large';
+  }
+
+  return null;
 }
 
 function resolveScannerErrorCode(error: unknown): string {
@@ -166,8 +180,14 @@ function describeScannerError(errorCode: string | null): string | null {
       return 'Não localizamos um código de barras na foto. Vamos tentar ler a embalagem visualmente.';
     case 'photo_ai_not_found':
       return 'A foto foi analisada, mas não foi possível identificar o produto com segurança. Tente outra imagem ou digite o nome.';
+    case 'photo_ai_timeout':
+      return 'A leitura da foto demorou demais. A foto foi mantida para você tentar outra imagem ou seguir pela confirmação assistida.';
     case 'photo_ai_error':
       return 'A leitura visual da embalagem falhou agora. Você pode tentar outra foto ou digitar o produto.';
+    case 'photo_invalid_type':
+      return 'Selecione uma imagem válida do celular, como JPEG, PNG ou WEBP.';
+    case 'photo_too_large':
+      return 'A foto está muito grande. Use uma imagem de até 4MB.';
     default:
       return 'Não foi possível usar a câmera agora. Você pode continuar por foto, código manual ou nome do produto.';
   }
@@ -191,7 +211,8 @@ export function ProductDetectionSheetGold({
   onClose,
 }: ProductDetectionSheetProps) {
   const cooldownRef = useRef(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const cameraPhotoInputRef = useRef<HTMLInputElement>(null);
+  const galleryPhotoInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const zxingControlsRef = useRef<IScannerControls | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -240,6 +261,9 @@ export function ProductDetectionSheetGold({
       });
 
       if (!res.ok) {
+        if (res.status === 504) {
+          return { product: null, errorCode: 'photo_ai_timeout' };
+        }
         return { product: null, errorCode: 'photo_ai_error' };
       }
 
@@ -319,10 +343,23 @@ export function ProductDetectionSheetGold({
         },
         errorCode: null,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        return { product: null, errorCode: 'photo_ai_timeout' };
+      }
       return { product: null, errorCode: 'photo_ai_error' };
     }
   }, [confirmed?.barcode, hint, petId]);
+
+  const openCameraPhotoPicker = useCallback(() => {
+    setScannerError(null);
+    cameraPhotoInputRef.current?.click();
+  }, []);
+
+  const openGalleryPhotoPicker = useCallback(() => {
+    setScannerError(null);
+    galleryPhotoInputRef.current?.click();
+  }, []);
 
   useEffect(() => {
     setHistory(loadScanHistory(petId, hint).slice(0, 5));
@@ -653,8 +690,16 @@ export function ProductDetectionSheetGold({
   };
 
   const handlePhotoFile = async (file: File) => {
+    const validationError = validateProductPhotoFile(file);
+    if (validationError) {
+      setScannerError(validationError);
+      setStep('photo-capture');
+      return;
+    }
+
     const url = URL.createObjectURL(file);
     setPhotoUrl(url);
+    setScannerError(null);
     setStep('photo-processing');
 
     let detectedPhotoBarcode = '';
@@ -1063,6 +1108,28 @@ export function ProductDetectionSheetGold({
         <p className="mt-1 text-sm text-gray-500">Tire ou escolha uma foto da embalagem do produto</p>
       </div>
 
+      {photoUrl && (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Foto atual mantida no fluxo</p>
+              <p className="mt-0.5 text-xs text-slate-500">Você pode tentar com esta imagem, tirar outra agora ou escolher da galeria.</p>
+            </div>
+          </div>
+          <img
+            src={photoUrl}
+            alt="Prévia da embalagem"
+            className="max-h-44 w-full rounded-xl border border-slate-200 bg-white object-contain"
+          />
+        </div>
+      )}
+
+      {describeScannerError(scannerError) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {describeScannerError(scannerError)}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={startScanner}
@@ -1071,13 +1138,23 @@ export function ProductDetectionSheetGold({
         📷 Tentar escanear agora
       </button>
 
-      <button
-        type="button"
-        onClick={() => photoInputRef.current?.click()}
-        className="w-full rounded-2xl bg-emerald-500 py-4 text-base font-bold text-white shadow-md transition-all active:scale-95"
-      >
-        📷 Tirar foto agora
-      </button>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={openCameraPhotoPicker}
+          className="w-full rounded-2xl bg-emerald-500 py-4 text-base font-bold text-white shadow-md transition-all active:scale-95"
+        >
+          📷 Tirar foto agora
+        </button>
+
+        <button
+          type="button"
+          onClick={openGalleryPhotoPicker}
+          className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 py-4 text-base font-bold text-emerald-900 shadow-sm transition-all active:scale-95"
+        >
+          🖼️ Escolher do celular
+        </button>
+      </div>
 
       <button
         type="button"
@@ -1130,6 +1207,25 @@ export function ProductDetectionSheetGold({
       {(cameraFailed || scannerError === 'lookup_timeout' || scannerError === 'product_not_found' || scannerError === 'manual_invalid_barcode' || scannerError === 'photo_barcode_not_found' || scannerError === 'photo_processing_error') && describeScannerError(scannerError) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {describeScannerError(scannerError)}
+        </div>
+      )}
+
+      {photoUrl && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={openCameraPhotoPicker}
+            className="w-full rounded-xl border border-emerald-200 bg-emerald-50 py-3 text-sm font-bold text-emerald-900 transition-all active:scale-95"
+          >
+            📷 Tirar outra foto agora
+          </button>
+          <button
+            type="button"
+            onClick={openGalleryPhotoPicker}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-bold text-slate-800 transition-all active:scale-95"
+          >
+            🖼️ Escolher do celular
+          </button>
         </div>
       )}
 
@@ -1217,6 +1313,14 @@ export function ProductDetectionSheetGold({
 
   const renderNotFound = () => (
     <div className="space-y-4 p-5 pb-8">
+      {photoUrl && (
+        <img
+          src={photoUrl}
+          alt="Foto analisada"
+          className="max-h-40 w-full rounded-xl border border-gray-100 bg-gray-50 object-contain"
+        />
+      )}
+
       <div className="py-4 text-center">
         <p className="mb-3 text-5xl">{confirmed?.queued ? '📬' : '🤔'}</p>
         <h3 className="text-[18px] font-bold text-gray-900">
@@ -1246,20 +1350,35 @@ export function ProductDetectionSheetGold({
           </div>
         </button>
 
-        <button
-          type="button"
-          onClick={() => setStep('photo-capture')}
-          className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left transition-all active:scale-[0.98]"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-2xl">📷</div>
-            <div className="flex-1">
-              <p className="text-[15px] font-bold text-emerald-900">Fotografar a embalagem</p>
-              <p className="mt-0.5 text-xs text-emerald-600">Tire uma foto e tentamos identificar pelo visual</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={openCameraPhotoPicker}
+            className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left transition-all active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-2xl">📷</div>
+              <div className="flex-1">
+                <p className="text-[15px] font-bold text-emerald-900">Tirar foto agora</p>
+                <p className="mt-0.5 text-xs text-emerald-600">Abrir a câmera e tentar de novo</p>
+              </div>
             </div>
-            <span className="flex-shrink-0 text-xl text-emerald-300">›</span>
-          </div>
-        </button>
+          </button>
+
+          <button
+            type="button"
+            onClick={openGalleryPhotoPicker}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-all active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-2xl">🖼️</div>
+              <div className="flex-1">
+                <p className="text-[15px] font-bold text-slate-900">Escolher do celular</p>
+                <p className="mt-0.5 text-xs text-slate-600">Usar uma foto já salva no aparelho</p>
+              </div>
+            </div>
+          </button>
+        </div>
 
         <button
           type="button"
@@ -1365,10 +1484,22 @@ export function ProductDetectionSheetGold({
   return (
     <ModalPortal>
       <input
-        ref={photoInputRef}
+        ref={cameraPhotoInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        className="hidden"
+        onChange={event => {
+          const file = event.target.files?.[0];
+          if (file) void handlePhotoFile(file);
+          event.target.value = '';
+        }}
+      />
+
+      <input
+        ref={galleryPhotoInputRef}
+        type="file"
+        accept="image/*"
         className="hidden"
         onChange={event => {
           const file = event.target.files?.[0];
