@@ -250,6 +250,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [loadedExisting, setLoadedExisting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
+  const [restockFeedback, setRestockFeedback] = useState<string | null>(null);
   const [apiEstimate, setApiEstimate] = useState<{ estimated_end_date: string | null; estimated_days_left: number | null } | null>(null);
 
   const applyScannedProduct = (itemId: string, product: ScannedProduct) => {
@@ -535,6 +536,69 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     }
   };
 
+  const handleRegisterNextFeeding = async () => {
+    const today = localTodayISO();
+    const nextItems = ensurePrimaryItem(normalizedItems.map((item) => (
+      item.isPrimary ? { ...item, startDate: today } : item
+    )));
+    const nextPrimaryItem = getPrimaryItem(nextItems);
+    const nextRequestItems = buildItemsPayload(nextItems);
+    const nextPrimaryRequestItem = nextRequestItems.find((item) => item.is_primary) ?? nextRequestItems[0];
+
+    setSaving(true);
+    setApiError(null);
+    setDeleteFeedback(null);
+    setRestockFeedback(null);
+    setItems(nextItems);
+    setApiEstimate(null);
+
+    try {
+      const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
+      localStorage.setItem(storageKey, JSON.stringify({
+        ...existing,
+        food_brand: nextPrimaryRequestItem?.food_brand ?? '',
+        brand: nextPrimaryRequestItem?.food_brand ?? '',
+        package_size_kg: nextPrimaryRequestItem?.package_size_kg ?? null,
+        daily_amount_g: nextPrimaryRequestItem?.daily_amount_g ?? null,
+        last_refill_date: today,
+        manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
+        reminder_time: reminderTime || '09:00',
+        barcode: nextPrimaryRequestItem?.barcode ?? null,
+        category: nextPrimaryRequestItem?.category ?? null,
+        items: nextRequestItems,
+      }));
+    } catch { /* silent */ }
+
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan/restock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ refill_date: today }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        setApiEstimate({
+          estimated_end_date: json.estimated_end_date ?? null,
+          estimated_days_left: json.estimated_days_left ?? null,
+        });
+        setRestockFeedback(`Novo ciclo registrado para ${nextPrimaryItem.brand || 'o produto principal'}.`);
+      } else {
+        setRestockFeedback('Novo ciclo registrado localmente. Tente sincronizar depois.');
+      }
+      onSaved?.();
+    } catch {
+      setRestockFeedback('Novo ciclo registrado localmente. Tente sincronizar depois.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const showForm = !hasExisting || formOpen;
@@ -564,6 +628,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           {deleteFeedback && (
             <div className="bg-slate-100 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-2">
               <span>ℹ️</span><span className="text-sm text-slate-700">{deleteFeedback}</span>
+            </div>
+          )}
+          {restockFeedback && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+              <span>🥣</span><span className="text-sm text-amber-900">{restockFeedback}</span>
             </div>
           )}
 
@@ -657,17 +726,24 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           )}
 
           {/* Actions */}
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={handleRegisterNextFeeding}
+              disabled={saving}
+              className="py-3 rounded-2xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
+            >
+              📦 Próxima alimentação
+            </button>
             <button
               onClick={() => setFormOpen(true)}
-              className="flex-1 py-3 rounded-2xl text-sm font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 active:opacity-70"
+              className="py-3 rounded-2xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 active:opacity-70"
             >
               ✏️ Editar alimentação
             </button>
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="flex-1 py-3 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50"
+              className="py-3 rounded-2xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 disabled:opacity-50"
             >
               🗑 Excluir
             </button>
@@ -727,8 +803,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                   </div>
 
                   <ProductBarcodeScanner
+                    label="📷 Fotografar ou escolher foto"
                     expectedCategory="food"
                     petId={petId}
+                    defaultMode="photo"
+                    allowScanning={false}
                     onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
                   />
 

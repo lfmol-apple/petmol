@@ -269,7 +269,8 @@ export interface ProductDetectionSheetProps {
   petId: string;
   petName?: string;
   hint?: ProductCategory;
-  defaultMode?: 'scan' | 'manual';
+  defaultMode?: 'scan' | 'manual' | 'photo';
+  allowScanning?: boolean;
   onProductConfirmed: (product: ScannedProduct) => void;
   onClose: () => void;
 }
@@ -279,6 +280,7 @@ export function ProductDetectionSheetGold({
   petName,
   hint,
   defaultMode,
+  allowScanning = true,
   onProductConfirmed,
   onClose,
 }: ProductDetectionSheetProps) {
@@ -314,7 +316,14 @@ export function ProductDetectionSheetGold({
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
 
-  const [step, setStep] = useState<Step>(defaultMode === 'scan' ? 'scanning' : defaultMode === 'manual' ? 'manual' : 'entry');
+  const initialStep: Step = defaultMode === 'scan'
+    ? 'scanning'
+    : defaultMode === 'manual'
+      ? 'manual'
+      : defaultMode === 'photo'
+        ? 'photo-capture'
+        : 'entry';
+  const [step, setStep] = useState<Step>(initialStep);
   const [confirmed, setConfirmed] = useState<ScannedProduct | null>(null);
   const [fromHistory, setFromHistory] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -1134,13 +1143,13 @@ export function ProductDetectionSheetGold({
   const goBack = async () => {
     if (step === 'scanning') {
       await stopScanner();
-      setStep('entry');
+      setStep(allowScanning ? 'entry' : 'photo-capture');
       return;
     }
 
     if (step === 'not-found') {
       setConfirmed(null);
-      setStep('entry');
+      setStep(allowScanning ? 'entry' : 'photo-capture');
       return;
     }
 
@@ -1152,7 +1161,12 @@ export function ProductDetectionSheetGold({
       return;
     }
 
-    setStep('entry');
+    if (defaultMode === 'photo' && !allowScanning && step === 'photo-capture') {
+      onClose();
+      return;
+    }
+
+    setStep(allowScanning ? 'entry' : 'photo-capture');
   };
 
   const renderEntry = () => (
@@ -1164,20 +1178,22 @@ export function ProductDetectionSheetGold({
       </div>
 
       <div className="space-y-3">
-        <button
-          type="button"
-          onClick={startScanner}
-          className="w-full rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left transition-all active:scale-[0.98]"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-2xl">📷</div>
-            <div className="flex-1">
-              <p className="text-[15px] font-bold text-blue-900">Escanear código de barras</p>
-              <p className="mt-0.5 text-xs text-blue-600">Câmera traseira em tela cheia e leitura contínua</p>
+        {allowScanning && (
+          <button
+            type="button"
+            onClick={startScanner}
+            className="w-full rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left transition-all active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-2xl">📷</div>
+              <div className="flex-1">
+                <p className="text-[15px] font-bold text-blue-900">Escanear código de barras</p>
+                <p className="mt-0.5 text-xs text-blue-600">Câmera traseira em tela cheia e leitura contínua</p>
+              </div>
+              <span className="flex-shrink-0 text-xl text-blue-300">›</span>
             </div>
-            <span className="flex-shrink-0 text-xl text-blue-300">›</span>
-          </div>
-        </button>
+          </button>
+        )}
 
         <button
           type="button"
@@ -1428,13 +1444,15 @@ export function ProductDetectionSheetGold({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={startScanner}
-        className="w-full rounded-2xl border border-blue-200 bg-blue-50 py-4 text-base font-bold text-blue-900 shadow-sm transition-all active:scale-95"
-      >
-        📷 Tentar escanear agora
-      </button>
+      {allowScanning && (
+        <button
+          type="button"
+          onClick={startScanner}
+          className="w-full rounded-2xl border border-blue-200 bg-blue-50 py-4 text-base font-bold text-blue-900 shadow-sm transition-all active:scale-95"
+        >
+          📷 Tentar escanear agora
+        </button>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <button
@@ -1527,13 +1545,15 @@ export function ProductDetectionSheetGold({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={startScanner}
-        className="w-full rounded-2xl border border-blue-200 bg-blue-50 py-3.5 text-sm font-bold text-blue-900 transition-all active:scale-95"
-      >
-        📷 Voltar para escanear
-      </button>
+      {allowScanning && (
+        <button
+          type="button"
+          onClick={startScanner}
+          className="w-full rounded-2xl border border-blue-200 bg-blue-50 py-3.5 text-sm font-bold text-blue-900 transition-all active:scale-95"
+        >
+          📷 Voltar para escanear
+        </button>
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Buscar por código de barras</p>
@@ -1633,20 +1653,22 @@ export function ProductDetectionSheetGold({
       </div>
 
       <div className="space-y-3">
-        <button
-          type="button"
-          onClick={startScanner}
-          className="w-full rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left transition-all active:scale-[0.98]"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-2xl">📷</div>
-            <div className="flex-1">
-              <p className="text-[15px] font-bold text-blue-900">Tentar escanear novamente</p>
-              <p className="mt-0.5 text-xs text-blue-600">Reabrir a câmera e ler o código de barras</p>
+        {allowScanning && (
+          <button
+            type="button"
+            onClick={startScanner}
+            className="w-full rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left transition-all active:scale-[0.98]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100 text-2xl">📷</div>
+              <div className="flex-1">
+                <p className="text-[15px] font-bold text-blue-900">Tentar escanear novamente</p>
+                <p className="mt-0.5 text-xs text-blue-600">Reabrir a câmera e ler o código de barras</p>
+              </div>
+              <span className="flex-shrink-0 text-xl text-blue-300">›</span>
             </div>
-            <span className="flex-shrink-0 text-xl text-blue-300">›</span>
-          </div>
-        </button>
+          </button>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <button

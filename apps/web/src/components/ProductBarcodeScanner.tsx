@@ -9,7 +9,8 @@ interface ProductBarcodeScannerProps {
   expectedCategory?: ProductCategory;
   petId?: string;
   petName?: string;
-  defaultMode?: 'scan' | 'manual';
+  defaultMode?: 'scan' | 'manual' | 'photo';
+  allowScanning?: boolean;
   onProductConfirmed: (product: ScannedProduct) => void;
 }
 
@@ -24,6 +25,7 @@ export function ProductBarcodeScanner({
   petId,
   petName,
   defaultMode,
+  allowScanning,
   onProductConfirmed,
 }: ProductBarcodeScannerProps) {
   const [open, setOpen] = useState(false);
@@ -46,6 +48,7 @@ export function ProductBarcodeScanner({
           petName={petName}
           hint={expectedCategory}
           defaultMode={defaultMode}
+          allowScanning={allowScanning}
           onProductConfirmed={product => {
             setOpen(false);
             onProductConfirmed(product);
