@@ -9,12 +9,21 @@ import json
 import logging
 from datetime import datetime
 import re
+import os
 
 logger = logging.getLogger(__name__)
 
 
 class VisionService:
     """Serviço de visão AI usando Gemini"""
+
+    DEFAULT_MODEL_NAME = "gemini-2.5-flash"
+    FALLBACK_MODEL_NAMES = (
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-001",
+    )
     
     def __init__(self, api_key: str):
         """
@@ -24,7 +33,45 @@ class VisionService:
             api_key: Chave da Google AI (GOOGLE_API_KEY)
         """
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        configured_model = (os.getenv("GEMINI_MODEL") or os.getenv("VISION_GEMINI_MODEL") or self.DEFAULT_MODEL_NAME).strip()
+        self.model_name = configured_model or self.DEFAULT_MODEL_NAME
+        self.model = genai.GenerativeModel(self.model_name)
+
+    def _candidate_model_names(self) -> List[str]:
+        names = [self.model_name, *self.FALLBACK_MODEL_NAMES]
+        unique_names: List[str] = []
+        for name in names:
+            normalized = str(name).strip()
+            if normalized and normalized not in unique_names:
+                unique_names.append(normalized)
+        return unique_names
+
+    async def _generate_content_with_model_fallback(self, prompt: str, image_part: Dict[str, Any]):
+        last_error: Optional[Exception] = None
+        for model_name in self._candidate_model_names():
+            try:
+                if model_name != self.model_name:
+                    logger.warning("Gemini fallback: trocando modelo de %s para %s", self.model_name, model_name)
+                self.model_name = model_name
+                self.model = genai.GenerativeModel(model_name)
+                return await self.model.generate_content_async(
+                    [prompt, image_part],
+                    request_options={"timeout": 20},
+                )
+            except Exception as exc:
+                err_str = str(exc).lower()
+                retryable_model_error = (
+                    "is not found for api version" in err_str or
+                    "not supported for generatecontent" in err_str or
+                    "404 models/" in err_str
+                )
+                if not retryable_model_error:
+                    raise
+                last_error = exc
+                continue
+        if last_error:
+            raise last_error
+        raise RuntimeError("Nenhum modelo Gemini disponível para generateContent")
 
     @staticmethod
     def _detect_mime_type(image_bytes: bytes) -> str:
@@ -285,10 +332,7 @@ Se a imagem for realmente ilegível:
                 "data": image_bytes,
             }
 
-            response = await self.model.generate_content_async(
-                [prompt, image_part],
-                request_options={"timeout": 20},
-            )
+            response = await self._generate_content_with_model_fallback(prompt, image_part)
             response_text = self._strip_json_fences(response.text)
             result = json.loads(response_text)
 
