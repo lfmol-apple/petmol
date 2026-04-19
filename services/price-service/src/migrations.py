@@ -38,6 +38,14 @@ def _pg_add_column_if_missing(conn, table: str, column: str, ddl_type: str) -> b
     return True
 
 
+def _pg_column_type(conn, table: str, column: str) -> str | None:
+    row = conn.execute(text(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_name = :t AND column_name = :c"
+    ), {"t": table, "c": column}).fetchone()
+    return str(row[0]).lower() if row and row[0] is not None else None
+
+
 def run_pg_migrations(engine: Engine) -> None:
     """Run additive, idempotent migrations for PostgreSQL."""
     if engine.dialect.name not in ("postgresql", "postgres"):
@@ -80,8 +88,8 @@ def run_pg_migrations(engine: Engine) -> None:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS notification_pendencies (
                 id           TEXT PRIMARY KEY,
-                user_id      INTEGER NOT NULL,
-                pet_id       INTEGER,
+                user_id      TEXT NOT NULL,
+                pet_id       TEXT,
                 type         TEXT NOT NULL,
                 event_id     TEXT,
                 title        TEXT NOT NULL,
@@ -98,6 +106,16 @@ def run_pg_migrations(engine: Engine) -> None:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_notif_pend_user ON notification_pendencies (user_id)"
         ))
+        if _pg_column_type(conn, "notification_pendencies", "user_id") in {"integer", "bigint", "smallint"}:
+            conn.execute(text(
+                'ALTER TABLE "notification_pendencies" '
+                'ALTER COLUMN "user_id" TYPE TEXT USING "user_id"::text'
+            ))
+        if _pg_column_type(conn, "notification_pendencies", "pet_id") in {"integer", "bigint", "smallint"}:
+            conn.execute(text(
+                'ALTER TABLE "notification_pendencies" '
+                'ALTER COLUMN "pet_id" TYPE TEXT USING "pet_id"::text'
+            ))
 
         # Product learning memory (Apr 2026)
         _pg_add_column_if_missing(conn, "product_correction_events", "brand", "TEXT")
@@ -407,8 +425,8 @@ def run_sqlite_migrations(engine: Engine) -> None:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS notification_pendencies (
                 id           TEXT PRIMARY KEY,
-                user_id      INTEGER NOT NULL,
-                pet_id       INTEGER,
+                user_id      TEXT NOT NULL,
+                pet_id       TEXT,
                 type         TEXT NOT NULL,
                 event_id     TEXT,
                 title        TEXT NOT NULL,
