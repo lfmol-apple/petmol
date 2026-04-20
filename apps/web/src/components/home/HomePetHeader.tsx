@@ -31,6 +31,7 @@ interface HomePetHeaderProps {
   onAlertSelect: (alert: PetInteractionItem) => void;
   selectedPetNeedsAttention: boolean;
   selectedPetCareScore: number;
+  onEmergencyClick?: () => void;
 }
 
 export function HomePetHeader({
@@ -56,6 +57,7 @@ export function HomePetHeader({
   onAlertSelect,
   selectedPetNeedsAttention,
   selectedPetCareScore,
+  onEmergencyClick,
 }: HomePetHeaderProps) {
   const { t } = useI18n();
   const nameButtonRef = useRef<HTMLButtonElement>(null);
@@ -145,6 +147,14 @@ export function HomePetHeader({
 
         {/* Botões de Ação Rápida no Canto Superior Direito */}
         <div className="absolute top-4 right-4 flex gap-2 z-20">
+          {onEmergencyClick && (
+            <button
+              onClick={onEmergencyClick}
+              className="flex items-center justify-center w-9 h-9 bg-red-500/80 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-red-600/90 active:scale-90 shadow-lg"
+            >
+              <span className="text-base">🚨</span>
+            </button>
+          )}
           <button
             onClick={onOpenAddPetModal}
             className="flex items-center justify-center w-9 h-9 bg-white/20 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-white/40 active:scale-90 shadow-lg"

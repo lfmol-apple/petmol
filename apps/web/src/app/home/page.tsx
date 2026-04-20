@@ -17,6 +17,7 @@ import { HistoryDocumentsOverlay } from '@/components/home/HistoryDocumentsOverl
 import { MedicalVaultModal } from '@/components/home/MedicalVaultModal';
 import { HomeNavigationModals } from '@/components/home/HomeNavigationModals';
 import { HomePetHeader } from '@/components/home/HomePetHeader';
+import { HomeEmergencySheet } from '@/components/home/HomeEmergencySheet';
 import { PetTabs } from '@/components/PetTabs';
 import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
 
@@ -176,6 +177,7 @@ export default function HomePage() {
   const vaccineSheetWasOpenRef = useRef(false);
   const [showAddPetModal, setShowAddPetModal] = useState(false);
   const [showHealthModal, setShowHealthModal] = useState(false);
+  const [showEmergencySheet, setShowEmergencySheet] = useState(false);
   const [healthModalMode, setHealthModalMode] = useState<'full' | 'health' | 'grooming' | 'food'>('full');
   const [healthActiveTab, setHealthActiveTab] = useState('vaccines');
   // Plano alimentar — API-first, sincronizado com localStorage
@@ -1114,18 +1116,6 @@ export default function HomePage() {
   }, [applyHomeSurfaceResolution, pets.length, selectedPetId]);
 
 
-  useEffect(() => {
-    if (currentPet) {
-      console.log('🖥️ [TELA] Dados sendo exibidos:', {
-        nome: currentPet.pet_name,
-        peso: currentPet.weight_history?.[0]?.weight,
-        peso_unit: currentPet.weight_history?.[0]?.weight_unit,
-        weight_history_completo: currentPet.weight_history,
-        esperado: '12.5 kg'
-      });
-    }
-  }, [currentPet]);
-
   // Fetch documents when vet history modal opens
   useEffect(() => {
     if (!showVetHistoryModal || !currentPet) return;
@@ -1161,7 +1151,7 @@ export default function HomePage() {
   
   return (
     <div
-      className="min-h-screen bg-gray-50"
+      className="min-h-screen bg-gradient-to-b from-amber-50/40 via-white to-gray-50"
       onTouchStart={(e) => {
         // Só ativa pull-to-refresh se o scroll já estiver no topo
         if (window.scrollY === 0) {
@@ -1332,6 +1322,7 @@ export default function HomePage() {
                       onAlertSelect={handleTopAttentionSelect}
                       selectedPetNeedsAttention={_selectedPetNeedsAttention}
                       selectedPetCareScore={_selectedPetCareScore}
+                      onEmergencyClick={() => setShowEmergencySheet(true)}
                     />
                   </PetTabs>
 
@@ -1719,6 +1710,11 @@ export default function HomePage() {
           onRefresh={loadGroomingRecords}
         />
       )}
+
+      <HomeEmergencySheet
+        open={showEmergencySheet}
+        onClose={() => setShowEmergencySheet(false)}
+      />
 
     </div>
   );
