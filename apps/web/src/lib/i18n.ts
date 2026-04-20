@@ -1954,7 +1954,7 @@ export const translations: Record<string, TranslationEntry> = {
     'fr': 'Vaccins · Antiparasitaires', 'it': 'Vaccini · Antiparassitari'
   },
   'home.shopping.desc': {
-    'pt-BR': 'Produtos', 'en': 'Products', 'es': 'Productos',
+    'pt-BR': 'Produtos com desconto', 'en': 'Products', 'es': 'Productos',
     'fr': 'Produits', 'it': 'Prodotti'
   },
   'home.services.clinics': {
