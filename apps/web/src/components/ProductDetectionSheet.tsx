@@ -391,6 +391,32 @@ export function ProductDetectionSheetGold({
     });
   }, [petId]);
 
+  const resetPhotoAttempt = useCallback(() => {
+    setConfirmed(null);
+    setFromHistory(false);
+    setDetectedBarcode('');
+    setManualBarcode('');
+    setScannerError(null);
+    decisionSourceRef.current = 'manual';
+    aiSuggestedNameRef.current = undefined;
+    aiConfidenceRef.current = undefined;
+    decisionScoreRef.current = undefined;
+    decisionResultTypeRef.current = 'fallback';
+    assistedConfirmationRef.current = false;
+    probableNameRef.current = undefined;
+    productNameRef.current = undefined;
+    visibleTextRef.current = undefined;
+    rawTextBlobsRef.current = [];
+    speciesRef.current = undefined;
+    lifeStageRef.current = undefined;
+    detectedWeightRef.current = undefined;
+    detectedBrandRef.current = undefined;
+    strongTermsRef.current = [];
+    mediumTermsRef.current = [];
+    weakTermsRef.current = [];
+    termConflictsRef.current = [];
+  }, []);
+
   const identifyProductFromPhoto = useCallback(async (file: File, barcodeFromPhoto?: string): Promise<PhotoIdentifyOutcome> => {
     try {
       // Comprime imagens grandes internamente antes de enviar para a API de visão
@@ -424,7 +450,7 @@ export function ProductDetectionSheetGold({
 
       const resolved = await resolvePhotoProductCandidate(payload, {
         hint: hint ?? undefined,
-        barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
+        barcode: barcodeFromPhoto ?? '',
       });
 
       const assistedConfirmation = shouldOpenAssistedConfirmation(payload);
@@ -934,6 +960,7 @@ export function ProductDetectionSheetGold({
   };
 
   const handlePhotoFile = async (file: File) => {
+    resetPhotoAttempt();
     const validationError = validateProductPhotoFile(file);
     if (validationError) {
       setScannerError(validationError);
