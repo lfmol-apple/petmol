@@ -1211,7 +1211,7 @@ export default function HomePage() {
       <div className="max-w-2xl mx-auto px-4 py-4">
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
-          <>
+          <div className="mx-auto max-w-xl space-y-4 rounded-[30px] border border-slate-200 bg-white/95 p-3 shadow-[0_18px_48px_rgba(15,23,42,0.09)] sm:p-4">
             {/* Atenção agora — banner inteligente: grade com todos os alertas ou banner simples */}
             {(() => {
               if (!selectedPetPrimaryAlert) return null;
@@ -1288,7 +1288,7 @@ export default function HomePage() {
               if (!currentPet) return null;
               
               return (
-                <div className="mx-auto max-w-xl space-y-4 rounded-[28px] border border-slate-200/80 bg-white/90 px-3 py-3 shadow-[0_12px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:px-4 sm:py-4">
+                <div className="space-y-4">
                   <PetTabs
                     pets={pets.map(p => ({
                       id: p.pet_id,
@@ -1372,7 +1372,7 @@ export default function HomePage() {
                 </div>
               );
             })()}
-          </>
+          </div>
         ) : (
           /* No Pets - Show Simple Message */
           <div className="space-y-3">
