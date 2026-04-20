@@ -182,6 +182,8 @@ def run_import(json_path: Path) -> dict:
     now = datetime.now(timezone.utc)
     db = SessionLocal()
     batch_count = 0
+    # Rastrear canonical_keys inseridos neste import para evitar duplicatas intra-batch
+    seen_canonical_keys: set[str] = set()
 
     try:
         for norm_ean, item in deduped.items():
@@ -267,7 +269,9 @@ def run_import(json_path: Path) -> dict:
                             reliable.weight = reliable.weight or weight
                             reliable.updated_at = now
                         stats["reliable_merged"] += 1
-                    else:
+                        seen_canonical_keys.add(canon_key)
+                    elif canon_key not in seen_canonical_keys:
+                        # Novo — inserir
                         db.add(ProductReliableCatalog(
                             canonical_key=canon_key,
                             canonical_name=name,
@@ -281,7 +285,11 @@ def run_import(json_path: Path) -> dict:
                             created_at=now,
                             updated_at=now,
                         ))
+                        seen_canonical_keys.add(canon_key)
                         stats["reliable_inserted"] += 1
+                    else:
+                        # Já processado neste import — pular silenciosamente
+                        stats["skipped_duplicate_ean"] += 1
 
                 batch_count += 1
                 if batch_count % BATCH_SIZE == 0:
@@ -310,6 +318,8 @@ def run_import(json_path: Path) -> dict:
                 db = SessionLocal()
                 now = datetime.now(timezone.utc)
                 batch_count = 0
+                # Resetar tracking intra-batch após reiniciar sessão
+                seen_canonical_keys = set()
 
         # Commit final
         db.commit()
