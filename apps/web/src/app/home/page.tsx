@@ -1353,6 +1353,7 @@ export default function HomePage() {
                     setQuickMarkToast={setQuickMarkToast}
                     fetchPetEvents={fetchPetEvents}
                     onOpenHealth={handleOpenHealth}
+                    onOpenEmergency={() => setShowEmergencySheet(true)}
                     onOpenDocuments={handleOpenDocuments}
                     alertVacinas={selectedPetCardAlerts.vacinas}
                     colorVacinas={selectedPetCardColors.vacinas}
@@ -1604,6 +1605,7 @@ export default function HomePage() {
         onOpenAntipulgas={handleOpenAntipulgas}
         onOpenColeira={handleOpenColeira}
         onOpenMedication={handleOpenMedication}
+        onOpenEmergency={() => setShowEmergencySheet(true)}
       />
 
       {/* Add Pet Modal */}

@@ -8,6 +8,7 @@ import { type HomeInactiveEligibleControlId } from '@/lib/homeControlPreferences
 // ── Props H1 logic preserved ──────────────────────────────────────────────────
 interface AppleControlButtonsProps {
   onHealthClick: () => void;
+  onEmergencyClick?: () => void;
   onDocumentosClick: () => void;
   onAlimentacaoClick?: () => void;
   onBanhoTosaClick?: () => void;
@@ -59,6 +60,7 @@ function AlertBadge({ tone = 'critical' }: { tone?: ControlTone }) {
 
 export function AppleControlButtons({
   onHealthClick,
+  onEmergencyClick,
   onDocumentosClick,
   onAlimentacaoClick,
   onBanhoTosaClick,
@@ -111,6 +113,20 @@ export function AppleControlButtons({
               </h3>
               <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-blue-900 opacity-100">{t('home.health.vaccines')}</p>
             </div>
+            {onEmergencyClick && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEmergencyClick();
+                }}
+                className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1.5 rounded-full border border-red-300 bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-red-600 shadow-sm backdrop-blur-sm transition-all hover:bg-white active:scale-95"
+                aria-label="Abrir opções de emergência veterinária"
+              >
+                <span className="text-[11px]">🚨</span>
+                <span>Emergência</span>
+              </button>
+            )}
           </button>
 
           {/* 3. HIGIENE */}

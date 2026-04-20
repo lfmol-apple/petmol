@@ -39,6 +39,7 @@ interface HomeNavigationModalsProps {
   onOpenAntipulgas?: () => void;
   onOpenColeira?: () => void;
   onOpenMedication?: () => void;
+  onOpenEmergency?: () => void;
 }
 
 function shouldShowAlert(tone?: ControlTone, fallbackAlert?: boolean) {
@@ -96,6 +97,7 @@ export function HomeNavigationModals({
   onOpenAntipulgas,
   onOpenColeira,
   onOpenMedication,
+  onOpenEmergency,
 }: HomeNavigationModalsProps) {
   const { t } = useI18n();
 
@@ -174,6 +176,7 @@ export function HomeNavigationModals({
                   { icon: '🛡️', label: 'Antipulgas', gradient: 'from-emerald-100 to-green-200 border-green-300', tab: 'flea_tick', alert: alertParasitesValue, tone: colorAntipulgasValue },
                   { icon: '📿', label: 'Coleira', gradient: 'from-teal-100 to-cyan-200 border-teal-300', tab: 'collar', alert: alertParasitesValue, tone: colorColeiraValue },
                   { icon: '💊', label: 'Medicação', gradient: 'from-purple-100 to-violet-200 border-purple-300', tab: 'medication', alert: alertMedicationValue, tone: colorMedicationValue, full: true },
+                  { icon: '🚨', label: 'Emergência', gradient: 'from-red-100 to-rose-200 border-red-300', tab: 'emergency', full: true },
                 ].map(({ icon, label, gradient, tab, alert, tone, full }) => (
                   <button
                     key={tab}
@@ -201,6 +204,11 @@ export function HomeNavigationModals({
                       if (tab === 'medication' && onOpenMedication) {
                         onCloseHealthOptionsModal();
                         onOpenMedication();
+                        return;
+                      }
+                      if (tab === 'emergency' && onOpenEmergency) {
+                        onCloseHealthOptionsModal();
+                        onOpenEmergency();
                         return;
                       }
                       
