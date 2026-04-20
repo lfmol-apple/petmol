@@ -16,6 +16,9 @@ export function Header() {
 
   const userLabel = tutor?.name || tutor?.email?.split('@')[0] || null;
   const homeHref = userLabel ? '/home' : '/';
+  const profileHref = '/profile';
+  const brandCaption = userLabel ? (pathname === '/home' ? 'você está na home' : 'voltar à home') : 'início';
+  const profileCaption = pathname === '/profile' ? 'configurações abertas' : 'abrir perfil';
 
   // Animação de entrada da logo
   useEffect(() => {
@@ -35,12 +38,18 @@ export function Header() {
           {/* Marca alinhada à esquerda */}
           <Link
             href={homeHref}
+            title={userLabel ? 'Ir para a home' : 'Ir para o início'}
             className={`flex items-center gap-2 transition-all duration-500 active:scale-95 ${
               showLogo ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
             }`}
           >
-            <span className="text-2xl font-black text-[#0056D2] tracking-tight leading-none flex items-center gap-1.5">
-              <span>🐾</span>Petmol
+            <span className="flex flex-col leading-none">
+              <span className="text-2xl font-black text-[#0056D2] tracking-tight flex items-center gap-1.5">
+                <span>🐾</span>Petmol
+              </span>
+              <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#0056D2]/65">
+                {brandCaption}
+              </span>
             </span>
           </Link>
 
@@ -53,11 +62,15 @@ export function Header() {
             {userLabel ? (
               <div className="flex items-center gap-3">
                 <Link
-                  href="/profile"
+                  href={profileHref}
+                  title="Abrir configurações do perfil"
                   className="inline-flex items-center gap-2 h-9 px-4 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors"
                 >
-                  <span>👤</span>
-                  <span>{userLabel}</span>
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-base">👤</span>
+                  <span className="flex flex-col items-start leading-none">
+                    <span>{userLabel}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#0056D2]/65">{profileCaption}</span>
+                  </span>
                 </Link>
                 <button
                   onClick={handleLogout}
@@ -89,11 +102,16 @@ export function Header() {
             {userLabel ? (
               <div className="flex items-center gap-2">
                 <Link
-                  href="/profile"
-                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors max-w-[140px] truncate"
+                  href={profileHref}
+                  title="Abrir configurações do perfil"
+                  className="inline-flex items-center gap-2 h-9 px-3 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors max-w-[170px]"
                   aria-label="Perfil"
                 >
-                  <span className="truncate">{userLabel}</span>
+                  <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm">👤</span>
+                  <span className="flex min-w-0 flex-col items-start leading-none">
+                    <span className="truncate max-w-[100px]">{userLabel}</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#0056D2]/65">{profileCaption}</span>
+                  </span>
                 </Link>
                 <button
                   onClick={handleLogout}
