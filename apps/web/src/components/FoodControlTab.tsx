@@ -836,7 +836,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                     expectedCategory="food"
                     petId={petId}
                     defaultMode="photo"
-                    allowScanning={true}
+                    allowScanning={false}
                     onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
                   />
 
