@@ -21,6 +21,7 @@ import { PetTabs } from '@/components/PetTabs';
 import { PushActionSheet, type ActionSheetType } from '@/components/PushActionSheet';
 
 import { HomePetDashboard } from '@/components/home/HomePetDashboard';
+import { OverdueAlertsGrid } from '@/components/home/OverdueAlertsGrid';
 import { ParasiteItemSheet } from '@/components/home/ParasiteItemSheet';
 import { VaccineItemSheet } from '@/components/home/VaccineItemSheet';
 import { MedicationItemSheet } from '@/components/home/MedicationItemSheet';
@@ -125,6 +126,8 @@ export default function HomePage() {
 
   // Check-up inicial banner
   const [checkupBanner, setCheckupBanner] = useState<{ petName: string; pendingCount: number } | null>(null);
+  // Grade de alertas em atraso (expande o banner quando há múltiplos alertas)
+  const [showOverdueGrid, setShowOverdueGrid] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -819,6 +822,14 @@ export default function HomePage() {
     }
   }, [applyHomeSurfaceResolution, selectedPetPrimaryAlert]);
 
+  const handleOverdueAlertClick = useCallback((alert: PetInteractionItem) => {
+    setShowOverdueGrid(false);
+    const destination = resolveTopAttentionDestination(alert.action_target);
+    if (destination) {
+      applyHomeSurfaceResolution(destination);
+    }
+  }, [applyHomeSurfaceResolution]);
+
   const {
     closeVermifugoSheet,
     closeAntipulgasSheet,
@@ -1201,11 +1212,28 @@ export default function HomePage() {
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
           <>
-            {/* Atenção agora — inline alerts (fallback) */}
+            {/* Atenção agora — banner inteligente: grade com todos os alertas ou banner simples */}
             {(() => {
               if (!selectedPetPrimaryAlert) return null;
-
               const currentPetName = selectedPetPrimaryAlert.pet_name || pets.find(p => p.pet_id === selectedPetId)?.pet_name || 'seu pet';
+              const overdueAlerts = _selectedPetActiveAlerts.filter(
+                a => a.status === 'overdue' || a.status === 'today'
+              ).sort((a, b) => ((b.priority || 0) - (a.priority || 0)) || ((b.days_overdue || 0) - (a.days_overdue || 0)));
+              const hasMany = overdueAlerts.length > 1;
+
+              // Grade expandida
+              if (showOverdueGrid && hasMany) {
+                return (
+                  <OverdueAlertsGrid
+                    alerts={overdueAlerts}
+                    petName={currentPetName}
+                    onAlertClick={handleOverdueAlertClick}
+                    onClose={() => setShowOverdueGrid(false)}
+                  />
+                );
+              }
+
+              // Banner compacto
               const typeLabel = selectedPetPrimaryAlert.type_label || 'um cuidado';
               const label = selectedPetPrimaryAlert.status === 'today'
                 ? `${currentPetName} precisa de atenção hoje em ${typeLabel}`
@@ -1214,12 +1242,19 @@ export default function HomePage() {
               return (
                 <div className="mb-3 flex items-center gap-3 rounded-2xl bg-red-50 border border-red-200 px-4 py-3">
                   <span className="text-xl flex-shrink-0">🚨</span>
-                  <p className="flex-1 text-base font-bold text-red-900 leading-snug">{label}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-red-900 leading-snug truncate">{label}</p>
+                    {hasMany && (
+                      <p className="text-[11px] text-red-600 mt-0.5">
+                        +{overdueAlerts.length - 1} outro{overdueAlerts.length - 1 > 1 ? 's' : ''} em atraso
+                      </p>
+                    )}
+                  </div>
                   <button
-                    onClick={handleSelectedPetPrimaryAlertOpen}
+                    onClick={hasMany ? () => setShowOverdueGrid(true) : handleSelectedPetPrimaryAlertOpen}
                     className="flex-shrink-0 text-sm font-semibold text-red-700 bg-red-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform whitespace-nowrap"
                   >
-                    Ver agora
+                    {hasMany ? `Ver ${overdueAlerts.length}` : 'Ver agora'}
                   </button>
                 </div>
               );
