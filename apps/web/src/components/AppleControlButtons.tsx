@@ -101,22 +101,22 @@ export function AppleControlButtons({
           {/* 2. SAÚDE */}
           <button
             onClick={onHealthClick}
-            className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-blue-50 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-sky-100 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorHealth, alertHealth) && <AlertBadge tone={colorHealth} />}
             <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
             <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-base font-semibold leading-tight text-sky-900">
+              <h3 className="truncate text-base font-semibold leading-tight text-blue-900">
                 {t('home.health.title')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-sky-700 opacity-70">{t('home.health.vaccines')}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-blue-600 opacity-80">{t('home.health.vaccines')}</p>
             </div>
           </button>
 
           {/* 3. HIGIENE */}
           <button
             onClick={onBanhoTosaClick}
-            className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-green-50 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-100 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorGrooming, alertGrooming) && <AlertBadge tone={colorGrooming} />}
             <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
@@ -124,7 +124,7 @@ export function AppleControlButtons({
               <h3 className="truncate text-base font-semibold leading-tight text-green-900">
                 {t('home.hygiene')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-green-700 opacity-70">{t('home.hygiene.desc')}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-green-700 opacity-80">{t('home.hygiene.desc')}</p>
             </div>
           </button>
 
