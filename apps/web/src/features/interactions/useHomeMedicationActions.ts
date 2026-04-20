@@ -97,8 +97,13 @@ export function useHomeMedicationActions({
       if (finalNotes) payload.notes = finalNotes;
 
       // Reminder extra_data (multi-time push notifications)
-      if (eventFormData.reminder_enabled) {
+      // Sempre incluir ao editar para preservar applied_dates, skipped_dates e dose_notes
+      if (eventFormData.reminder_enabled || (evEditId && eventFormData._preserved_extra)) {
         const extraData: Record<string, unknown> = {};
+        // Restaurar campos preservados antes de sobrescrever com campos editáveis
+        if (evEditId && eventFormData._preserved_extra) {
+          Object.assign(extraData, eventFormData._preserved_extra);
+        }
         if (eventFormData.reminder_time) extraData.reminder_time = eventFormData.reminder_time;
         if (eventFormData.frequency) extraData.frequency = eventFormData.frequency;
         if (eventFormData.treatment_days) extraData.treatment_days = parseInt(eventFormData.treatment_days);

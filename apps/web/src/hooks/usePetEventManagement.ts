@@ -24,6 +24,8 @@ export interface EventFormState {
   treatment_days: string;
   result: string;
   severity: string;
+  /** Campos de extra_data não editáveis no formulário — preservados entre edições (ex: applied_dates, skipped_dates, dose_notes) */
+  _preserved_extra?: Record<string, unknown>;
 }
 
 interface UsePetEventManagementParams {
@@ -148,6 +150,7 @@ export function usePetEventManagement({
     let reminderTimes: string[] = ['08:00'];
     const nextDueDate = event.next_due_date ? event.next_due_date.split('T')[0] : '';
 
+    let preservedExtra: Record<string, unknown> | undefined;
     try {
       const extraData = parsePetEventExtraData(event.extra_data);
       if (extraData.reminder_time) reminderTime = extraData.reminder_time;
@@ -155,6 +158,15 @@ export function usePetEventManagement({
       if (Array.isArray(extraData.reminder_times) && extraData.reminder_times.length > 0) {
         reminderTimes = extraData.reminder_times;
       }
+      // Preservar campos que não são editáveis no formulário
+      const preserved: Record<string, unknown> = {};
+      if (Array.isArray(extraData.applied_dates) && extraData.applied_dates.length > 0)
+        preserved.applied_dates = extraData.applied_dates;
+      if (Array.isArray(extraData.skipped_dates) && extraData.skipped_dates.length > 0)
+        preserved.skipped_dates = extraData.skipped_dates;
+      if (extraData.dose_notes && typeof extraData.dose_notes === 'object')
+        preserved.dose_notes = extraData.dose_notes;
+      if (Object.keys(preserved).length > 0) preservedExtra = preserved;
     } catch {}
 
     if (event.type === 'medicacao') {
@@ -207,6 +219,7 @@ export function usePetEventManagement({
       treatment_days: treatmentDays,
       result: '',
       severity,
+      _preserved_extra: preservedExtra,
     });
     setEditingEventId(event.id);
     setEventTypeLocked(false);

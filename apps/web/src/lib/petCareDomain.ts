@@ -390,9 +390,49 @@ function processEvents(p: PetCareDomainParams): PetCareReminder[] {
 
     const extra = parsePetEventExtraData(ev.extra_data);
 
-    // Medicações com treatment_days são tratadas pelo tracker de tratamento da RemindersSection
-    // Não as duplicamos nos chips simples
-    if (ev.type === 'medicacao' && extra.treatment_days) continue;
+    // Medicações com treatment_days: incluir nos lembretes se o tratamento está ativo e a dose de hoje ainda está pendente
+    if (ev.type === 'medicacao' && extra.treatment_days) {
+      const totalDoses = parseInt(String(extra.treatment_days), 10);
+      if (isNaN(totalDoses) || totalDoses <= 0) continue;
+      const today = todayMidnight();
+      const todayIso = dateToLocalISO(today);
+      const startDate = parseLocalDate((ev.scheduled_at || '').split('T')[0]);
+      if (!startDate) continue;
+      const appliedDates: string[] = Array.isArray(extra.applied_dates) ? extra.applied_dates : [];
+      const skippedDates: string[] = Array.isArray(extra.skipped_dates) ? extra.skipped_dates : [];
+      // Tratamento já completo por contagem de doses?
+      if (appliedDates.length >= totalDoses) continue;
+      // Calcular data de término com dias perdidos
+      const daysSinceStart = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / 86400000));
+      const appliedBefore = appliedDates.filter(d => d < todayIso).length;
+      const skippedBefore = skippedDates.filter(d => d < todayIso).length;
+      const missedDays = Math.max(0, daysSinceStart - (appliedBefore + skippedBefore));
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + totalDoses - 1 + missedDays);
+      // Período de tratamento já encerrado?
+      if (endDate < today) continue;
+      // Dose de hoje já aplicada?
+      if (appliedDates.includes(todayIso)) continue;
+      // Dose de hoje ainda pendente — exibir como 'hoje' (ou futuro se não iniciado)
+      const effectiveDue = startDate > today ? startDate : today;
+      const treatDiff = Math.round((effectiveDue.getTime() - today.getTime()) / 86400000);
+      const treatDueStr = dateToLocalISO(effectiveDue);
+      result.push({
+        key: makeKey(p.pet_id, 'medication', 'medicacao', ev.id, treatDueStr),
+        pet_id: p.pet_id,
+        domain: 'medication',
+        label: ev.title,
+        sublabel: extra.dosage ? String(extra.dosage) : eventLabels[ev.type],
+        icon: '💊',
+        due_date: treatDueStr,
+        diff: treatDiff,
+        status: toStatus(treatDiff),
+        action_target: 'health/medication',
+        source_record_id: ev.id,
+        is_derived: false,
+      });
+      continue;
+    }
 
     const nextDate = parseLocalDate(ev.next_due_date);
     if (!nextDate) continue;
