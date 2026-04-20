@@ -227,7 +227,7 @@ export function HomeNavigationModals({
                     )}
                     <div className="relative">
                       <span className={`text-[14px] font-bold leading-tight block ${isEmergency ? 'text-red-700' : 'text-slate-900'}`}>{label}</span>
-                      <span className={`text-[9px] font-black uppercase tracking-widest mt-0.5 block ${isEmergency ? 'text-red-500/80' : 'text-slate-600/60'}`}>{isEmergency ? 'Atalho rápido' : 'Gerenciar'}</span>
+                      <span className={`text-[9px] font-black uppercase tracking-widest mt-0.5 block ${isEmergency ? 'text-red-500/80' : 'text-slate-600/60'}`}>{isEmergency ? 'Clínicas e hospitais 24h' : 'Gerenciar'}</span>
                     </div>
                   </button>
                 )})}
