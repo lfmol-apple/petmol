@@ -1353,7 +1353,6 @@ export default function HomePage() {
                     setQuickMarkToast={setQuickMarkToast}
                     fetchPetEvents={fetchPetEvents}
                     onOpenHealth={handleOpenHealth}
-                    onOpenEmergency={() => setShowEmergencySheet(true)}
                     onOpenDocuments={handleOpenDocuments}
                     alertVacinas={selectedPetCardAlerts.vacinas}
                     colorVacinas={selectedPetCardColors.vacinas}

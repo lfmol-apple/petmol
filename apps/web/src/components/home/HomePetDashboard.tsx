@@ -58,7 +58,6 @@ interface HomePetDashboardProps {
   setQuickMarkToast: (value: string | null) => void;
   fetchPetEvents: (petId: string) => Promise<void>;
   onOpenHealth: () => void;
-  onOpenEmergency: () => void;
   onOpenDocuments: () => void;
   alertVacinas?: boolean;
   colorVacinas?: CardTone;
@@ -90,7 +89,6 @@ export function HomePetDashboard({
   currentPet,
   tutorCheckinDay,
   onOpenHealth,
-  onOpenEmergency,
   onOpenDocuments,
   alertVacinas,
   colorVacinas,
@@ -212,7 +210,6 @@ export function HomePetDashboard({
     <div className="relative px-2 pt-0 space-y-3 -mt-6">
       <AppleControlButtons
         onHealthClick={onOpenHealth}
-        onEmergencyClick={onOpenEmergency}
         onDocumentosClick={onOpenDocuments}
         onAlimentacaoClick={onOpenFood}
         onBanhoTosaClick={onOpenGrooming}
