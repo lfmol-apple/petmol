@@ -296,10 +296,7 @@ def _canonical_key(name: str, brand: Optional[str], category: Optional[str]) -> 
 
 def _response_from_catalog_row(row: ProductCatalog, *, from_cache: bool) -> LookupResponse:
     payload = _deserialize_payload(row.raw_payload)
-    # Preservar identidade petmol_master e petmol_db para que o frontend
-    # possa aplicar score correto; demais fontes em cache retornam 'cache'.
-    _IDENTITY_SOURCES = {"petmol_master", "petmol_db"}
-    source = row.source_primary if row.source_primary in _IDENTITY_SOURCES else ("cache" if from_cache else row.source_primary)
+    source = "cache" if from_cache else row.source_primary
     return LookupResponse(
         ok=True,
         gtin=row.barcode_normalized,
@@ -677,24 +674,6 @@ def save_confirmed_product_to_catalog(
 
         # Aprendizado silencioso: elevar confiança no ProductCatalog quando
         # muitas confirmações acumuladas — produto é altamente confiável.
-        # Threshold conservador: 3 confirmações sem correção.
-        CONFIDENCE_ELEVATION_THRESHOLD = 3
-        if (
-            tutor_confirmed
-            and new_correction_count == 0
-            and new_confirmation_count >= CONFIDENCE_ELEVATION_THRESHOLD
-        ):
-            try:
-                catalog_row = db.scalar(
-                    select(ProductCatalog).where(
-                        ProductCatalog.barcode_normalized == normalize_gtin(gtin)
-                    )
-                )
-                if catalog_row and catalog_row.source_confidence < 0.95:
-                    catalog_row.source_confidence = min(0.95, catalog_row.source_confidence + 0.05)
-                    catalog_row.updated_at = now
-            except Exception:
-                pass
     except Exception:
         pass
 

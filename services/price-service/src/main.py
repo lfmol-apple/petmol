@@ -50,9 +50,6 @@ from .user_auth.security import hash_password
 from .version import get_version_info
 from .product_lookup import router as product_lookup_router
 from .gtin_router import router as gtin_router
-from .product_catalog_lookup import search_catalog_by_text as _search_db_catalog
-from .db import get_db as _get_db
-
 # SLICE 1: Import new services models to register with Base
 from .services import models as _services_models
 
@@ -1275,63 +1272,16 @@ async def search_catalog_v2(
     country: str = Query("BR", min_length=2, max_length=2, description="Country code"),
     type: str = Query("food", description="Product type: food or product"),
     limit: int = Query(10, ge=1, le=50, description="Max results"),
-    db=Depends(_get_db),
 ):
     """
     Search the product catalog for candidates (trivago-style).
     Returns candidates from multiple sources with images and pack sizes.
-    Inclui resultados da base mestre interna (ProductCatalog) como suplemento.
     """
-    import re as _re
-    _weight_re = _re.compile(r'([\d]+(?:[.,]\d+)?)\s*(kg|g|ml|l)\b', _re.IGNORECASE)
-
     # Check if results are from cache
     cached = catalog_cache.get(q, country, type)
     is_cached = cached is not None
 
     candidates_raw = search_catalog_candidates(q, country.upper(), type, limit)
-
-    # Suplementar com resultados da base mestre (ProductCatalog DB)
-    try:
-        db_rows = _search_db_catalog(db, q=q, category="food" if type == "food" else None, limit=limit)
-        seen_titles: set[str] = {
-            "".join(c.get("title", "").lower().split()) for c in candidates_raw
-        }
-        for row in db_rows:
-            if not row.name:
-                continue
-            title_key = "".join(row.name.lower().split())
-            if title_key in seen_titles:
-                continue
-            seen_titles.add(title_key)
-            # Extrair peso do raw_payload para pack_sizes
-            pack_sizes_raw: list[dict] = []
-            try:
-                import json as _json
-                raw = _json.loads(row.raw_payload or "{}")
-                weight_str = raw.get("weight") or ""
-                m = _weight_re.search(str(weight_str).replace(",", "."))
-                if m:
-                    pack_sizes_raw = [{"value": float(m.group(1)), "unit": m.group(2).lower()}]
-            except Exception:
-                pass
-            candidates_raw.append({
-                "source": "petmol_master",
-                "source_item_id": f"petmol:{row.barcode_normalized}",
-                "title": row.name,
-                "brand": row.brand,
-                "variant": None,
-                "species": None,
-                "pack_sizes": pack_sizes_raw,
-                "image_url": row.thumbnail_url,
-                "price": None,
-                "currency": None,
-                "url": None,
-            })
-            if len(candidates_raw) >= limit:
-                break
-    except Exception:
-        pass  # fallback silencioso — não quebrar se DB offline
 
     # Convert to model
     candidates = [
