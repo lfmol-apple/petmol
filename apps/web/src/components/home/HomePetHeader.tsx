@@ -147,17 +147,6 @@ export function HomePetHeader({
 
         {/* Botões de Ação Rápida no Canto Superior Direito */}
         <div className="absolute top-4 right-4 flex gap-2 z-20">
-          {onEmergencyClick && (
-            <button
-              onClick={onEmergencyClick}
-              className="group/emergency relative flex h-10 items-center justify-center gap-1.5 rounded-full border border-red-200/80 bg-gradient-to-r from-red-500 via-rose-500 to-red-600 px-3 text-white shadow-[0_10px_30px_rgba(239,68,68,0.45)] ring-2 ring-white/70 backdrop-blur-md transition-all hover:scale-[1.03] hover:shadow-[0_14px_36px_rgba(239,68,68,0.55)] active:scale-95"
-              aria-label="Abrir opções de emergência veterinária"
-            >
-              <span className="pointer-events-none absolute inset-0 rounded-full bg-white/10 opacity-0 transition-opacity duration-200 group-hover/emergency:opacity-100" />
-              <span className="relative text-[15px] leading-none">🚨</span>
-              <span className="relative text-[10px] font-black uppercase tracking-[0.18em]">SOS</span>
-            </button>
-          )}
           <button
             onClick={onOpenAddPetModal}
             className="flex items-center justify-center w-9 h-9 bg-white/20 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-white/40 active:scale-90 shadow-lg"
@@ -231,6 +220,7 @@ export function HomePetHeader({
               </span>
             </div>
           </div>
+
         </div>
 
         {/* Dropdown de Seleção de Pets via Portal (escapa overflow-hidden do PetTabs) */}

@@ -127,6 +127,7 @@ interface HealthModalProps {
   attachDocFiles: File[]; setAttachDocFiles: (files: File[]) => void; setShowAttachDoc: (v: boolean) => void;
   docFolderModal: DocFolderModalState; setDocFolderModal: Dispatch<SetStateAction<DocFolderModalState>>; handleDeleteEvent: (eventId: string) => void;
   fetchPetEvents: (petId: string) => void; openEditEvent: (event: PetEventRecord) => void; vetHistoryDocs: VetHistoryDocument[];
+  onOpenEmergencySheet?: () => void;
 }
 
 export function HealthModal({
@@ -142,6 +143,7 @@ export function HealthModal({
   eventSaving, setEventSaving, attachDocFiles, setAttachDocFiles,
   docFolderModal: _docFolderModal, setDocFolderModal: _setDocFolderModal,
   handleDeleteEvent, fetchPetEvents, openEditEvent, vetHistoryDocs,
+  onOpenEmergencySheet,
 }: HealthModalProps) {
   const { t } = useI18n();
 
@@ -434,6 +436,23 @@ export function HealthModal({
 
             {/* Conteúdo do Modal - Área de scroll otimizada */}
             <div className="p-3 sm:p-5 overflow-y-auto flex-1 bg-gray-50">
+              
+              {onOpenEmergencySheet && healthActiveTab !== 'food' && healthActiveTab !== 'grooming' && (
+                <button
+                  onClick={onOpenEmergencySheet}
+                  className="mb-4 flex w-full items-center gap-3 rounded-[24px] border border-red-200 bg-gradient-to-r from-red-50 via-white to-rose-50 px-4 py-3 text-left shadow-[0_10px_24px_rgba(239,68,68,0.10)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(239,68,68,0.16)] active:scale-[0.99]"
+                >
+                  <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-red-500 to-rose-500 text-2xl text-white shadow-sm">
+                    🚨
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-red-600">Emergência</span>
+                    <span className="mt-0.5 block text-sm font-bold leading-tight text-slate-900">Clínicas e hospitais veterinários 24h</span>
+                    <span className="mt-1 block text-xs leading-tight text-slate-600">Abra rapidamente opções de atendimento urgente perto de você.</span>
+                  </span>
+                  <span className="text-xl font-light text-red-400">›</span>
+                </button>
+              )}
 
               {/* Painel de Compartilhamento — acessível pelo botão ↗ no header */}
               {showShareOverlay && currentPet && (

@@ -202,6 +202,11 @@ export default function HomePage() {
   const [eventTypeLocked, setEventTypeLocked] = useState(false);
   const [showPetSelector, setShowPetSelector] = useState(false);
 
+  const handleOpenEmergencyFromHealth = useCallback(() => {
+    setShowHealthModal(false);
+    setShowEmergencySheet(true);
+  }, []);
+
   
   const [showTopAttentionModal, setShowTopAttentionModal] = useState(false);
   const [showCheckinPicker, setShowCheckinPicker] = useState(false);
@@ -1445,6 +1450,7 @@ export default function HomePage() {
           fetchPetEvents={fetchPetEvents}
           openEditEvent={openEditEvent}
           vetHistoryDocs={vetHistoryDocs}
+                  onOpenEmergencySheet={handleOpenEmergencyFromHealth}
         />
       )}
 
