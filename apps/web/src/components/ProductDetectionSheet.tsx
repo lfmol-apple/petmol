@@ -849,6 +849,8 @@ export function ProductDetectionSheetGold({
       clearPlayTimeout();
       console.info('[ProductScanner] playResolved');
       await waitForVideoMetadata(video);
+      // Aguarda estabilização da câmera (foco automático + ajuste de exposição)
+      await new Promise(resolve => setTimeout(resolve, 600));
       console.info('[ProductScanner] decodeStarted', {
         videoWidth: video.videoWidth,
         videoHeight: video.videoHeight,

@@ -245,7 +245,7 @@ export function VaccineItemSheet({
               onClick={onQuickAdd}
               className="w-full py-4 rounded-2xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-[15px] font-bold shadow-md transition-opacity"
             >
-              ➕ Registrar manualmente
+              ➕ Registro rápido
             </button>
 
             {/* ── Secondary CTAs ─────────────────────────────────────────── */}

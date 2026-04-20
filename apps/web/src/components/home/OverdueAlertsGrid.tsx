@@ -76,7 +76,7 @@ export function OverdueAlertsGrid({ alerts, petName, onAlertClick, onClose }: Ov
                 {alert.type_label}
               </p>
               <p className="text-[10px] text-red-600 font-semibold mt-0.5">
-                Ver agora →
+                Resolver agora
               </p>
             </button>
           );

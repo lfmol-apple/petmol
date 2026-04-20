@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertCircle, X, ChevronRight, ShoppingCart } from 'lucide-react';
+import { AlertCircle, X, ChevronRight } from 'lucide-react';
 import { PetCareReminder, resolveCareCTA } from '@/lib/petCareDomain';
 
 interface OverdueAlertBannerProps {
@@ -98,8 +98,8 @@ export function OverdueAlertBanner({
                     onClick={handleResolve}
                     className="flex-1 bg-red-600 text-white text-[13px] font-bold py-2 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
                   >
-                    <ShoppingCart className="w-4 h-4" />
-                    Comprar Agora
+                    <ChevronRight className="w-4 h-4" />
+                    Resolver agora
                   </button>
                   
                   {overdueReminders.length > 1 && (

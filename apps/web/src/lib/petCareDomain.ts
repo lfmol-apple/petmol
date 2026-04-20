@@ -263,14 +263,23 @@ function processGrooming(p: PetCareDomainParams): PetCareReminder[] {
 
   // Apenas o mais recente por tipo COM reminder_enabled E next_recommended_date
   const latestByType = new Map<string, GroomingRecord>();
+
+  // Passe 1: encontrar o registro mais recente por tipo, sem filtro de reminder
+  const absoluteLatestByType = new Map<string, GroomingRecord>();
   for (const r of p.groomingRecords) {
-    if (!r.reminder_enabled || !r.next_recommended_date) continue;
     const key = r.type;
-    const prev = latestByType.get(key);
-    if (!prev) { latestByType.set(key, r); continue; }
+    const prev = absoluteLatestByType.get(key);
+    if (!prev) { absoluteLatestByType.set(key, r); continue; }
     const dt = parseLocalDate(r.date)?.getTime() ?? 0;
     const prevDt = parseLocalDate(prev.date)?.getTime() ?? 0;
-    if (dt > prevDt) latestByType.set(key, r);
+    if (dt > prevDt) absoluteLatestByType.set(key, r);
+  }
+
+  // Passe 2: se o registro mais recente tem reminder configurado, usa-o; senão ignora o tipo inteiro
+  for (const [type, r] of absoluteLatestByType) {
+    if (r.reminder_enabled && r.next_recommended_date) {
+      latestByType.set(type, r);
+    }
   }
 
   const typeLabels: Record<string, string> = {

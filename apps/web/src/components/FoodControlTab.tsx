@@ -276,10 +276,10 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [savedOk, setSavedOk] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState('Dados salvos com sucesso.');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [, setRecurringProducts] = useState<Array<{ name: string; count: number; lastUsed: string }>>([]);
   const [hasExisting, setHasExisting] = useState(false);
   const [reminderDays, setReminderDays] = useState('3');
   const [reminderTime, setReminderTime] = useState('09:00');
-  const [recurringProducts, setRecurringProducts] = useState<Array<{ name: string; count: number; lastUsed: string }>>([]);
   const [loadedExisting, setLoadedExisting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'add' | 'edit'>('edit');
@@ -396,7 +396,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const primaryMetrics = getItemMetrics(primaryItem);
   const pkgKg = primaryMetrics.packageSizeKg;
   const dailyConsumptionG = primaryMetrics.dailyConsumptionG;
-  const days = primaryMetrics.days;
   // Local estimates — used only for form preview (pre-save) and progress bar denominator
   const localEndDate = primaryMetrics.localEndDate;
   const localDaysLeft = primaryMetrics.localDaysLeft;
@@ -587,58 +586,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       setHasExisting(false);
       setApiEstimate(null);
       setApiError('Sem conexão. Registro removido localmente.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRegisterNextFeeding = async () => {
-    const today = localTodayISO();
-    const nextItems = ensurePrimaryItem(normalizedItems.map((item) => (
-      item.isPrimary ? { ...item, startDate: today } : item
-    )));
-    const { localPayload, requestBody, primarySourceItem } = buildPlanPayload(nextItems);
-
-    setSaving(true);
-    setApiError(null);
-    setDeleteFeedback(null);
-    setRestockFeedback(null);
-    setItems(nextItems);
-    setApiEstimate(null);
-
-    try {
-      const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
-      localStorage.setItem(storageKey, JSON.stringify({
-        ...existing,
-        ...localPayload,
-      }));
-    } catch { /* silent */ }
-
-    try {
-      const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: 'include',
-        body: JSON.stringify(requestBody),
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        setApiEstimate({
-          estimated_end_date: json.estimate?.estimated_end_date ?? null,
-          estimated_days_left: json.estimate?.estimated_days_left ?? null,
-        });
-        setRestockFeedback(`Novo ciclo registrado para ${primarySourceItem.brand || 'o produto principal'}.`);
-      } else {
-        setRestockFeedback('Novo ciclo registrado localmente. Tente sincronizar depois.');
-      }
-      onSaved?.();
-    } catch {
-      setRestockFeedback('Novo ciclo registrado localmente. Tente sincronizar depois.');
     } finally {
       setSaving(false);
     }

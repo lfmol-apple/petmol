@@ -186,14 +186,18 @@ export function HomePetHeader({
           </button>
           
           {/* Metadados em Linha (Raça · Idade · Peso · Sexo) */}
-          <div className="mt-1.5 ml-1 flex items-center gap-1.5 overflow-hidden">
+          <div className="mt-1.5 ml-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span className="text-[11.5px] font-bold text-slate-500 tracking-tight uppercase whitespace-nowrap">
               {currentPet.species === 'dog' ? '🐕' : '🐱'} {currentPet.breed}
             </span>
-            <span className="opacity-40 text-slate-400 font-black tracking-tighter mx-0.5 whitespace-nowrap">·</span>
-            <span className="text-[11.5px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap truncate">
-              {petMeta.split(' · ').slice(1).join(' · ')}
-            </span>
+            {petMeta.split(' · ').slice(1).join(' · ') && (
+              <>
+                <span className="opacity-40 text-slate-400 font-black tracking-tighter whitespace-nowrap">·</span>
+                <span className="text-[11.5px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap">
+                  {petMeta.split(' · ').slice(1).join(' · ')}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Badge de atenção — linha separada, não sobrepõe dados */}
