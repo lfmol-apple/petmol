@@ -177,7 +177,7 @@ export function HomeNavigationModals({
                   { icon: '📿', label: 'Coleira', gradient: 'from-teal-100 to-cyan-200 border-teal-300', tab: 'collar', alert: alertParasitesValue, tone: colorColeiraValue },
                   { icon: '💊', label: 'Medicação', gradient: 'from-purple-100 to-violet-200 border-purple-300', tab: 'medication', alert: alertMedicationValue, tone: colorMedicationValue },
                   { icon: '🚨', label: 'Emergência', gradient: 'from-rose-50 via-red-50 to-rose-100 border-red-200', tab: 'emergency' },
-                ].map(({ icon, label, gradient, tab, alert, tone, full }) => {
+                ].map(({ icon, label, gradient, tab, alert, tone }) => {
                   const isEmergency = tab === 'emergency';
 
                   return (
@@ -218,7 +218,7 @@ export function HomeNavigationModals({
                       onCloseHealthOptionsModal();
                       onOpenHealthTab(tab);
                     }}
-                    className={`group relative overflow-hidden bg-gradient-to-br ${gradient} border rounded-2xl p-4 h-[94px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 text-left flex flex-col justify-end shadow-sm ${full ? 'col-span-2' : ''} ${isEmergency ? 'shadow-[0_8px_20px_rgba(239,68,68,0.10)] hover:shadow-[0_12px_24px_rgba(239,68,68,0.14)]' : ''}`}
+                    className={`group relative overflow-hidden bg-gradient-to-br ${gradient} border rounded-2xl p-4 h-[94px] transition-all duration-200 hover:shadow-lg hover:-translate-y-1 active:scale-95 text-left flex flex-col justify-end shadow-sm ${isEmergency ? 'shadow-[0_8px_20px_rgba(239,68,68,0.10)] hover:shadow-[0_12px_24px_rgba(239,68,68,0.14)]' : ''}`}
                   >
                     {shouldShowAlert(tone, alert) && <ControlAlertBadge tone={tone} />}
                     <span className={`absolute top-2 right-2 text-2xl transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6 ${isEmergency ? 'opacity-100 drop-shadow-[0_0_10px_rgba(239,68,68,0.28)]' : 'opacity-90'}`}>{icon}</span>
