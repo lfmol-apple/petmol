@@ -101,30 +101,30 @@ export function AppleControlButtons({
           {/* 2. SAÚDE */}
           <button
             onClick={onHealthClick}
-            className="group relative overflow-hidden rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 via-blue-50 to-blue-100 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-blue-300 bg-gradient-to-br from-sky-50 via-blue-50 to-blue-100 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorHealth, alertHealth) && <AlertBadge tone={colorHealth} />}
             <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
             <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-base font-semibold leading-tight text-blue-900">
+              <h3 className="truncate text-base font-semibold leading-tight text-blue-950">
                 {t('home.health.title')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-sky-700 opacity-85">{t('home.health.vaccines')}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-blue-800 opacity-95">{t('home.health.vaccines')}</p>
             </div>
           </button>
 
           {/* 3. HIGIENE */}
           <button
             onClick={onBanhoTosaClick}
-            className="group relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-green-50 to-lime-50 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-green-300 bg-gradient-to-br from-emerald-50 via-green-50 to-lime-50 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorGrooming, alertGrooming) && <AlertBadge tone={colorGrooming} />}
             <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
             <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-base font-semibold leading-tight text-emerald-900">
+              <h3 className="truncate text-base font-semibold leading-tight text-green-950">
                 {t('home.hygiene')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-emerald-700 opacity-85">{t('home.hygiene.desc')}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-green-800 opacity-95">{t('home.hygiene.desc')}</p>
             </div>
           </button>
 
