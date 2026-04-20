@@ -282,6 +282,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [recurringProducts, setRecurringProducts] = useState<Array<{ name: string; count: number; lastUsed: string }>>([]);
   const [loadedExisting, setLoadedExisting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<'add' | 'edit'>('edit');
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
   const [restockFeedback, setRestockFeedback] = useState<string | null>(null);
   const [apiEstimate, setApiEstimate] = useState<{ estimated_end_date: string | null; estimated_days_left: number | null } | null>(null);
@@ -643,11 +644,22 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     }
   };
 
-  const openFoodForm = () => {
+  const openEditForm = () => {
     setApiError(null);
     setDeleteFeedback(null);
     setRestockFeedback(null);
     setSavedOk(false);
+    setFormMode('edit');
+    setFormOpen(true);
+  };
+
+  const openAddNewItem = () => {
+    setApiError(null);
+    setDeleteFeedback(null);
+    setRestockFeedback(null);
+    setSavedOk(false);
+    setItems((current) => ensurePrimaryItem([...current, createEmptyFoodItem(false)]));
+    setFormMode('add');
     setFormOpen(true);
   };
 
@@ -780,28 +792,27 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           )}
 
           {/* Actions */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={openFoodForm}
-              className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-sm font-semibold leading-tight text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+              onClick={openAddNewItem}
+              className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-sm font-semibold leading-tight text-emerald-800 hover:bg-emerald-100"
             >
-              📦 Adicionar alimento
+              ➕ Adicionar outro alimento
             </button>
             <button
-              onClick={handleRegisterNextFeeding}
-              disabled={saving}
-              className="min-h-[56px] rounded-2xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-sm font-semibold leading-tight text-amber-800 hover:bg-amber-100 active:opacity-70"
+              onClick={openEditForm}
+              className="min-h-[56px] rounded-2xl border border-blue-200 bg-blue-50 px-2 py-2.5 text-sm font-semibold leading-tight text-blue-800 hover:bg-blue-100"
             >
-              🔄 Registrar reposição
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={saving}
-              className="min-h-[56px] rounded-2xl border border-red-200 bg-red-50 px-2 py-2.5 text-sm font-semibold leading-tight text-red-700 hover:bg-red-100 disabled:opacity-50"
-            >
-              🗑 Excluir
+              ✏️ Editar alimentação
             </button>
           </div>
+          <button
+            onClick={handleDelete}
+            disabled={saving}
+            className="w-full rounded-2xl border border-red-100 bg-red-50 px-2 py-2 text-xs font-medium text-red-500 hover:bg-red-100 disabled:opacity-50"
+          >
+            🗑 Excluir controle
+          </button>
 
         </div>
       )}
@@ -820,10 +831,15 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3 sm:p-4">
             <div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
-              Cadastre ou ajuste o alimento principal para controlar a previsão e os lembretes.
+              {formMode === 'add'
+                ? 'Preencha os dados do novo alimento concomitante.'
+                : 'Ajuste os dados do alimento para atualizar o controle.'}
             </div>
 
-            {orderPrimaryFirst(normalizedItems).map((item, index) => {
+            {(formMode === 'add'
+              ? normalizedItems.filter((i) => !i.isPrimary)
+              : orderPrimaryFirst(normalizedItems)
+            ).map((item, index) => {
               const itemMetrics = getItemMetrics(item);
               return (
                 <div key={item.id} className="rounded-2xl border border-slate-200 p-3 space-y-2.5 bg-slate-50">
