@@ -17,10 +17,11 @@ export interface FoodItemSheetProps {
   pet: PetHealthProfile;
   onClose: () => void;
   onSaved?: () => void;
+  initialMode?: 'view' | 'buy';
 }
 
-export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
-  const [mode, setMode] = useState<'view' | 'buy'>('view');
+export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSheetProps) {
+  const [mode, setMode] = useState<'view' | 'buy'>(initialMode ?? 'view');
   const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
   const [snoozing, setSnoozing] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
@@ -29,9 +30,12 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
     showForm: false,
     commerceStatus: null,
     foodBrand: '',
+    daysLeft: null,
+    restockDate: null,
   });
   const overlayRef = useRef<HTMLDivElement>(null);
-  const shouldShowCommerceActions = !foodState.showForm && foodState.commerceStatus !== null && foodState.commerceStatus !== 'steady';
+  const hasFood = !foodState.showForm && foodState.commerceStatus !== null;
+  const shouldShowCommerceActions = hasFood;
 
   const handleSnooze = async (days: number) => {
     setSnoozing(true);
@@ -116,8 +120,8 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-[15px] font-bold text-gray-900 leading-tight">Alimentação</h2>
-            <p className="text-[12px] text-gray-500 leading-tight truncate">{pet.pet_name}</p>
+            <h2 className="text-base font-bold text-gray-900 leading-tight">Alimentação</h2>
+            <p className="text-xs text-gray-500 leading-tight truncate">{pet.pet_name}</p>
           </div>
           <button
             onClick={mode === 'buy' ? () => setMode('view') : onClose}
@@ -131,9 +135,50 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
         </div>
 
         {/* Content — FoodControlTab scrolls inside */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" style={{ scrollPaddingBottom: '320px' }}>
           {mode === 'view' ? (
             <>
+              {/* ── Fallback: dado insuficiente para estimar consumo ─────────── */}
+              {hasFood && foodState.daysLeft === null && foodState.restockDate === null && (
+                <div className="mx-3 mt-3 mb-1 rounded-2xl px-4 py-3 flex items-center gap-3 bg-gray-50 border border-gray-200">
+                  <span className="text-xl flex-shrink-0 opacity-50">📦</span>
+                  <p className="text-xs text-gray-500 leading-snug">Adicione o tamanho da embalagem para ver o consumo estimado</p>
+                </div>
+              )}
+
+              {/* ── Consumption estimate banner ─────────────────────────────── */}
+              {hasFood && (foodState.daysLeft !== null || foodState.restockDate !== null) && (
+                <div className={`mx-3 mt-3 mb-1 rounded-2xl px-4 py-3 flex items-center gap-3 ${
+                  foodState.daysLeft !== null && foodState.daysLeft <= 5
+                    ? 'bg-red-50 border border-red-200'
+                    : foodState.daysLeft !== null && foodState.daysLeft <= 12
+                      ? 'bg-orange-50 border border-orange-200'
+                      : 'bg-amber-50 border border-amber-100'
+                }`}>
+                  <span className="text-2xl flex-shrink-0">⏱</span>
+                  <div className="min-w-0 flex-1">
+                    {foodState.daysLeft !== null && (
+                      <p className={`text-base font-bold leading-tight ${
+                        foodState.daysLeft <= 5 ? 'text-red-800' :
+                        foodState.daysLeft <= 12 ? 'text-orange-800' : 'text-amber-900'
+                      }`}>
+                        {foodState.daysLeft <= 0
+                          ? 'Ração acabou — hora de comprar!'
+                          : `Acaba em ~${foodState.daysLeft} dia${foodState.daysLeft === 1 ? '' : 's'}`}
+                      </p>
+                    )}
+                    {foodState.restockDate && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Próxima compra: {(() => {
+                          const [, m, d] = foodState.restockDate.split('-').map(Number);
+                          const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+                          return `${d} ${months[m - 1]}`;
+                        })()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               <FoodControlTab
                 petId={pet.pet_id}
                 petName={pet.pet_name}
@@ -168,8 +213,8 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                         🛒
                       </div>
                       <div className="text-left">
-                        <p className="text-[13px] font-bold text-blue-900">Preciso comprar</p>
-                        <p className="text-[11px] text-blue-700/70">Ver onde encontrar ração</p>
+                        <p className="text-sm font-bold text-blue-900">Preciso comprar</p>
+                        <p className="text-xs text-blue-700/70">Ver onde encontrar ração</p>
                       </div>
                     </div>
                     <span className="text-blue-400 text-lg font-bold">›</span>
@@ -186,22 +231,22 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                           ⏸️
                         </div>
                         <div className="text-left">
-                          <p className="text-[13px] font-bold text-gray-700">Adiar lembrete</p>
-                          <p className="text-[11px] text-gray-500">Escolher por quantos dias</p>
+                          <p className="text-sm font-bold text-gray-700">Adiar lembrete</p>
+                          <p className="text-xs text-gray-500">Escolher por quantos dias</p>
                         </div>
                       </div>
                       <span className="text-gray-400 text-lg font-bold">›</span>
                     </button>
                   ) : (
                     <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2">
-                      <p className="text-[13px] font-semibold text-gray-600 mb-1">Adiar por quantos dias?</p>
+                      <p className="text-base font-semibold text-gray-600 mb-1">Adiar por quantos dias?</p>
                       <div className="grid grid-cols-4 gap-2">
                         {[1, 3, 5, 7].map((days) => (
                           <button
                             key={days}
                             onClick={() => { setSnoozeOpen(false); handleSnooze(days); }}
                             disabled={snoozing}
-                            className="py-2 rounded-xl bg-white border border-gray-200 text-[13px] font-bold text-gray-700 hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50"
+                            className="min-h-[44px] py-2.5 rounded-xl bg-white border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50"
                           >
                             {days}d
                           </button>
@@ -221,7 +266,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
           ) : (
             /* ── BUY MODE ─────────────────────────────────────────────────── */
             <div className="p-5 pb-8 space-y-4">
-              <h3 className="text-[16px] font-bold text-gray-900">Onde comprar</h3>
+              <h3 className="text-base font-bold text-gray-900">Onde comprar</h3>
               <p className="text-sm text-gray-500">
                 Escolha onde encontrar ração{foodBrand ? ` (${foodBrand})` : ''}:
               </p>
@@ -257,7 +302,7 @@ export function FoodItemSheet({ pet, onClose, onSaved }: FoodItemSheetProps) {
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
                       <div className="flex-1">
-                        <p className="font-bold text-gray-900 text-sm">{partner.name}</p>
+                        <p className="font-bold text-gray-900 text-base">{partner.name}</p>
                         <p className="text-xs text-gray-400 mt-0.5">{partner.description}</p>
                       </div>
                       <span className="text-gray-400 text-lg">›</span>

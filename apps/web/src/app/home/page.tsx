@@ -345,6 +345,7 @@ export default function HomePage() {
   const [showVaccineSheet, setShowVaccineSheet] = useState(false);
   const [showMedicationSheet, setShowMedicationSheet] = useState(false);
   const [showFoodSheet, setShowFoodSheet] = useState(false);
+  const [foodSheetInitialMode, setFoodSheetInitialMode] = useState<'view' | 'buy'>('view');
 
   // Estado para simulação de chegada em estabelecimento
   const [showArrivalAlert, setShowArrivalAlert] = useState(false);
@@ -1053,6 +1054,10 @@ export default function HomePage() {
     const eventId = params.get('eventId') || undefined;
     const itemName = params.get('itemName') || undefined;
 
+    if (modal === 'food' && params.get('action') === 'buy') {
+      setFoodSheetInitialMode('buy');
+    }
+
     const destination = resolveHomeDeepLinkDestination(modal, params.get('tab'));
     if (destination?.kind === 'push-action-sheet' && resolvedPetId) {
       setPushActionSheet({ type: destination.actionSheetType as ActionSheetType, eventId, itemName });
@@ -1184,7 +1189,7 @@ export default function HomePage() {
                     <div className="flex items-start gap-3">
                       <span className="text-xl flex-shrink-0">{isHigh ? '🚨' : '⚠️'}</span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold leading-snug ${isHigh ? 'text-red-900' : 'text-amber-900'}`}>
+                        <p className={`text-base font-bold leading-snug ${isHigh ? 'text-red-900' : 'text-amber-900'}`}>
                           {topPend.title}
                         </p>
                         <p className={`text-xs leading-snug mt-0.5 ${isHigh ? 'text-red-700' : 'text-amber-700'}`}>
@@ -1195,25 +1200,25 @@ export default function HomePage() {
                     <div className="flex gap-1.5 pt-0.5">
                       <button
                         onClick={() => { router.push(topPend.deep_link); void actPendency(topPend.id, 'resolve'); }}
-                        className={`flex-1 py-2 rounded-xl text-white text-xs font-bold active:scale-95 transition-all ${isHigh ? 'bg-red-600' : 'bg-amber-500'}`}
+                        className={`flex-1 py-2 rounded-xl text-white text-sm font-bold active:scale-95 transition-all ${isHigh ? 'bg-red-600' : 'bg-amber-500'}`}
                       >
                         Resolver agora
                       </button>
                       <button
                         onClick={() => void actPendency(topPend.id, 'snooze', 24)}
-                        className={`flex-1 py-2 rounded-xl border text-xs font-semibold active:scale-95 transition-all ${isHigh ? 'border-red-200 text-red-700' : 'border-amber-200 text-amber-700'}`}
+                        className={`flex-1 py-2 rounded-xl border text-sm font-semibold active:scale-95 transition-all ${isHigh ? 'border-red-200 text-red-700' : 'border-amber-200 text-amber-700'}`}
                       >
                         Lembrar depois
                       </button>
                       <button
                         onClick={() => void actPendency(topPend.id, 'dismiss')}
-                        className="px-3 py-2 rounded-xl border border-gray-200 text-gray-400 text-xs font-semibold active:scale-95 transition-all"
+                        className="px-3 py-2 rounded-xl border border-gray-200 text-gray-400 text-sm font-semibold active:scale-95 transition-all"
                       >
                         Já resolvi
                       </button>
                     </div>
                     {visiblePendencies.length > 1 && (
-                      <p className="text-[10px] text-gray-400 text-center">
+                      <p className="text-xs text-gray-400 text-center">
                         +{visiblePendencies.length - 1} {visiblePendencies.length - 1 === 1 ? 'outro item' : 'outros itens'} pendentes
                       </p>
                     )}
@@ -1232,10 +1237,10 @@ export default function HomePage() {
               return (
                 <div className="mb-3 flex items-center gap-3 rounded-2xl bg-red-50 border border-red-200 px-4 py-3">
                   <span className="text-xl flex-shrink-0">🚨</span>
-                  <p className="flex-1 text-sm font-bold text-red-900 leading-snug">{label}</p>
+                  <p className="flex-1 text-base font-bold text-red-900 leading-snug">{label}</p>
                   <button
                     onClick={action}
-                    className="flex-shrink-0 text-xs font-semibold text-red-700 bg-red-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform whitespace-nowrap"
+                    className="flex-shrink-0 text-sm font-semibold text-red-700 bg-red-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform whitespace-nowrap"
                   >
                     Ver agora
                   </button>
@@ -1245,13 +1250,13 @@ export default function HomePage() {
             {checkupBanner && (
               <div className="mb-3 flex items-center gap-3 rounded-2xl bg-blue-50 border border-blue-100 px-4 py-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-blue-900 leading-snug">
+                  <p className="text-base font-bold text-blue-900 leading-snug">
                     Faltam {checkupBanner.pendingCount} {checkupBanner.pendingCount === 1 ? 'passo' : 'passos'} para colocar {checkupBanner.petName} em dia
                   </p>
                 </div>
                 <button
                   onClick={() => router.push('/check-up')}
-                  className="flex-shrink-0 text-xs font-semibold text-[#0056D2] bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                  className="flex-shrink-0 text-sm font-semibold text-[#0056D2] bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
                 >
                   Continuar
                 </button>
@@ -1645,8 +1650,9 @@ export default function HomePage() {
       {showFoodSheet && currentPet && (
         <FoodItemSheet
           pet={currentPet}
-          onClose={closeFoodSheet}
+          onClose={() => { setFoodSheetInitialMode('view'); closeFoodSheet(); }}
           onSaved={handleFoodSaved}
+          initialMode={foodSheetInitialMode}
         />
       )}
 

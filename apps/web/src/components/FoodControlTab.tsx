@@ -46,6 +46,8 @@ export interface FoodControlTabState {
   showForm: boolean;
   commerceStatus: 'steady' | 'attention' | 'urgent' | null;
   foodBrand: string;
+  daysLeft: number | null;
+  restockDate: string | null;
 }
 
 export interface FoodControlTabProps {
@@ -654,6 +656,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       showForm,
       commerceStatus: commerceSnapshot?.status ?? null,
       foodBrand: primaryItem.brand.trim(),
+      daysLeft: displayDaysLeft ?? null,
+      restockDate: displayEndDate ?? null,
     });
   }, [commerceSnapshot?.status, onStateChange, primaryItem.brand, showForm]);
 
@@ -668,17 +672,17 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           {savedOk && (
             <div className="bg-green-500 rounded-2xl px-4 py-3 flex items-center gap-2 shadow-sm">
               <span className="text-white text-lg">✅</span>
-              <span className="text-white text-sm font-bold">{saveFeedback}</span>
+              <span className="text-white text-base font-bold">{saveFeedback}</span>
             </div>
           )}
           {deleteFeedback && (
             <div className="bg-slate-100 border border-slate-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-              <span>ℹ️</span><span className="text-sm text-slate-700">{deleteFeedback}</span>
+              <span>ℹ️</span><span className="text-base text-slate-700">{deleteFeedback}</span>
             </div>
           )}
           {restockFeedback && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-              <span>🥣</span><span className="text-sm text-amber-900">{restockFeedback}</span>
+              <span>🥣</span><span className="text-base text-amber-900">{restockFeedback}</span>
             </div>
           )}
 
@@ -702,20 +706,20 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                     <div className="flex min-w-0 items-start gap-2.5">
                       <span className="mt-0.5 text-lg flex-shrink-0">🥣</span>
                       <div className="min-w-0">
-                        <p className="font-bold text-gray-900 text-sm leading-tight">{item.brand || `Produto ${index + 1}`}</p>
-                        <p className="text-[11px] text-gray-500">
+                        <p className="font-bold text-gray-900 text-base leading-tight">{item.brand || `Produto ${index + 1}`}</p>
+                        <p className="text-xs text-gray-500">
                           {isTracked ? 'Produto principal monitorado' : 'Produto adicional'}
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1.5">
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                         isTracked ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
                       }`}>
                         {isTracked ? 'Principal' : 'Adicional'}
                       </span>
                       {isTracked && currentDaysLeft !== null && (
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full whitespace-nowrap ${
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${
                           currentDaysLeft < 0 ? 'bg-red-100 text-red-700' :
                           currentDaysLeft <= 5 ? 'bg-orange-100 text-orange-700' :
                           'bg-green-100 text-green-700'
@@ -737,13 +741,13 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                       />
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500 mt-0.5">
-                    {item.packageSizeKg && <span>📦 {item.packageSizeKg} kg</span>}
-                    {item.startDate && <span>📅 Início: {fmtDate(item.startDate)}</span>}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 mt-0.5">
+                    {item.packageSizeKg && <span>{item.packageSizeKg} kg</span>}
+                    {item.startDate && <span>Desde {fmtDate(item.startDate)}</span>}
                     {currentEndDate && isTracked && (
-                      <span>⏳ Prev. término: {fmtDate(currentEndDate)}</span>
+                      <span>Término ~{fmtDate(currentEndDate)}</span>
                     )}
-                    {!isTracked && item.category && <span>🏷️ {item.category}</span>}
+                    {!isTracked && item.category && <span>{item.category}</span>}
                   </div>
                 </div>
               );
@@ -764,10 +768,10 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             >
               <span className="text-xl flex-shrink-0">{commerceSnapshot.status === 'urgent' ? '🛒' : '⏰'}</span>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-bold text-slate-900 leading-tight">{commerceSnapshot.title}</p>
-                <p className="text-[11px] text-slate-600 mt-0.5 leading-tight">{commerceSnapshot.description}</p>
+                <p className="text-base font-bold text-slate-900 leading-tight">{commerceSnapshot.title}</p>
+                <p className="text-xs text-slate-600 mt-0.5 leading-tight">{commerceSnapshot.description}</p>
               </div>
-              <span className="flex-shrink-0 text-[12px] font-bold text-slate-700 whitespace-nowrap">{commerceSnapshot.ctaLabel} ›</span>
+              <span className="flex-shrink-0 text-sm font-bold text-slate-700 whitespace-nowrap">{commerceSnapshot.ctaLabel} ›</span>
             </a>
           )}
 
@@ -776,20 +780,20 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             <button
               onClick={handleRegisterNextFeeding}
               disabled={saving}
-              className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-[11px] font-semibold leading-tight text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+              className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-sm font-semibold leading-tight text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
             >
               📦 Adicionar alimento
             </button>
             <button
               onClick={() => setFormOpen(true)}
-              className="min-h-[56px] rounded-2xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-[11px] font-semibold leading-tight text-amber-800 hover:bg-amber-100 active:opacity-70"
+              className="min-h-[56px] rounded-2xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-sm font-semibold leading-tight text-amber-800 hover:bg-amber-100 active:opacity-70"
             >
               ✏️ Editar alimentação
             </button>
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="min-h-[56px] rounded-2xl border border-red-200 bg-red-50 px-2 py-2.5 text-[11px] font-semibold leading-tight text-red-700 hover:bg-red-100 disabled:opacity-50"
+              className="min-h-[56px] rounded-2xl border border-red-200 bg-red-50 px-2 py-2.5 text-sm font-semibold leading-tight text-red-700 hover:bg-red-100 disabled:opacity-50"
             >
               🗑 Excluir
             </button>
@@ -821,8 +825,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                 <div key={item.id} className="rounded-2xl border border-slate-200 p-3 space-y-2.5 bg-slate-50">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-sm font-bold text-slate-900">{item.brand || `Produto ${index + 1}`}</p>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-base font-bold text-slate-900">{item.brand || `Produto ${index + 1}`}</p>
+                      <p className="text-xs text-slate-500">
                         {item.isPrimary ? 'Produto principal monitorado' : 'Produto adicional'}
                       </p>
                     </div>
@@ -831,7 +835,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                         <button
                           type="button"
                           onClick={() => setPrimaryItem(item.id)}
-                          className="min-h-[36px] px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
+                          className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
                         >
                           Usar no monitoramento
                         </button>
@@ -840,7 +844,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                         <button
                           type="button"
                           onClick={() => removeFoodItem(item.id)}
-                          className="min-h-[36px] px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
+                          className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
                         >
                           Remover
                         </button>
@@ -863,7 +867,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                       <button
                         type="button"
                         onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'weight' }))}
-                        className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                        className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
                           item.trackingMethod === 'weight'
                             ? 'border-amber-300 bg-amber-50 text-amber-900'
                             : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
@@ -874,7 +878,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                       <button
                         type="button"
                         onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'duration' }))}
-                        className={`min-h-[44px] rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+                        className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
                           item.trackingMethod === 'duration'
                             ? 'border-amber-300 bg-amber-50 text-amber-900'
                             : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
@@ -884,7 +888,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                       </button>
                     </div>
                     {item.isPrimary && (
-                      <p className="text-[11px] text-gray-500">
+                      <p className="text-xs text-gray-500">
                         O item principal continua controlando os lembretes e pushes de reposição.
                       </p>
                     )}
@@ -897,7 +901,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                       value={item.brand}
                       onChange={e => updateItem(item.id, (current) => ({ ...current, brand: e.target.value }))}
                       placeholder="Ex: Royal Canin, Guabi Natural, petisco..."
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                     />
                   </div>
 
@@ -913,7 +917,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                             value={item.packageSizeKg}
                             onChange={e => updateItem(item.id, (current) => ({ ...current, packageSizeKg: e.target.value }))}
                             placeholder="Ex: 15"
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                           />
                         </div>
                         <div>
@@ -925,7 +929,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                             value={item.dailyConsumptionG}
                             onChange={e => updateItem(item.id, (current) => ({ ...current, dailyConsumptionG: e.target.value }))}
                             placeholder="Ex: 300"
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                           />
                         </div>
                       </div>
@@ -935,7 +939,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                           type="date"
                           value={item.startDate}
                           onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                         />
                       </div>
                     </>
@@ -950,7 +954,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                           value={item.durationDays}
                           onChange={e => updateItem(item.id, (current) => ({ ...current, durationDays: e.target.value }))}
                           placeholder="Ex: 30"
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                         />
                       </div>
                       <div>
@@ -959,7 +963,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                           type="date"
                           value={item.startDate}
                           onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                         />
                       </div>
                     </div>
@@ -984,7 +988,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                   )}
 
                   {!item.isPrimary && itemMetrics.days != null && (
-                    <div className="text-[11px] text-slate-500">
+                    <div className="text-xs text-slate-500">
                       Previsão local deste item: cerca de {itemMetrics.days} dias.
                     </div>
                   )}
@@ -1022,7 +1026,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-[15px] font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
+            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
           >
             {saving ? 'Salvando...' : hasExisting ? '✅ Atualizar alimentação' : '✅ Confirmar alimentação'}
           </button>

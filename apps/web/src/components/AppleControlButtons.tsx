@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useI18n } from '@/lib/I18nContext';
 import { HomeShoppingSheet } from '@/features/commerce/HomeShoppingSheet';
-import { HomeEmergencySheet } from '@/components/home/HomeEmergencySheet';
 import { type HomeInactiveEligibleControlId } from '@/lib/homeControlPreferences';
 
 // ── Props H1 logic preserved ──────────────────────────────────────────────────
@@ -77,62 +76,59 @@ export function AppleControlButtons({
 }: AppleControlButtonsProps) {
   const { t } = useI18n();
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
-  const [showEmergencySheet, setShowEmergencySheet] = useState(false);
-  const [showTrainingSheet, setShowTrainingSheet] = useState(false);
-  const [showHealthPlanSheet, setShowHealthPlanSheet] = useState(false);
 
 
   return (
     <>
-      {/* 6 Botões Principais - Grid 2x3 compacto para caber na primeira dobra */}
+      {/* Grid principal — Alimentação em destaque na primeira posição */}
       <div className="relative">
         <div className="grid grid-cols-2 gap-2.5">
-          {/* 1. SAÚDE - Azul Vacina (Mais Vivo) / Fixo */}
+          {/* 1. ALIMENTAÇÃO — hero card, primeira posição */}
+          <button
+            onClick={onAlimentacaoClick}
+            className="group relative overflow-hidden rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-100 to-orange-200 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
+          >
+            {shouldShowAlert(colorFood, alertFood) && <AlertBadge tone={colorFood} />}
+            <span className="absolute right-2 top-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
+              <span className="text-2xl">🥣</span>
+            </span>
+            <div className="flex h-full flex-col justify-center pr-8 pt-3 text-left">
+              <h3 className="truncate text-base font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-amber-800">{t('home.food.desc')}</p>
+            </div>
+          </button>
+
+          {/* 2. SAÚDE */}
           <button
             onClick={onHealthClick}
-            className="group relative overflow-hidden rounded-xl border border-blue-300 bg-gradient-to-br from-blue-100 to-blue-200 p-3 min-h-[74px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
+            className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-blue-50 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorHealth, alertHealth) && <AlertBadge tone={colorHealth} />}
             <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
             <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-semibold leading-tight text-sky-900">
+              <h3 className="truncate text-base font-semibold leading-tight text-sky-900">
                 {t('home.health.title')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-sky-700 opacity-70">{t('home.health.vaccines')}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-sky-700 opacity-70">{t('home.health.vaccines')}</p>
             </div>
           </button>
 
-          {/* 2. HIGIENE - Verde Vibrante (Original) */}
+          {/* 3. HIGIENE */}
           <button
             onClick={onBanhoTosaClick}
-            className="group relative overflow-hidden rounded-xl border border-green-300 bg-gradient-to-br from-green-100 to-green-200 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-green-200 hover:to-green-300"
+            className="group relative overflow-hidden rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-green-50 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorGrooming, alertGrooming) && <AlertBadge tone={colorGrooming} />}
             <span className="absolute right-2 top-2 text-xl opacity-80 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
             <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-semibold leading-tight text-green-900">
+              <h3 className="truncate text-base font-semibold leading-tight text-green-900">
                 {t('home.hygiene')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-green-700 opacity-70">{t('home.hygiene.desc')}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-green-700 opacity-70">{t('home.hygiene.desc')}</p>
             </div>
           </button>
 
-          {/* 3. ALIMENTAÇÃO - Laranja Vibrante (Original) */}
-          <button
-            onClick={onAlimentacaoClick}
-            className="group relative overflow-hidden rounded-xl border border-orange-200 bg-gradient-to-br from-orange-100 to-amber-200 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-orange-200 hover:to-amber-300"
-          >
-            {shouldShowAlert(colorFood, alertFood) && <AlertBadge tone={colorFood} />}
-            <span className="absolute right-2 top-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
-              <span className="text-xl">🥣</span>
-            </span>
-            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-amber-800">{t('home.food.desc')}</p>
-            </div>
-          </button>
-
-          {/* 4. SHOPPING - Azul Marca (Original) */}
+          {/* 4. SCANNER / COMPRAS */}
           <button
             onClick={() => setShowShoppingSheet(true)}
             className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-[#1d4ed8] hover:to-[#6d28d9]"
@@ -140,68 +136,32 @@ export function AppleControlButtons({
             {alertShopping && <AlertBadge tone="critical" />}
             <span className="absolute right-2 top-2 text-xl pointer-events-none transition-transform group-hover:scale-110" style={{ filter: 'brightness(0) invert(1)' }}>🛒</span>
             <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-bold leading-tight text-white drop-shadow-sm">{t('home.shopping.title')}</h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-white/80">{t('home.shopping.desc')}</p>
+              <h3 className="truncate text-base font-bold leading-tight text-white drop-shadow-sm">{t('home.shopping.title')}</h3>
+              <p className="mt-0.5 line-clamp-1 text-xs leading-tight text-white/80">{t('home.shopping.desc')}</p>
             </div>
           </button>
 
-        <button
-          onClick={() => setShowEmergencySheet(true)}
-          className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-red-600 via-red-500 to-rose-500 p-3 min-h-[68px] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] shadow-md shadow-red-200 hover:from-red-700 hover:via-red-600 hover:to-rose-600"
-        >
-          <span className="absolute left-2.5 top-2.5 flex items-center justify-center">
-            <span className="absolute h-7 w-7 rounded-full bg-white/20 animate-ping"></span>
-            <span className="relative text-lg">🚨</span>
-          </span>
-          <div className="flex h-full flex-col justify-center pl-7 pr-6 text-left">
-            <h3 className="truncate text-[14px] font-bold leading-tight text-white drop-shadow">Emergência</h3>
-            <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-white/80">Clínicas e hospitais 24h perto de você</p>
-          </div>
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg text-white/70 transition-transform group-hover:translate-x-1">›</span>
-        </button>
-
-        <button
-          onClick={onDocumentosClick}
-          className="group relative overflow-hidden rounded-xl border border-slate-600/50 bg-gradient-to-r from-slate-700 to-slate-800 p-3 min-h-[68px] transition-all duration-300 hover:shadow-xl active:scale-[0.98]"
-        >
-          <div className="flex h-full items-center gap-2.5 text-left">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-transform group-hover:scale-110">
-              <span className="pointer-events-none text-lg">📁</span>
+          {/* 5. DOCUMENTOS — full width */}
+          <button
+            onClick={onDocumentosClick}
+            className="group col-span-2 relative overflow-hidden rounded-xl border border-slate-600/50 bg-gradient-to-r from-slate-700 to-slate-800 p-3 min-h-[56px] transition-all duration-300 hover:shadow-xl active:scale-[0.98]"
+          >
+            <div className="flex h-full items-center gap-2.5 text-left">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-transform group-hover:scale-110">
+                <span className="pointer-events-none text-lg">📁</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-base font-bold leading-tight text-white">Documentos</h3>
+                <p className="mt-0.5 line-clamp-1 text-xs font-semibold leading-tight text-slate-300 opacity-80">Cofre digital de saúde do pet</p>
+              </div>
+              <span className="text-lg text-white/30 transition-transform group-hover:translate-x-1">›</span>
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-[14px] font-bold leading-tight text-white">Documentos</h3>
-              <p className="mt-0.5 line-clamp-2 text-[10px] font-semibold leading-tight text-slate-300 opacity-80">Seu cofre digital de saúde pet</p>
-            </div>
-            <span className="text-lg text-white/30 transition-transform group-hover:translate-x-1">›</span>
-          </div>
-        </button>
+          </button>
         </div>
       </div>
 
       <HomeShoppingSheet open={showShoppingSheet} onClose={() => setShowShoppingSheet(false)} />
-      <HomeEmergencySheet open={showEmergencySheet} onClose={() => setShowEmergencySheet(false)} />
       
-      {/* Informação sobre itens indisponíveis no MVP H1 mas presentes no visual */}
-      {(showTrainingSheet || showHealthPlanSheet) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => { setShowTrainingSheet(false); setShowHealthPlanSheet(false); }}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div className="relative w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">{showTrainingSheet ? '🐾' : '🩺'}</span>
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Em breve</h2>
-            <p className="text-gray-500 text-sm mb-6">
-              Esta funcionalidade está sendo preparada para o PETMOL. Continue usando os recursos de Saúde e Higiene disponíveis!
-            </p>
-            <button 
-              onClick={() => { setShowTrainingSheet(false); setShowHealthPlanSheet(false); }}
-              className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold active:scale-95 transition-all"
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
