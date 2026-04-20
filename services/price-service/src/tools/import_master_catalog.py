@@ -29,8 +29,8 @@ from typing import Optional
 # Caminho padrão da base mestre — relativo ao topo do repositório
 _TOOLS_DIR = Path(__file__).parent
 _SRC_DIR = _TOOLS_DIR.parent
-_REPO_ROOT = _SRC_DIR.parents[2]  # services/price-service/src/tools → repo root
-_DEFAULT_PATH = _REPO_ROOT.parent / "PRODUTOS" / "base_mestre_pet.json"
+_SERVICE_ROOT = _SRC_DIR.parent  # services/price-service/
+_DEFAULT_PATH = _SERVICE_ROOT / "data" / "base_mestre_pet.json"
 
 _HTML_TAG = re.compile(r"<[^>]+>")
 _MULTI_SPACE = re.compile(r"\s+")

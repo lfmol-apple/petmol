@@ -35,6 +35,10 @@ uploads/
 *.sqlite
 *.db
 
+# ✅ Exceções — arquivos JSON versionados explicitamente
+!services/price-service/data/base_mestre_pet.json
+!shared/**/*.json
+
 # 🔴 uploads de documentos
 **/uploads_pet_documents_*
 **/pet_documents/
