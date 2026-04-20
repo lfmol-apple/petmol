@@ -307,10 +307,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     setItems((current) => ensurePrimaryItem(current.map((item) => (item.id === itemId ? updater(item) : item))));
   };
 
-  const addFoodItem = () => {
-    setItems((current) => [...ensurePrimaryItem(current), createEmptyFoodItem(false)]);
-  };
-
   const removeFoodItem = (itemId: string) => {
     setItems((current) => {
       const next = current.filter((item) => item.id !== itemId);
@@ -647,6 +643,14 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     }
   };
 
+  const openFoodForm = () => {
+    setApiError(null);
+    setDeleteFeedback(null);
+    setRestockFeedback(null);
+    setSavedOk(false);
+    setFormOpen(true);
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const showForm = !hasExisting || formOpen;
@@ -778,17 +782,17 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           {/* Actions */}
           <div className="grid grid-cols-3 gap-2">
             <button
-              onClick={handleRegisterNextFeeding}
-              disabled={saving}
+              onClick={openFoodForm}
               className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-sm font-semibold leading-tight text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
             >
               📦 Adicionar alimento
             </button>
             <button
-              onClick={() => setFormOpen(true)}
+              onClick={handleRegisterNextFeeding}
+              disabled={saving}
               className="min-h-[56px] rounded-2xl border border-amber-200 bg-amber-50 px-2 py-2.5 text-sm font-semibold leading-tight text-amber-800 hover:bg-amber-100 active:opacity-70"
             >
-              ✏️ Editar alimentação
+              🔄 Registrar reposição
             </button>
             <button
               onClick={handleDelete}
@@ -816,7 +820,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3 sm:p-4">
             <div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
-              Você pode cadastrar vários produtos ao mesmo tempo. O item marcado como principal controla a previsão e os lembretes.
+              Cadastre ou ajuste o alimento principal para controlar a previsão e os lembretes.
             </div>
 
             {orderPrimaryFirst(normalizedItems).map((item, index) => {
@@ -995,14 +999,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                 </div>
               );
             })}
-
-            <button
-              type="button"
-              onClick={addFoodItem}
-              className="w-full min-h-[52px] rounded-2xl text-sm font-semibold bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200"
-            >
-              + Adicionar outro produto
-            </button>
           </div>
 
           <ReminderPicker
