@@ -660,7 +660,7 @@ export default function HomePage() {
   useHomeNotificationBridge(multipetInteractions.canonicalEvents, masterRules);
 
   // ── Pendências persistentes (in-app) — complementam o push ──
-  const { pendencies, act: actPendency, refetch: refetchPendencies } = usePendencies();
+  const { refetch: refetchPendencies } = usePendencies();
 
   // fire-and-forget: dispara push para itens vencidos ao abrir o app (loggedUserId set by usePetBootstrap)
   useEffect(() => {
@@ -1178,53 +1178,8 @@ export default function HomePage() {
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
           <>
-            {/* Atenção agora — API pendencies (primary) or inline alerts (fallback) */}
+            {/* Atenção agora — inline alerts (fallback) */}
             {(() => {
-              const visiblePendencies = pendencies.filter((pendency) => pendency.type !== 'vaccine');
-              const topPend = visiblePendencies[0];
-              if (topPend) {
-                const isHigh = topPend.priority >= 75;
-                return (
-                  <div className={`mb-3 rounded-2xl border px-4 py-3 space-y-2 ${isHigh ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'}`}>
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl flex-shrink-0">{isHigh ? '🚨' : '⚠️'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-base font-bold leading-snug ${isHigh ? 'text-red-900' : 'text-amber-900'}`}>
-                          {topPend.title}
-                        </p>
-                        <p className={`text-xs leading-snug mt-0.5 ${isHigh ? 'text-red-700' : 'text-amber-700'}`}>
-                          {topPend.message}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1.5 pt-0.5">
-                      <button
-                        onClick={() => { router.push(topPend.deep_link); void actPendency(topPend.id, 'resolve'); }}
-                        className={`flex-1 py-2 rounded-xl text-white text-sm font-bold active:scale-95 transition-all ${isHigh ? 'bg-red-600' : 'bg-amber-500'}`}
-                      >
-                        Resolver agora
-                      </button>
-                      <button
-                        onClick={() => void actPendency(topPend.id, 'snooze', 24)}
-                        className={`flex-1 py-2 rounded-xl border text-sm font-semibold active:scale-95 transition-all ${isHigh ? 'border-red-200 text-red-700' : 'border-amber-200 text-amber-700'}`}
-                      >
-                        Lembrar depois
-                      </button>
-                      <button
-                        onClick={() => void actPendency(topPend.id, 'dismiss')}
-                        className="px-3 py-2 rounded-xl border border-gray-200 text-gray-400 text-sm font-semibold active:scale-95 transition-all"
-                      >
-                        Já resolvi
-                      </button>
-                    </div>
-                    {visiblePendencies.length > 1 && (
-                      <p className="text-xs text-gray-400 text-center">
-                        +{visiblePendencies.length - 1} {visiblePendencies.length - 1 === 1 ? 'outro item' : 'outros itens'} pendentes
-                      </p>
-                    )}
-                  </div>
-                );
-              }
               // Fallback: inline computed alerts (before first send-on-open response)
               const currentPetName = pets.find(p => p.pet_id === selectedPetId)?.pet_name || 'seu pet';
               let label: string | null = null;
