@@ -96,6 +96,8 @@ export function useHomeMedicationActions({
       if (eventFormData.cost) payload.cost = parseFloat(eventFormData.cost);
       if (finalNotes) payload.notes = finalNotes;
 
+      const evEditId = editingEventId;
+
       // Reminder extra_data (multi-time push notifications)
       // Sempre incluir ao editar para preservar applied_dates, skipped_dates e dose_notes
       if (eventFormData.reminder_enabled || (evEditId && eventFormData._preserved_extra)) {
@@ -120,7 +122,6 @@ export function useHomeMedicationActions({
           : eventFormData.next_due_date;
       if (nextDate) payload.next_due_date = new Date(nextDate).toISOString();
 
-      const evEditId = editingEventId;
       const res = await fetch(
         evEditId ? `${API_BASE_URL}/events/${evEditId}` : `${API_BASE_URL}/events`,
         {
