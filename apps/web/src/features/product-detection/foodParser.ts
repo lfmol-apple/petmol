@@ -51,6 +51,18 @@ const OCR_CORRECTIONS: Array<[RegExp, string]> = [
   [/[i1]ams/gi, 'Iams'],
   [/eukan[u0]ba/gi, 'Eukanuba'],
   [/\b0(?=[a-z])/gi, 'o'],  // zero seguido de letra → 'o'
+  // Therapeutic term OCR corrections (confusions: 0↔o, 1↔l, v↔y, lJ↔U, i↔I)
+  [/\blJrinary\b/g, 'urinary'],
+  [/\bUrinarv\b/gi, 'urinary'],
+  [/\bUr[i1]nar[yv]\b/gi, 'urinary'],
+  [/\bRena[1]\b/gi, 'renal'],
+  [/\bReria[l1]\b/gi, 'renal'],
+  [/\bRen[a4][l1]\b/gi, 'renal'],
+  [/\bHepat[i1]c\b/gi, 'hepatic'],
+  [/\bGastr[o0][i1]ntest[i1]nal\b/gi, 'gastrointestinal'],
+  [/\bH[i1]p[o0]alerg[eê]n[i1]co\b/gi, 'hipoalergenico'],
+  [/\bD[i1]ab[eé]t[i1]co\b/gi, 'diabetico'],
+  [/\bD[i1]abet[i1]c\b/gi, 'diabetic'],
 ];
 
 const WEIGHT_RE = /\b(\d+(?:[,.]\d+)?)\s*(kg|g)\b/i;

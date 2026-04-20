@@ -151,8 +151,8 @@ export function AppleControlButtons({
                 <span className="pointer-events-none text-lg">📁</span>
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-base font-bold leading-tight text-white">Documentos</h3>
-                <p className="mt-0.5 line-clamp-1 text-xs font-semibold leading-tight text-slate-300 opacity-80">Cofre digital de saúde do pet</p>
+                <h3 className="truncate text-base font-bold leading-tight text-white">Histórico</h3>
+                <p className="mt-0.5 line-clamp-1 text-xs font-semibold leading-tight text-slate-300 opacity-80">Leve o histórico do pet para cada consulta</p>
               </div>
               <span className="text-lg text-white/30 transition-transform group-hover:translate-x-1">›</span>
             </div>

@@ -368,6 +368,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
   const [selectedDiscover, setSelectedDiscover] = useState<Set<string>>(new Set());
   const [importCategory, setImportCategory] = useState('other');
   const [activeCategory, setActiveCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [cardDeleteDocId, setCardDeleteDocId] = useState<string | null>(null);
   const [fabOpen, setFabOpen] = useState(false);
   const [vaultToast, setVaultToast] = useState<string | null>(null);
@@ -421,14 +422,25 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
     : activeCategory === 'health'
     ? baseDocs.filter((d) => HEALTH_CATS.includes(d.category || 'other'))
     : baseDocs.filter((d) => (d.category || 'other') === activeCategory);
+
+  const searchFiltered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return filtered;
+    return filtered.filter((d) =>
+      (d.title || '').toLowerCase().includes(q) ||
+      (d.establishment_name || '').toLowerCase().includes(q) ||
+      (d.notes || '').toLowerCase().includes(q)
+    );
+  }, [filtered, searchQuery]);
+
   const groupedDocs = useMemo(
-    () => groupVaultDocumentsByMonth(filtered as VaultPetDocument[]),
-    [filtered]
+    () => groupVaultDocumentsByMonth(searchFiltered as VaultPetDocument[]),
+    [searchFiltered]
   );
 
   const navigableDocs = useMemo(
-    () => filtered.filter((d) => !((d.kind === 'link') && !!d.url_masked) && !!d.storage_key),
-    [filtered]
+    () => searchFiltered.filter((d) => !((d.kind === 'link') && !!d.url_masked) && !!d.storage_key),
+    [searchFiltered]
   );
 
   // ── Upload ────────────────────────────────────────────────────────────
@@ -1722,6 +1734,46 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
         </div>
       )}
 
+      {/* ── Search ──────────────────────────────────────────────────── */}
+      {docs.length > 0 && (
+        <div style={{ position: 'relative' }}>
+          <svg
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round"
+            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#9ca3af', pointerEvents: 'none' }}
+          >
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por nome, clínica ou nota…"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              border: '1.5px solid #e8e8ea', borderRadius: 14,
+              padding: '10px 14px 10px 36px',
+              fontSize: 16, color: '#111', outline: 'none',
+              background: '#f9f9f9',
+              WebkitAppearance: 'none',
+            } as React.CSSProperties}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                background: '#d1d5db', border: 'none', borderRadius: '50%',
+                width: 18, height: 18, fontSize: 10, color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0,
+              } as React.CSSProperties}
+              aria-label="Limpar busca"
+            >✕</button>
+          )}
+        </div>
+      )}
+
       {/* ── Category filter tabs ────────────────────────────────────── */}
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' } as React.CSSProperties}>
         <div style={{ display: 'flex', gap: 6, paddingBottom: 2, minWidth: 'max-content' }}>
@@ -1764,7 +1816,7 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
       {/* ── Documents list ─────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#c0c0c8', letterSpacing: 0.6, textTransform: 'uppercase' }}>
-          {filtered.length} {filtered.length !== 1 ? 'Documentos' : 'Documento'}
+          {searchFiltered.length} {searchFiltered.length !== 1 ? 'Documentos' : 'Documento'}
         </span>
         {docs.length > 0 && (
           <button
@@ -1782,15 +1834,39 @@ export function PetDocumentVault({ petId, onDocsChanged, eventId }: PetDocumentV
         </div>
       )}
 
-      {!loading && filtered.length === 0 && (
+      {!loading && searchFiltered.length === 0 && (
         <div style={{ padding: '48px 16px', textAlign: 'center' }}>
-          <div style={{ fontSize: 52, marginBottom: 12 }}>📂</div>
-          <p style={{ fontSize: 15, fontWeight: 600, color: '#9ca3af', margin: '0 0 4px', letterSpacing: -0.2 }}>
-            {activeCategory === 'all' ? 'Nenhum documento' : 'Nenhum documento nesta categoria'}
-          </p>
-          <p style={{ fontSize: 13, color: '#d1d5db', margin: 0 }}>
-            Toque em + para adicionar
-          </p>
+          {searchQuery.trim() ? (
+            <>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#9ca3af', margin: '0 0 4px', letterSpacing: -0.2 }}>
+                Nenhum resultado
+              </p>
+              <p style={{ fontSize: 13, color: '#d1d5db', margin: 0 }}>
+                Tente outro nome, clínica ou categoria
+              </p>
+            </>
+          ) : docs.length === 0 ? (
+            <>
+              <div style={{ fontSize: 48, marginBottom: 14 }}>🩺</div>
+              <p style={{ fontSize: 16, fontWeight: 700, color: '#6b7280', margin: '0 0 6px', letterSpacing: -0.3 }}>
+                Histórico clínico vazio
+              </p>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: '0 0 2px', lineHeight: 1.55 }}>
+                Escaneie exames, receitas ou a carteirinha de vacina.
+              </p>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: 0, lineHeight: 1.55 }}>
+                Tudo aqui antes da próxima consulta.
+              </p>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#9ca3af', margin: '0 0 4px', letterSpacing: -0.2 }}>
+                Nenhum documento nesta categoria
+              </p>
+            </>
+          )}
         </div>
       )}
 

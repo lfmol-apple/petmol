@@ -25,6 +25,16 @@ const STORAGE_KEY = 'petmol_checkup_v1';
 
 const ITEMS = [
   {
+    key: 'food' as const,
+    icon: '🥣',
+    title: 'O que o seu pet come?',
+    btnLabel: 'Escanear a ração agora',
+    iconBg: 'bg-amber-50',
+    iconColor: 'text-amber-600',
+    cardBg: 'bg-amber-50/50 border-amber-200',
+    btnClass: 'bg-amber-500 text-white',
+  },
+  {
     key: 'vaccines' as const,
     icon: '💉',
     title: 'Vacinas',
@@ -33,6 +43,7 @@ const ITEMS = [
     iconColor: 'text-blue-600',
     cardBg: 'bg-blue-50/50 border-blue-100',
     btnClass: 'bg-[#0056D2] text-white',
+    optional: true,
   },
   {
     key: 'vermifugo' as const,
@@ -43,6 +54,7 @@ const ITEMS = [
     iconColor: 'text-emerald-600',
     cardBg: 'bg-emerald-50/50 border-emerald-100',
     btnClass: 'bg-emerald-600 text-white',
+    optional: true,
   },
   {
     key: 'antipulgas' as const,
@@ -53,26 +65,17 @@ const ITEMS = [
     iconColor: 'text-orange-600',
     cardBg: 'bg-orange-50/50 border-orange-100',
     btnClass: 'bg-orange-500 text-white',
+    optional: true,
   },
   {
     key: 'coleira' as const,
     icon: '⭕',
-    title: 'Coleira',
+    title: 'Coleira antipulgas',
     btnLabel: 'Adicionar coleira',
     iconBg: 'bg-purple-50',
     iconColor: 'text-purple-600',
     cardBg: 'bg-purple-50/50 border-purple-100',
     btnClass: 'bg-purple-600 text-white',
-  },
-  {
-    key: 'food' as const,
-    icon: '🍖',
-    title: 'Alimentação',
-    btnLabel: 'Adicionar alimentação',
-    iconBg: 'bg-amber-50',
-    iconColor: 'text-amber-600',
-    cardBg: 'bg-amber-50/50 border-amber-100',
-    btnClass: 'bg-amber-500 text-white',
     optional: true,
   },
 ] as const;
@@ -221,36 +224,17 @@ export default function CheckupPage() {
   if (!loaded || !state) return null;
 
   const petName = state.petName || 'seu pet';
-  const doneCount = (['vaccines', 'vermifugo', 'antipulgas', 'coleira', 'food'] as const).filter(k => state[k] === 'done').length;
-  const progressPct = Math.round((doneCount / 5) * 100);
 
   return (
     <div className="min-h-dvh bg-white flex flex-col">
       {/* Header */}
       <div className="w-full max-w-sm mx-auto px-6 pt-12 pb-5">
-        <p className="text-xs font-semibold text-[#0056D2] uppercase tracking-wider mb-2">Primeiros cuidados</p>
+        <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">Comece por aqui</p>
         <h1 className="text-2xl font-bold text-gray-900 leading-tight">
-          Colocar {petName} em dia
+          O que {petName} come?
         </h1>
-        <p className="text-sm text-gray-500 mt-1">Leva menos de 1 minuto</p>
+        <p className="text-sm text-gray-500 mt-1">Escaneie a ração e o PETMOL monitora o resto</p>
 
-        {/* Progress bar — only shows after first action */}
-        {doneCount > 0 && (
-          <div className="mt-5">
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-xs text-gray-400">
-                {doneCount} de 5 {doneCount === 1 ? 'cuidado' : 'cuidados'} registrado{doneCount !== 1 ? 's' : ''}
-              </span>
-              <span className="text-xs font-semibold text-[#0056D2]">{progressPct}%</span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#0056D2] rounded-full transition-all duration-500"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Items list */}
@@ -349,7 +333,7 @@ export default function CheckupPage() {
                 >
                   {isVisiting && item.key === 'vaccines' ? 'Abrindo…' : item.btnLabel}
                 </button>
-                {!isSkipped && !isVisiting && (
+                {'optional' in item && item.optional && !isSkipped && !isVisiting && (
                   <button
                     onClick={() => markSkipped(item.key)}
                     className="px-3 py-2.5 text-xs text-gray-400 font-medium rounded-xl active:scale-[0.98] transition-transform"

@@ -899,9 +899,40 @@ def _title_from_url(url: str) -> str:
 
 
 # ── Import session store ──────────────────────────────────────────────────────
-# Mantém URLs reais em memória: import_id → [{url_real, title, kind}]
+# Mantém URLs reais em memória: import_id → (expires_at, [{url_real, title, kind}])
+# TTL de 30 minutos — evita leak de memória em produção.
 # Nunca serializado para o cliente — o cliente usa índices (__idx__:N).
-_import_sessions: dict[str, list[dict]] = {}
+import time as _time
+
+_SESSION_TTL_SECS = 1800  # 30 minutos
+_import_sessions: dict[str, tuple[float, list[dict]]] = {}
+
+
+def _sessions_set(import_id: str, items: list[dict]) -> None:
+    _evict_expired_sessions()
+    _import_sessions[import_id] = (_time.monotonic() + _SESSION_TTL_SECS, items)
+
+
+def _sessions_get(import_id: str) -> list[dict] | None:
+    entry = _import_sessions.get(import_id)
+    if entry is None:
+        return None
+    expires_at, items = entry
+    if _time.monotonic() > expires_at:
+        _import_sessions.pop(import_id, None)
+        return None
+    return items
+
+
+def _sessions_pop(import_id: str) -> None:
+    _import_sessions.pop(import_id, None)
+
+
+def _evict_expired_sessions() -> None:
+    now = _time.monotonic()
+    expired = [k for k, (exp, _) in _import_sessions.items() if now > exp]
+    for k in expired:
+        del _import_sessions[k]
 
 
 def _create_import_record(db: Session, pet_id: str, url: str, provider: str) -> PetDocumentImport:
@@ -1465,8 +1496,8 @@ async def import_link(
                 error="Nenhum arquivo encontrado na página. Link guardado.",
             )
 
-        # URLs reais ficam em memória — frontend recebe apenas url_masked
-        _import_sessions[import_rec.id] = raw_items
+        # URLs reais ficam em memória (TTL 30min) — frontend recebe apenas url_masked
+        _sessions_set(import_rec.id, raw_items)
         _update_import(db, import_rec, "discovered", discovered_count=len(raw_items))
 
         return ImportLinkResponse(
@@ -1511,8 +1542,8 @@ async def import_items(
         return {"imported": [], "errors": []}
 
     session_items: list[dict] = []
-    if body.import_id and body.import_id in _import_sessions:
-        session_items = _import_sessions[body.import_id]
+    if body.import_id:
+        session_items = _sessions_get(body.import_id) or []
 
     imported: list[dict] = []
     errors: list[str] = []
@@ -1589,7 +1620,7 @@ async def import_items(
                 imported_count=len(imported),
                 last_error=("; ".join(errors[:3]) if errors and not imported else None),
             )
-        _import_sessions.pop(body.import_id, None)
+        _sessions_pop(body.import_id)
 
     return {"imported": imported, "errors": errors}
 

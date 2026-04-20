@@ -945,28 +945,39 @@ def send_no_control_pushes() -> None:
         logger.error(f"send_no_control_pushes erro: {e}")
 
 
-# In-memory cooldown: pend_id → epoch_seconds of last push sent.
-# Prevents duplicate pushes if the scheduler restarts within the same 09:00 window.
-_food_push_cooldown: dict = {}
-_FOOD_PUSH_COOLDOWN_SECS = 6 * 3600  # 6 hours
+def _food_push_title(pet_name: str, days_left: int) -> str:
+    """🐾-branded title. Three tiers: urgent (≤3d), standard (>3d), zero/overdue."""
+    if days_left <= 0:
+        return f"🐾 A ração de {pet_name} acabou hoje"
+    if days_left <= 3:
+        return f"🐾 {pet_name} vai ficar sem ração em breve"
+    return f"🐾 A ração de {pet_name} acaba em {days_left} {'dia' if days_left == 1 else 'dias'}"
+
+
+def _food_push_body(brand: str, days_left: int) -> str:
+    if days_left <= 0:
+        return f"{brand} — hora de comprar. Vamos?"
+    if days_left <= 3:
+        return f"Restam ~{days_left} {'dia' if days_left == 1 else 'dias'} de {brand}. Resolver agora?"
+    return f"{brand} — quer garantir a próxima embalagem?"
 
 
 def send_food_reminder_pushes() -> None:
-    """Daily job at 09:00 BRT.
+    """Daily job at 11:00 BRT.
 
     For each feeding plan where next_reminder_date <= today:
       - enabled=true, no_consumption_control=false, deleted_at IS NULL
     Creates pendency (type='food', priority=60) and sends push.
-    Dedup tag: petmol-food-{pet_id}-{next_reminder_date}  → one push per pet per reminder cycle.
-    In-memory cooldown of 6h per pend_id prevents double-sends on scheduler restart.
+    Dedup: plan.last_food_push_date persisted in DB — survives service restarts.
+    One push per pet per calendar day.
     """
     from datetime import timezone as _tz, timedelta as _td
 
     brt = _tz(_td(hours=-3))
     now = datetime.now(brt)
 
-    # Only fire at 09:00 BRT
-    if now.hour != 9 or now.minute != 0:
+    # Only fire at 11:00 BRT
+    if now.hour != 11 or now.minute != 0:
         return
 
     today = now.date()
@@ -991,6 +1002,10 @@ def send_food_reminder_pushes() -> None:
             expired_ids: list[str] = []
 
             for plan in plans:
+                # Persistent dedup: skip if already pushed today
+                if plan.last_food_push_date == today:
+                    continue
+
                 pet = db.query(Pet).filter(Pet.id == plan.pet_id).first()
                 if not pet:
                     continue
@@ -1010,18 +1025,9 @@ def send_food_reminder_pushes() -> None:
                     f"{plan.next_reminder_date.isoformat() if plan.next_reminder_date else today.isoformat()}"
                 )
 
-                # Cooldown: skip if already sent this pend_id within 6h (restart protection)
-                import time as _time
-                _now_ts = _time.time()
-                if _now_ts - _food_push_cooldown.get(pend_id, 0) < _FOOD_PUSH_COOLDOWN_SECS:
-                    continue
-
-                if days_left > 0:
-                    title = f"🍖 A ração de {pet.name} está acabando"
-                    body = f"{brand} acaba em {days_left} dia{'s' if days_left != 1 else ''}"
-                else:
-                    title = f"🍖 A ração de {pet.name} acabou"
-                    body = f"O estoque de {brand} chegou ao fim"
+                title = _food_push_title(pet.name, days_left)
+                body = _food_push_body(brand, days_left)
+                deep_link = f"/home?modal=food&petId={pet.id}&action=buy"
 
                 _upsert_pend(
                     user_id=pet.user_id,
@@ -1030,7 +1036,7 @@ def send_food_reminder_pushes() -> None:
                     type_="food",
                     title=title,
                     message=body,
-                    deep_link=f"/home?modal=food&petId={pet.id}",
+                    deep_link=deep_link,
                     priority=60,
                 )
 
@@ -1041,7 +1047,7 @@ def send_food_reminder_pushes() -> None:
                     "badge": "/icons/badge-mono.png",
                     "image": "/brand/notification-banner.png",
                     "tag": pend_id,
-                    "data": {"url": f"/home?modal=food&petId={pet.id}"},
+                    "data": {"url": deep_link},
                     "requireInteraction": True,
                     "autoCloseMs": 0,
                 }
@@ -1049,8 +1055,10 @@ def send_food_reminder_pushes() -> None:
                 if not ok:
                     expired_ids.append(str(pet.user_id))
                 else:
-                    _food_push_cooldown[pend_id] = _time.time()
-                    logger.info(f"Push ração enviado -> pet {pet.id} user {pet.user_id}")
+                    # Persist dedup date so restart cannot double-send today
+                    plan.last_food_push_date = today
+                    db.commit()
+                    logger.info(f"Push ração enviado -> pet {pet.id} user {pet.user_id} days_left={days_left}")
 
             if expired_ids:
                 for uid in expired_ids:

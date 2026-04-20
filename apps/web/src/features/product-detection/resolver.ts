@@ -429,9 +429,7 @@ export async function resolvePhotoProductCandidate(
     // Guard: if the AI's product_name / full name contradicts what the scan actually shows,
     // strip the conflicting part so we build a name from the real scan evidence only.
     let safeInput = structuredFoodInput;
-    const hasDominantConstraints =
-      hasStrongDominantTerms(parsed.dominantTerms) ||
-      parsed.dominantTerms.audienceTerms.length > 0;
+    const hasDominantConstraints = hasStrongDominantTerms(parsed.dominantTerms);
 
     if (hasDominantConstraints) {
       // ── Symmetric check ────────────────────────────────────────────────────
@@ -448,20 +446,24 @@ export async function resolvePhotoProductCandidate(
       });
 
       // ── Asymmetric check ───────────────────────────────────────────────────
-      // Fires when scan has a THERAPEUTIC term (urinary, renal, …) but the
-      // full AI name specifies audience/life-stage WITHOUT any therapeutic term.
-      // "Royal Canin Maxi Adult" for a Urinary S/O scan = hard block.
-      // Only applied to payload.name (the full AI name), not to sub-fields like
-      // product_name which legitimately omit the therapeutic line indicator.
+      // Fires when scan has a THERAPEUTIC term (urinary, renal, …) but a
+      // composed AI name specifies audience/life-stage WITHOUT any therapeutic
+      // term. "Royal Canin Maxi Adult" for a Urinary S/O scan = hard block.
+      // Covers both payload.name (full AI name) and probableName (composed by
+      // the vision service from brand+product_name+line+variant).
       let asymmetricBlock = false;
       if (!symmetricBlock && parsed.dominantTerms.functionalTerms.length > 0) {
-        const fullAiName = normalizeText(payload.name);
-        if (fullAiName) {
-          const fullNameTerms = buildDominantTerms({ texts: [fullAiName] });
-          asymmetricBlock =
-            fullNameTerms.functionalTerms.length === 0 &&
-            (fullNameTerms.audienceTerms.length > 0 || fullNameTerms.lifeStageTerms.length > 0);
-        }
+        const candidateFullNames = [
+          normalizeText(payload.name),
+          structuredFoodInput.probableName ?? undefined,
+        ].filter((t): t is string => Boolean(t));
+        asymmetricBlock = candidateFullNames.some(text => {
+          const terms = buildDominantTerms({ texts: [text] });
+          return (
+            terms.functionalTerms.length === 0 &&
+            (terms.audienceTerms.length > 0 || terms.lifeStageTerms.length > 0)
+          );
+        });
       }
 
       aiContradicts = symmetricBlock || asymmetricBlock;
@@ -483,7 +485,8 @@ export async function resolvePhotoProductCandidate(
       const catalogMatch = await searchInternalCatalogCandidate(payload, category, queries, parsed.dominantTerms);
       if (catalogMatch) {
         const hasStrongCompatibility = !hasStrongDominantTerms(parsed.dominantTerms) || catalogMatch.strongTermMatches.length > 0;
-        const assistedConfirmation = !hasStrongCompatibility || catalogMatch.mediumTermConflicts.length > 0;
+        const isTherapeutic = parsed.dominantTerms.functionalTerms.length > 0;
+        const assistedConfirmation = isTherapeutic || !hasStrongCompatibility || catalogMatch.mediumTermConflicts.length > 0;
         const confidence = scorePhotoCandidate({
           payload,
           category,
@@ -586,7 +589,8 @@ export async function resolvePhotoProductCandidate(
     species: payload.species,
     lifeStage: payload.life_stage,
   });
-  const assistedConfirmation = aiContradicts || (category === 'food'
+  const isTherapeutic = category === 'food' && (dominantTerms?.functionalTerms.length ?? 0) > 0;
+  const assistedConfirmation = isTherapeutic || aiContradicts || (category === 'food'
     ? !normalizeText(payload.name) || confidence.level !== 'high'
     : false);
   const resultType: ProductDetectionResultType = confidence.level === 'low'

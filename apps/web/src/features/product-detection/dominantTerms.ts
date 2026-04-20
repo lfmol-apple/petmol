@@ -143,8 +143,8 @@ const DOMINANT_TAXONOMY: DominantTaxonomyEntry[] = [
   },
 ];
 
-const STRONG_BUCKETS: DominantTermBucket[] = ['functional', 'life_stage', 'species'];
-const MEDIUM_BUCKETS: DominantTermBucket[] = ['audience'];
+const STRONG_BUCKETS: DominantTermBucket[] = ['functional', 'life_stage', 'species', 'audience'];
+const MEDIUM_BUCKETS: DominantTermBucket[] = [];
 
 function normalizeText(value: string): string {
   return value
@@ -300,6 +300,7 @@ export function hasStrongDominantTerms(terms: DominantTerms): boolean {
     if (bucket === 'functional') return terms.functionalTerms.length > 0;
     if (bucket === 'life_stage') return terms.lifeStageTerms.length > 0;
     if (bucket === 'species') return terms.speciesTerms.length > 0;
+    if (bucket === 'audience') return terms.audienceTerms.length > 0;
     return false;
   });
 }

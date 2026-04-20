@@ -66,6 +66,8 @@ class FeedingPlan(Base):
     # Calculated fields (populated by service layer)
     estimated_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     next_reminder_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Persisted dedup: date of last successful food push — prevents double-sends on service restart
+    last_food_push_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     
     # Additional info
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
