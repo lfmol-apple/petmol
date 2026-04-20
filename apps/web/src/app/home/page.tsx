@@ -577,9 +577,19 @@ export default function HomePage() {
 
     document.addEventListener('visibilitychange', handler);
     window.addEventListener('pageshow', handlePageShow);
+
+    // Polling passivo: recarrega dados a cada 30s enquanto a aba está visível.
+    // Garante sincronização just-in-time: alteração feita em outro dispositivo (celular ↔ desktop)
+    // aparece automaticamente sem o usuário precisar dar refresh.
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      refreshAllRef.current();
+    }, 30_000);
+
     return () => {
       document.removeEventListener('visibilitychange', handler);
       window.removeEventListener('pageshow', handlePageShow);
+      clearInterval(pollInterval);
     };
   }, []); // deps vazio: listener criado 1x, freshness garantida pelo ref
 

@@ -134,7 +134,7 @@ interface PhotoIdentifyOutcome {
   termConflicts?: string[];
 }
 
-const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024;
+const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024; // usado apenas para compressão interna, não como bloqueio
 
 function hasUsefulProductPartial(payload: PhotoProductIdentifyResponse): boolean {
   return Boolean(
@@ -191,15 +191,56 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/**
+ * Compressão interna para análise AI: redimensiona para máx 1920px e qualidade 0.85.
+ * Preserva qualidade suficiente para OCR, barcode e identificação de rótulo.
+ * Foto original não é modificada — compressoão ocorre apenas para o payload da API.
+ */
+async function compressImageForAnalysis(file: File): Promise<File> {
+  // Só comprime se maior que o limite (preserva arquivos pequenos intactos)
+  if (file.size <= MAX_PRODUCT_PHOTO_BYTES) return file;
+
+  return new Promise<File>((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const MAX_DIM = 1920;
+      let { width, height } = img;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) {
+          height = Math.round((height * MAX_DIM) / width);
+          width = MAX_DIM;
+        } else {
+          width = Math.round((width * MAX_DIM) / height);
+          height = MAX_DIM;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        },
+        'image/jpeg',
+        0.85,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+    img.src = objectUrl;
+  });
+}
+
 function validateProductPhotoFile(file: File): string | null {
   if (!file.type.startsWith('image/')) {
     return 'photo_invalid_type';
   }
-
-  if (file.size > MAX_PRODUCT_PHOTO_BYTES) {
-    return 'photo_too_large';
-  }
-
+  // Sem limite de tamanho: imagens grandes são comprimidas internamente antes da análise
   return null;
 }
 
@@ -352,7 +393,10 @@ export function ProductDetectionSheetGold({
 
   const identifyProductFromPhoto = useCallback(async (file: File, barcodeFromPhoto?: string): Promise<PhotoIdentifyOutcome> => {
     try {
-      const image = await fileToBase64(file);
+      // Comprime imagens grandes internamente antes de enviar para a API de visão
+      // Garante que fotos de alta resolução do celular funcionem sem erros de tamanho
+      const fileForAnalysis = await compressImageForAnalysis(file);
+      const image = await fileToBase64(fileForAnalysis);
       const token = getToken();
       const res = await fetch(`${API_BASE_URL}/vision/identify-product-photo`, {
         method: 'POST',
