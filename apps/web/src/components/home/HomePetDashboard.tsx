@@ -132,7 +132,6 @@ export function HomePetDashboard({
         feedingPlan: feedingPlan[currentPet.pet_id] ?? null,
         petEvents,
       },
-      { maxDays: 30 },
     );
 
     const careHandlers = {
@@ -148,7 +147,6 @@ export function HomePetDashboard({
 
     return reminders
       .filter((reminder) => reminder.diff >= 0)
-      .slice(0, 4)
       .map((reminder) => ({
         ...reminder,
         action: resolveCareCTA(reminder.action_target, careHandlers),
