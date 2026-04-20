@@ -16,7 +16,7 @@ type ProductLookupResponse = {
   found: boolean;
   from_cache: boolean;
   queued: boolean;
-  source?: ResolvedProduct['source'] | 'none' | null;
+  source?: ResolvedProduct['source'] | 'none' | 'petmol_master' | null;
   error?: string | null;
   product?: {
     name?: string | null;
