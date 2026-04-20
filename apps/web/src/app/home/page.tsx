@@ -692,6 +692,20 @@ export default function HomePage() {
     return Math.max(15, Math.min(100, proportional));
   }, [_selectedPetCareBreakdown]);
   const _selectedPetNeedsAttention = _selectedPetCareBreakdown.overdueItems > 0;
+  const selectedPetPrimaryAlert = useMemo(() => {
+    return [..._selectedPetActiveAlerts].sort((a, b) => {
+      const priorityDiff = (b.priority || 0) - (a.priority || 0);
+      if (priorityDiff !== 0) return priorityDiff;
+
+      const overdueDiff = (b.days_overdue || 0) - (a.days_overdue || 0);
+      if (overdueDiff !== 0) return overdueDiff;
+
+      if (a.status === b.status) return 0;
+      if (a.status === 'overdue') return -1;
+      if (b.status === 'overdue') return 1;
+      return 0;
+    })[0] ?? null;
+  }, [_selectedPetActiveAlerts]);
 
   const activeMedicationCount = useMemo(() => {
     return petEvents.filter(ev => {
@@ -795,6 +809,15 @@ export default function HomePage() {
       applyHomeSurfaceResolution(destination);
     }
   }, [applyHomeSurfaceResolution, setSelectedPetId]);
+
+  const handleSelectedPetPrimaryAlertOpen = useCallback(() => {
+    if (!selectedPetPrimaryAlert) return;
+
+    const destination = resolveTopAttentionDestination(selectedPetPrimaryAlert.action_target);
+    if (destination) {
+      applyHomeSurfaceResolution(destination);
+    }
+  }, [applyHomeSurfaceResolution, selectedPetPrimaryAlert]);
 
   const {
     closeVermifugoSheet,
@@ -1180,21 +1203,20 @@ export default function HomePage() {
           <>
             {/* Atenção agora — inline alerts (fallback) */}
             {(() => {
-              // Fallback: inline computed alerts (before first send-on-open response)
-              const currentPetName = pets.find(p => p.pet_id === selectedPetId)?.pet_name || 'seu pet';
-              let label: string | null = null;
-              let action: (() => void) | null = null;
-              if (alertParasitesValue) {
-                label = `${currentPetName} está com antiparasitário atrasado`;
-                action = handleOpenVermifugo;
-              }
-              if (!label || !action) return null;
+              if (!selectedPetPrimaryAlert) return null;
+
+              const currentPetName = selectedPetPrimaryAlert.pet_name || pets.find(p => p.pet_id === selectedPetId)?.pet_name || 'seu pet';
+              const typeLabel = selectedPetPrimaryAlert.type_label || 'um cuidado';
+              const label = selectedPetPrimaryAlert.status === 'today'
+                ? `${currentPetName} precisa de atenção hoje em ${typeLabel}`
+                : `${currentPetName} está com ${typeLabel} em atraso`;
+
               return (
                 <div className="mb-3 flex items-center gap-3 rounded-2xl bg-red-50 border border-red-200 px-4 py-3">
                   <span className="text-xl flex-shrink-0">🚨</span>
                   <p className="flex-1 text-base font-bold text-red-900 leading-snug">{label}</p>
                   <button
-                    onClick={action}
+                    onClick={handleSelectedPetPrimaryAlertOpen}
                     className="flex-shrink-0 text-sm font-semibold text-red-700 bg-red-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform whitespace-nowrap"
                   >
                     Ver agora
