@@ -765,13 +765,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
               ✏️ Editar alimentação
             </button>
           </div>
-          <button
-            onClick={handleDelete}
-            disabled={saving}
-            className="w-full rounded-2xl border border-red-100 bg-red-50 px-2 py-2 text-xs font-medium text-red-500 hover:bg-red-100 disabled:opacity-50"
-          >
-            🗑 Excluir controle
-          </button>
 
         </div>
       )}
@@ -1001,6 +994,16 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           >
             {saving ? 'Salvando...' : hasExisting ? '✅ Atualizar alimentação' : '✅ Confirmar alimentação'}
           </button>
+
+          {hasExisting && formMode === 'edit' && (
+            <button
+              onClick={handleDelete}
+              disabled={saving}
+              className="w-full py-3 rounded-2xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold shadow-sm disabled:opacity-50 active:scale-[0.99] transition-all hover:bg-red-100"
+            >
+              🗑 Excluir controle
+            </button>
+          )}
         </div>
       )}
     </div>
