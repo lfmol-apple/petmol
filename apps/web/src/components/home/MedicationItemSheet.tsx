@@ -241,9 +241,15 @@ export function MedicationItemSheet({
       if (finalNotes) payload.notes = finalNotes;
 
       if (form.reminder_enabled) {
-        const extra: Record<string, unknown> = {
-          frequency: form.frequency,
-        };
+        // Ao editar, preservar applied_dates/skipped_dates/dose_notes da medicação existente
+        let extra: Record<string, unknown> = {};
+        if (editingId) {
+          const existing = medications.find(ev => ev.id === editingId);
+          if (existing?.extra_data) {
+            try { extra = { ...parsePetEventExtraData(existing.extra_data) }; } catch { /* silent */ }
+          }
+        }
+        extra.frequency = form.frequency;
         if (form.reminder_times.length > 0) {
           extra.reminder_times = form.reminder_times;
           extra.reminder_time = form.reminder_times[0];
