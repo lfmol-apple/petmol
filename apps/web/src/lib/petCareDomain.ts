@@ -326,11 +326,28 @@ function processFood(p: PetCareDomainParams): PetCareReminder[] {
   // 2. derivedManualReminder → data derivada de next_purchase_date - manual_reminder_days_before
   // 3. next_purchase_date    → data manual explícita de compra
   // 4. estimated_end_date    → fallback bruto de término do estoque
-  const reminderDateStr =
+  // 5. cálculo local         → package_size_kg + daily_amount_g + last_refill_date
+  let reminderDateStr: string =
     (plan.next_reminder_date ?? '') ||
     (derivedManualReminderDate ?? '') ||
     (plan.next_purchase_date ?? '') ||
     (plan.estimated_end_date ?? '');
+
+  if (!reminderDateStr) {
+    const pkgKg = Number(plan.package_size_kg ?? primaryItem?.package_size_kg ?? 0);
+    const dailyG = Number(plan.daily_amount_g ?? primaryItem?.daily_amount_g ?? 0);
+    const refillStr = (plan.last_refill_date ?? primaryItem?.last_refill_date ?? '') as string;
+    if (pkgKg > 0 && dailyG > 0 && refillStr) {
+      const refillDate = parseLocalDate(refillStr);
+      if (refillDate) {
+        const totalDays = Math.round((pkgKg * 1000) / dailyG);
+        const warningBefore = hasManualReminderOffset ? manualReminderOffsetRaw : 5;
+        const alertDate = new Date(refillDate);
+        alertDate.setDate(alertDate.getDate() + totalDays - warningBefore);
+        reminderDateStr = dateToLocalISO(alertDate);
+      }
+    }
+  }
 
   if (!reminderDateStr) return [];
 

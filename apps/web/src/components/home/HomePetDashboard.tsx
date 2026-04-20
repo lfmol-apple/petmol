@@ -180,7 +180,12 @@ export function HomePetDashboard({
     };
 
     return reminders
-      .filter((reminder) => reminder.diff >= 0)
+      .filter((reminder) => {
+        if (reminder.diff < 0) return false;
+        // Alimentação só aparece quando está próxima (≤ 14 dias)
+        if (reminder.domain === 'food' && reminder.diff > 14) return false;
+        return true;
+      })
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
       .map((reminder) => ({
         ...reminder,
