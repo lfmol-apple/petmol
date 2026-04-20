@@ -4,6 +4,7 @@ import { getToken } from '@/lib/auth-token';
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '@/lib/api';
 import { trackV1Metric } from '@/lib/v1Metrics';
+import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import type { ScannedProduct } from '@/lib/productScanner';
@@ -647,19 +648,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     setDeleteFeedback(null);
     setRestockFeedback(null);
     setSavedOk(false);
-    // Força modo weight para o formulário simplificado
-    setItems((current) => ensurePrimaryItem(current.map((item) =>
-      item.isPrimary ? { ...item, trackingMethod: 'weight' } : item,
-    )));
     setFormOpen(true);
-  };
-
-  const handleUseEstimatedConsumption = () => {
-    const pkg = parseFloat(primaryItem.packageSizeKg);
-    const estimated = Number.isFinite(pkg) && pkg > 0
-      ? Math.round((pkg * 1000) / 30)
-      : species === 'cat' ? 65 : 250;
-    updateItem(primaryItem.id, (cur) => ({ ...cur, dailyConsumptionG: String(estimated), trackingMethod: 'weight' }));
   };
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -819,100 +808,205 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
       {/* ── FORM MODE ─────────────────────────────────────────────────────── */}
       {showForm && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {hasExisting && (
             <button
               onClick={() => setFormOpen(false)}
-              className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium"
+              className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
             >
               ‹ Voltar
             </button>
           )}
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
-            {/* Scanner */}
-            <ProductBarcodeScanner
-              label="📷 Fotografar ou escolher foto"
-              expectedCategory="food"
-              petId={petId}
-              defaultMode="photo"
-              allowScanning={false}
-              onProductConfirmed={(product) => applyScannedProduct(primaryItem.id, product)}
-            />
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3 sm:p-4">
+            <div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+              Cadastre ou ajuste o alimento principal para controlar a previsão e os lembretes.
+            </div>
 
-            {/* Produto */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Marca / Produto</label>
-              <input
-                type="text"
-                value={primaryItem.brand}
-                onChange={e => updateItem(primaryItem.id, (cur) => ({ ...cur, brand: e.target.value }))}
-                placeholder="Ex: Royal Canin, Guabi Natural..."
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-              />
-              {recurringProducts.length > 0 && !primaryItem.brand && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {recurringProducts.slice(0, 3).map((p) => (
-                    <button
-                      key={p.name}
-                      type="button"
-                      onClick={() => updateItem(primaryItem.id, (cur) => ({ ...cur, brand: p.name }))}
-                      className="text-xs px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-medium"
-                    >
-                      {p.name}
-                    </button>
-                  ))}
+            {orderPrimaryFirst(normalizedItems).map((item, index) => {
+              const itemMetrics = getItemMetrics(item);
+              return (
+                <div key={item.id} className="rounded-2xl border border-slate-200 p-3 space-y-2.5 bg-slate-50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-base font-bold text-slate-900">{item.brand || `Produto ${index + 1}`}</p>
+                      <p className="text-xs text-slate-500">
+                        {item.isPrimary ? 'Produto principal monitorado' : 'Produto adicional'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {!item.isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() => setPrimaryItem(item.id)}
+                          className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
+                        >
+                          Usar no monitoramento
+                        </button>
+                      )}
+                      {normalizedItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeFoodItem(item.id)}
+                          className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <ProductBarcodeScanner
+                    label="📷 Fotografar ou escolher foto"
+                    expectedCategory="food"
+                    petId={petId}
+                    defaultMode="photo"
+                    allowScanning={false}
+                    onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
+                  />
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-gray-600">Como deseja controlar este alimento?</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'weight' }))}
+                        className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
+                          item.trackingMethod === 'weight'
+                            ? 'border-amber-300 bg-amber-50 text-amber-900'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        ⚖️ Por peso
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'duration' }))}
+                        className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
+                          item.trackingMethod === 'duration'
+                            ? 'border-amber-300 bg-amber-50 text-amber-900'
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        ⏳ Por duração
+                      </button>
+                    </div>
+                    {item.isPrimary && (
+                      <p className="text-xs text-gray-500">
+                        O item principal continua controlando os lembretes e pushes de reposição.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">Marca / Produto</label>
+                    <input
+                      type="text"
+                      value={item.brand}
+                      onChange={e => updateItem(item.id, (current) => ({ ...current, brand: e.target.value }))}
+                      placeholder="Ex: Royal Canin, Guabi Natural, petisco..."
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                    />
+                  </div>
+
+                  {item.trackingMethod === 'weight' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Pacote (kg)</label>
+                          <input
+                            type="number"
+                            min={0.1}
+                            step={0.5}
+                            value={item.packageSizeKg}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, packageSizeKg: e.target.value }))}
+                            placeholder="Ex: 15"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Consumo/dia (g)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={item.dailyConsumptionG}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, dailyConsumptionG: e.target.value }))}
+                            placeholder="Ex: 300"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
+                        <input
+                          type="date"
+                          value={item.startDate}
+                          onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Duração (dias)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={item.durationDays}
+                          onChange={e => updateItem(item.id, (current) => ({ ...current, durationDays: e.target.value }))}
+                          placeholder="Ex: 30"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
+                        <input
+                          type="date"
+                          value={item.startDate}
+                          onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {item.isPrimary && item.trackingMethod === 'weight' && pkgKg && dailyConsumptionG && (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span>📦</span>
+                      <span className="text-xs font-semibold text-amber-800">
+                        Duração estimada: ~{Math.round((pkgKg * 1000) / dailyConsumptionG)} dias (após salvar, data exata calculada pelo servidor)
+                      </span>
+                    </div>
+                  )}
+
+                  {item.isPrimary && item.trackingMethod === 'duration' && itemMetrics.days != null && (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                      <span>⏳</span>
+                      <span className="text-xs font-semibold text-amber-800">
+                        O sistema vai usar {itemMetrics.days} dias para programar o próximo lembrete de reposição.
+                      </span>
+                    </div>
+                  )}
+
+                  {!item.isPrimary && itemMetrics.days != null && (
+                    <div className="text-xs text-slate-500">
+                      Previsão local deste item: cerca de {itemMetrics.days} dias.
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            {/* Pacote */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Pacote (kg)</label>
-              <input
-                type="number"
-                min={0.1}
-                step={0.5}
-                value={primaryItem.packageSizeKg}
-                onChange={e => updateItem(primaryItem.id, (cur) => ({ ...cur, packageSizeKg: e.target.value, trackingMethod: 'weight' }))}
-                placeholder="Ex: 15"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-              />
-            </div>
-
-            {/* Consumo/dia */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-gray-600">Consumo/dia (g)</label>
-                <button
-                  type="button"
-                  onClick={handleUseEstimatedConsumption}
-                  className="text-xs text-amber-600 font-semibold hover:underline active:opacity-70"
-                >
-                  Não sei →
-                </button>
-              </div>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={primaryItem.dailyConsumptionG}
-                onChange={e => updateItem(primaryItem.id, (cur) => ({ ...cur, dailyConsumptionG: e.target.value, trackingMethod: 'weight' }))}
-                placeholder="Ex: 300"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-              />
-            </div>
-
-            {/* Preview */}
-            {pkgKg && dailyConsumptionG && (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                <span>📦</span>
-                <span className="text-xs font-semibold text-amber-800">
-                  Duração estimada: ~{Math.round((pkgKg * 1000) / dailyConsumptionG)} dias
-                </span>
-              </div>
-            )}
+              );
+            })}
           </div>
+
+          <ReminderPicker
+            days={reminderDays}
+            time={reminderTime}
+            onDaysChange={setReminderDays}
+            onTimeChange={setReminderTime}
+          />
 
           {apiError && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800 flex items-start gap-2">
@@ -928,9 +1022,9 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-base font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
+            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
           >
-            {saving ? 'Salvando...' : hasExisting ? '✅ Atualizar controle' : '🚀 Começar controle'}
+            {saving ? 'Salvando...' : hasExisting ? '✅ Atualizar alimentação' : '✅ Confirmar alimentação'}
           </button>
         </div>
       )}
