@@ -202,6 +202,7 @@ if [ "$RESTART_WEB" = true ]; then
     # manually copied next to the server.js entry point.
     log "Copying static assets to standalone..."
     STANDALONE="$APP_DIR/apps/web/.next/standalone/apps/web"
+    mkdir -p "$STANDALONE/.next"
     cp -r "$APP_DIR/apps/web/public"       "$STANDALONE/"
     cp -r "$APP_DIR/apps/web/.next/static" "$STANDALONE/.next/"
     # ──────────────────────────────────────────────────────────────────────
