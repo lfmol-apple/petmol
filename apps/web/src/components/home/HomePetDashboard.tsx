@@ -161,7 +161,7 @@ export function HomePetDashboard({
           icon: '📋',
           due_date: dueDateStr,
           diff,
-          status: (diff === 0 ? 'today' : 'upcoming') as const,
+          status: diff === 0 ? ('today' as const) : ('upcoming' as const),
           action_target: 'health/events' as const,
           is_derived: true,
         });
