@@ -340,10 +340,12 @@ export function HealthParasiteControlPanel({
           )}
 
           {parasiteControls.map((control) => {
-            const latestIdForType = parasiteControls
-              .filter((item) => item.type === control.type)
-              .sort((a, b) => new Date(b.date_applied || '0').getTime() - new Date(a.date_applied || '0').getTime())[0]?.id;
-            const isHistory = control.id !== latestIdForType;
+            const controlTime = new Date(control.date_applied || '0').getTime();
+            const isHistory = parasiteControls.some((item) => {
+              if (item.id === control.id || item.type !== control.type) return false;
+              const itemTime = new Date(item.date_applied || '0').getTime();
+              return !Number.isNaN(itemTime) && (Number.isNaN(controlTime) || itemTime > controlTime);
+            });
 
             const nextDate = new Date(control.next_due_date || '');
             const today = new Date();

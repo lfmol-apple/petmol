@@ -33,6 +33,15 @@ function createLocalDate(dateStr: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function hasLaterGroomingRecord(records: GroomingRecord[], record: GroomingRecord): boolean {
+  const recordTime = new Date(record.date || '0').getTime();
+  return records.some((candidate) => {
+    if (candidate.id === record.id || candidate.type !== record.type) return false;
+    const candidateTime = new Date(candidate.date || '0').getTime();
+    return !Number.isNaN(candidateTime) && (Number.isNaN(recordTime) || candidateTime > recordTime);
+  });
+}
+
 export function HealthGroomingPanel({
   petName,
   editingGrooming,
@@ -343,9 +352,7 @@ export function HealthGroomingPanel({
                 };
 
                 const latestGroomIdForType = groomingRecords
-                  .filter((r) => r.type === record.type)
-                  .sort((a, b) => new Date(b.date || '0').getTime() - new Date(a.date || '0').getTime())[0]?.id;
-                const isGroomHistory = record.id !== latestGroomIdForType;
+                const isGroomHistory = hasLaterGroomingRecord(groomingRecords, record);
                 const nextRecommendedDate = record.next_recommended_date ? createLocalDate(record.next_recommended_date) : null;
                 const nextRecommendedDaysLeft = nextRecommendedDate
                   ? Math.ceil((nextRecommendedDate.getTime() - new Date().getTime()) / (24 * 60 * 60 * 1000))

@@ -86,6 +86,15 @@ function getNextDate(ctrl: ParasiteControl): string | null {
   return ctrl.collar_expiry_date || ctrl.next_due_date || null;
 }
 
+function hasLaterParasiteRecord(records: ParasiteControl[], record: ParasiteControl): boolean {
+  const recordTime = new Date(record.date_applied).getTime();
+  return records.some((candidate) => {
+    if (candidate.id === record.id) return false;
+    const candidateTime = new Date(candidate.date_applied).getTime();
+    return !Number.isNaN(candidateTime) && (Number.isNaN(recordTime) || candidateTime > recordTime);
+  });
+}
+
 function computeStatus(nextDate?: string | null) {
   const diff = diffDays(nextDate);
   if (diff === null) return { label: 'Sem dados', bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' };
@@ -514,17 +523,20 @@ export function ParasiteItemSheet({
                   {historyExpanded && (
                     <div className="divide-y divide-gray-100 border-t border-gray-100">
                       {(historyShowAll ? sorted : sorted.slice(0, 2)).map((rec, i) => (
+                        (() => {
+                          const isHistory = hasLaterParasiteRecord(sorted, rec);
+                          return (
                         <div
                           key={rec.id}
                           className="flex items-center gap-3 px-4 py-2.5"
                         >
-                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${i === 0 ? cfg.colorLight : 'bg-gray-100'}`}>
-                            {i === 0 ? cfg.icon : '·'}
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${!isHistory ? cfg.colorLight : 'bg-gray-100'}`}>
+                            {!isHistory ? cfg.icon : '·'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-semibold text-gray-800 truncate">{rec.product_name}</p>
-                              {diffDays(getNextDate(rec)) !== null && diffDays(getNextDate(rec))! < 0 && (
+                              {!isHistory && diffDays(getNextDate(rec)) !== null && diffDays(getNextDate(rec))! < 0 && (
                                 <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
                                   !
                                 </div>
@@ -553,6 +565,8 @@ export function ParasiteItemSheet({
                             </button>
                           </div>
                         </div>
+                          );
+                        })()
                       ))}
                       {!historyShowAll && sorted.length > 2 && (
                         <button

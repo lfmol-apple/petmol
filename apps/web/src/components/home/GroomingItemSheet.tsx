@@ -26,6 +26,15 @@ function diffDays(dateStr?: string | null): number | null {
   return Math.round((target.getTime() - now.getTime()) / 86400000);
 }
 
+function hasLaterGroomingRecord(records: GroomingRecord[], record: GroomingRecord): boolean {
+  const recordTime = new Date(record.date).getTime();
+  return records.some((candidate) => {
+    if (candidate.id === record.id || candidate.type !== record.type) return false;
+    const candidateTime = new Date(candidate.date).getTime();
+    return !Number.isNaN(candidateTime) && (Number.isNaN(recordTime) || candidateTime > recordTime);
+  });
+}
+
 function fmtDate(s?: string | null): string {
   if (!s) return '—';
   const clean = s.split('T')[0];
@@ -151,7 +160,6 @@ export function GroomingItemSheet({
       const freq = parseInt(addForm.frequency_days, 10) || FREQ_DEFAULTS[addForm.type];
       const nextRec = addDays(addForm.date, freq);
 
-      // Build notes: prepend product info if provided
       const productLine = addForm.product_name.trim()
         ? `Produto: ${addForm.product_name.trim()}${addForm.barcode ? ` (EAN: ${addForm.barcode})` : ''}`
         : '';
@@ -423,47 +431,50 @@ export function GroomingItemSheet({
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                     Histórico ({sorted.length})
                   </p>
-                  {sorted.map((rec, i) => (
-                    <div
-                      key={rec.id}
-                      className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm"
-                    >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${i === 0 ? 'bg-sky-50' : 'bg-gray-50'}`}>
-                        {i === 0 ? '🛁' : '·'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-gray-800">{TYPE_LABELS[rec.type]}</p>
-                          {diffDays(rec.next_recommended_date) !== null && diffDays(rec.next_recommended_date)! < 0 && (
-                            <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
-                              !
-                            </div>
-                          )}
+                  {sorted.map((rec) => {
+                    const isHistory = hasLaterGroomingRecord(sorted, rec);
+                    return (
+                      <div
+                        key={rec.id}
+                        className="flex items-center gap-3 bg-white rounded-2xl border border-gray-100 px-4 py-3 shadow-sm"
+                      >
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${!isHistory ? 'bg-sky-50' : 'bg-gray-50'}`}>
+                          {!isHistory ? '🛁' : '·'}
                         </div>
-                        <p className="text-xs text-gray-400">
-                          {fmtDate(rec.date)}
-                          {rec.cost != null ? ` · R$ ${rec.cost.toFixed(2).replace('.', ',')}` : ''}
-                          {rec.location ? ` · ${rec.location}` : ''}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-800">{TYPE_LABELS[rec.type]}</p>
+                            {!isHistory && diffDays(rec.next_recommended_date) !== null && diffDays(rec.next_recommended_date)! < 0 && (
+                              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
+                                !
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            {fmtDate(rec.date)}
+                            {rec.cost != null ? ` · R$ ${rec.cost.toFixed(2).replace('.', ',')}` : ''}
+                            {rec.location ? ` · ${rec.location}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => startEdit(rec)}
+                            className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-sm hover:bg-gray-200"
+                            aria-label="Editar"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(rec.id)}
+                            className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-sm hover:bg-red-100"
+                            aria-label="Remover"
+                          >
+                            🗑
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => startEdit(rec)}
-                          className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-sm hover:bg-gray-200"
-                          aria-label="Editar"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteId(rec.id)}
-                          className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-sm hover:bg-red-100"
-                          aria-label="Remover"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

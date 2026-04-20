@@ -256,15 +256,31 @@ export function HealthModal({
 
   const latestVaccinesMap = latestVaccinePerGroup(vaccines);
   const currentVaccines = Array.from(latestVaccinesMap.values());
+  const currentParasiteControls = Array.from(
+    parasiteControls.reduce((latestByType, control) => {
+      const key = String(control.type || '').toLowerCase();
+      if (!key) return latestByType;
+      const previous = latestByType.get(key);
+      const controlTime = new Date(control.date_applied || '0').getTime();
+      const previousTime = previous ? new Date(previous.date_applied || '0').getTime() : Number.NaN;
+      if (!previous || (!Number.isNaN(controlTime) && (Number.isNaN(previousTime) || controlTime > previousTime))) {
+        latestByType.set(key, control);
+      }
+      return latestByType;
+    }, new Map<string, ParasiteControl>()).values()
+  );
 
   const now = Date.now();
   const overdueVaccines = currentVaccines.filter(v => v.next_dose_date && new Date(v.next_dose_date).getTime() < now).length;
-  const overdueParasites = parasiteControls.filter(p => p.next_due_date && new Date(p.next_due_date).getTime() < now).length;
+  const overdueParasites = currentParasiteControls.filter((p) => {
+    const nextDate = p.collar_expiry_date || p.next_due_date;
+    return nextDate ? new Date(nextDate).getTime() < now : false;
+  }).length;
 
   return (
     <ModalPortal>
     <>
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md backdrop-blur-sm flex items-center justify-center sm:p-4 z-50 animate-fadeIn">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center sm:p-4 z-50 animate-fadeIn">
           <div className="bg-slate-50 rounded-[32px] shadow-premium w-full max-w-4xl max-h-[100dvh] sm:max-h-[94dvh] overflow-hidden flex flex-col animate-scaleIn border border-slate-200/50">
             {/* Header do Modal - Design Clean e Elegante */}
             <div className="sticky top-0 z-50 shadow-sm bg-white/90 backdrop-blur-xl border-b border-slate-100">
