@@ -1288,7 +1288,7 @@ export default function HomePage() {
               if (!currentPet) return null;
               
               return (
-                <div className="max-w-md mx-auto space-y-2">
+                <div className="mx-auto max-w-xl space-y-4 rounded-[28px] border border-slate-200/80 bg-white/90 px-3 py-3 shadow-[0_12px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:px-4 sm:py-4">
                   <PetTabs
                     pets={pets.map(p => ({
                       id: p.pet_id,
