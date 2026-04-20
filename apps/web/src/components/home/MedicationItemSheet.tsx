@@ -9,6 +9,7 @@ import { trackPartnerClicked } from '@/lib/v1Metrics';
 import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import { IosSwitch } from '@/components/ui/IosSwitch';
 import type { ScannedProduct } from '@/lib/productScanner';
+import { requestUserDecision } from '@/features/interactions/userPromptChannel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -108,7 +109,6 @@ export function MedicationItemSheet({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<MedForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [medHistoryExpanded, setMedHistoryExpanded] = useState(false);
   const [applyingId, setApplyingId] = useState<string | null>(null);
@@ -319,19 +319,41 @@ export function MedicationItemSheet({
   }
 
   async function handleDelete(evId: string) {
-    // MedRow provides inline two-tap confirmation before calling this — no additional dialog needed
     const token = localStorage.getItem('petmol_token');
     try {
       await fetch(`${API_BASE_URL}/events/${evId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      setDeletingId(null);
       showToast('🗑️ Registro removido');
       await onRefresh();
+      return true;
     } catch {
       showToast('❌ Erro ao excluir registro. Tente novamente.');
+      return false;
     }
+  }
+
+  async function confirmDeleteCurrent() {
+    if (!editingId) return;
+    const accepted = await requestUserDecision(
+      'Excluir esta medicação? Essa ação remove o registro atual e não pode ser desfeita.',
+      {
+        title: 'Excluir medicação',
+        tone: 'danger',
+        confirmLabel: 'Excluir medicação',
+      },
+    );
+    if (!accepted) return;
+
+    setSaving(true);
+    const deleted = await handleDelete(editingId);
+    if (deleted) {
+      setEditingId(null);
+      setMode('view');
+      setForm(EMPTY_FORM);
+    }
+    setSaving(false);
   }
 
   // ── Status badge ──────────────────────────────────────────────────────────
@@ -499,24 +521,6 @@ export function MedicationItemSheet({
                           >
                             ✏️ Editar
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (deletingId === ev.id) {
-                                handleDelete(ev.id);
-                                setDeletingId(null);
-                                return;
-                              }
-                              setDeletingId(ev.id);
-                            }}
-                            className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors active:scale-95 ${
-                              deletingId === ev.id
-                                ? 'bg-red-600 text-white'
-                                : 'border border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
-                            }`}
-                          >
-                            {deletingId === ev.id ? '✓ Confirmar exclusão' : '🗑 Excluir'}
-                          </button>
                         </div>
 
                         {/* Expanded: day calendar */}
@@ -618,10 +622,7 @@ export function MedicationItemSheet({
                         <MedRow
                           key={ev.id}
                           ev={ev}
-                          deletingId={deletingId}
-                          setDeletingId={setDeletingId}
                           onEdit={openEdit}
-                          onDelete={handleDelete}
                           accentText="text-gray-700"
                         />
                       ))}
@@ -920,6 +921,17 @@ export function MedicationItemSheet({
               >
                 {saving ? 'Salvando...' : '✅ Confirmar registro'}
               </button>
+
+              {mode === 'edit' && editingId && (
+                <button
+                  type="button"
+                  onClick={confirmDeleteCurrent}
+                  disabled={saving}
+                  className="w-full py-4 rounded-2xl border border-red-200 bg-red-50 text-red-700 text-[15px] font-bold shadow-sm disabled:opacity-50 transition-colors hover:bg-red-100"
+                >
+                  {saving ? 'Excluindo...' : '🗑 Excluir medicação'}
+                </button>
+              )}
             </div>
           )}
 
@@ -933,17 +945,11 @@ export function MedicationItemSheet({
 // ── Row sub-component ────────────────────────────────────────────────────────
 function MedRow({
   ev,
-  deletingId,
-  setDeletingId,
   onEdit,
-  onDelete,
   accentText,
 }: {
   ev: PetEventRecord;
-  deletingId: string | null;
-  setDeletingId: (id: string | null) => void;
   onEdit: (ev: PetEventRecord) => void;
-  onDelete: (id: string) => void;
   accentText: string;
 }) {
   let badgeCls = 'bg-yellow-100 text-yellow-700';
@@ -974,7 +980,6 @@ function MedRow({
     notesCaption = firstLine;
   }
 
-  const isConfirming = deletingId === ev.id;
   const dateStr = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(
     new Date((ev.scheduled_at || '').replace(' ', 'T')),
   );
@@ -999,16 +1004,6 @@ function MedRow({
           className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xs hover:bg-purple-100 transition-colors"
           title="Editar"
         >✏️</button>
-        <button
-          onClick={() => {
-            if (isConfirming) { onDelete(ev.id); setDeletingId(null); }
-            else setDeletingId(ev.id);
-          }}
-          className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs transition-colors ${
-            isConfirming ? 'bg-red-600 text-white' : 'bg-red-50 text-red-500 hover:bg-red-100'
-          }`}
-          title={isConfirming ? 'Confirmar exclusão' : 'Excluir'}
-        >{isConfirming ? '✓' : '🗑️'}</button>
       </div>
     </div>
   );
