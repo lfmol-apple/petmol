@@ -31,7 +31,6 @@ interface HomePetHeaderProps {
   onAlertSelect: (alert: PetInteractionItem) => void;
   selectedPetNeedsAttention: boolean;
   selectedPetCareScore: number;
-  onEmergencyClick?: () => void;
 }
 
 export function HomePetHeader({
@@ -57,7 +56,6 @@ export function HomePetHeader({
   onAlertSelect,
   selectedPetNeedsAttention,
   selectedPetCareScore,
-  onEmergencyClick,
 }: HomePetHeaderProps) {
   const { t } = useI18n();
   const nameButtonRef = useRef<HTMLButtonElement>(null);
