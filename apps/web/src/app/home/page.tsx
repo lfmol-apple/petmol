@@ -1211,7 +1211,7 @@ export default function HomePage() {
       <div className="max-w-2xl mx-auto px-4 py-4">
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
-          <div className="mx-auto max-w-xl space-y-4 rounded-[40px] border border-white/60 bg-white/95 p-4 shadow-premium backdrop-blur-xl sm:p-5">
+          <div className="mx-auto max-w-xl space-y-4 rounded-[30px] border border-slate-200 bg-white/95 p-3 shadow-[0_18px_48px_rgba(15,23,42,0.09)] sm:p-4">
             {/* Atenção agora — banner inteligente: grade com todos os alertas ou banner simples */}
             {(() => {
               if (!selectedPetPrimaryAlert) return null;
