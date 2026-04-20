@@ -288,19 +288,31 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [apiEstimate, setApiEstimate] = useState<{ estimated_end_date: string | null; estimated_days_left: number | null } | null>(null);
 
   const applyScannedProduct = (itemId: string, product: ScannedProduct) => {
-    setItems((current) => ensurePrimaryItem(current.map((item) => (
-      item.id === itemId
-        ? {
-            ...item,
-            brand: [product.brand, product.name].filter(Boolean).join(' ').trim() || item.brand,
-            packageSizeKg: product.weight?.toLowerCase().includes('kg')
-              ? product.weight.replace(/kg/i, '').replace(',', '.').trim()
-              : item.packageSizeKg,
-            barcode: product.barcode,
-            category: product.category,
+    setItems((current) => ensurePrimaryItem(current.map((item) => {
+      if (item.id !== itemId) return item;
+      // Resolver packageSizeKg a partir do peso do produto
+      let resolvedPackageKg = item.packageSizeKg;
+      const rawWeight = product.weight?.trim() ?? '';
+      if (rawWeight) {
+        const kgMatch = rawWeight.match(/^([\d.,]+)\s*kg/i);
+        const gMatch = rawWeight.match(/^([\d.,]+)\s*g\b/i);
+        if (kgMatch) {
+          resolvedPackageKg = kgMatch[1].replace(',', '.');
+        } else if (gMatch) {
+          const grams = parseFloat(gMatch[1].replace(',', '.'));
+          if (Number.isFinite(grams) && grams > 0) {
+            resolvedPackageKg = String(grams / 1000);
           }
-        : item
-    ))));
+        }
+      }
+      return {
+        ...item,
+        brand: [product.brand, product.name].filter(Boolean).join(' ').trim() || item.brand,
+        packageSizeKg: resolvedPackageKg,
+        barcode: product.barcode,
+        category: product.category,
+      };
+    })));
     if (!product.found) setApiError('Não encontramos os dados. Preencha manualmente.');
   };
 
@@ -820,11 +832,11 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                   </div>
 
                   <ProductBarcodeScanner
-                    label="📷 Fotografar ou escolher foto"
+                    label="📷 Escanear ou fotografar produto"
                     expectedCategory="food"
                     petId={petId}
                     defaultMode="photo"
-                    allowScanning={false}
+                    allowScanning={true}
                     onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
                   />
 

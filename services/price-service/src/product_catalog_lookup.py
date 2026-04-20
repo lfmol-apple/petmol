@@ -296,13 +296,17 @@ def _canonical_key(name: str, brand: Optional[str], category: Optional[str]) -> 
 
 def _response_from_catalog_row(row: ProductCatalog, *, from_cache: bool) -> LookupResponse:
     payload = _deserialize_payload(row.raw_payload)
+    # Preservar identidade petmol_master e petmol_db para que o frontend
+    # possa aplicar score correto; demais fontes em cache retornam 'cache'.
+    _IDENTITY_SOURCES = {"petmol_master", "petmol_db"}
+    source = row.source_primary if row.source_primary in _IDENTITY_SOURCES else ("cache" if from_cache else row.source_primary)
     return LookupResponse(
         ok=True,
         gtin=row.barcode_normalized,
         found=True,
         from_cache=from_cache,
         queued=False,
-        source="cache" if from_cache else row.source_primary,
+        source=source,
         product=LookupProductPayload(
             name=row.name,
             brand=row.brand,
@@ -664,10 +668,33 @@ def save_confirmed_product_to_catalog(
         reliable.species = reliable.species or _safe_text(species)
         reliable.life_stage = reliable.life_stage or _safe_text(life_stage)
         reliable.weight = reliable.weight or _safe_text(weight)
-        reliable.confirmation_count = int(reliable.confirmation_count or 0) + (1 if tutor_confirmed else 0)
-        reliable.correction_count = int(reliable.correction_count or 0) + (1 if was_corrected else 0)
+        new_confirmation_count = int(reliable.confirmation_count or 0) + (1 if tutor_confirmed else 0)
+        new_correction_count = int(reliable.correction_count or 0) + (1 if was_corrected else 0)
+        reliable.confirmation_count = new_confirmation_count
+        reliable.correction_count = new_correction_count
         reliable.last_confirmed_at = now
         reliable.updated_at = now
+
+        # Aprendizado silencioso: elevar confiança no ProductCatalog quando
+        # muitas confirmações acumuladas — produto é altamente confiável.
+        # Threshold conservador: 3 confirmações sem correção.
+        CONFIDENCE_ELEVATION_THRESHOLD = 3
+        if (
+            tutor_confirmed
+            and new_correction_count == 0
+            and new_confirmation_count >= CONFIDENCE_ELEVATION_THRESHOLD
+        ):
+            try:
+                catalog_row = db.scalar(
+                    select(ProductCatalog).where(
+                        ProductCatalog.barcode_normalized == normalize_gtin(gtin)
+                    )
+                )
+                if catalog_row and catalog_row.source_confidence < 0.95:
+                    catalog_row.source_confidence = min(0.95, catalog_row.source_confidence + 0.05)
+                    catalog_row.updated_at = now
+            except Exception:
+                pass
     except Exception:
         pass
 

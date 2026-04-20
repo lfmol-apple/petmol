@@ -615,15 +615,15 @@ export async function resolvePhotoProductCandidate(
   };
 }
 
-export function scoreGtinResolution(source?: ResolvedProduct['source'] | null): ProductDetectionConfidence {
-  const highSource = source === 'cache' || source === 'petmol_db' || source === 'history';
+export function scoreGtinResolution(source?: ResolvedProduct['source'] | string | null): ProductDetectionConfidence {
+  const highSource = source === 'cache' || source === 'petmol_db' || source === 'history' || source === 'petmol_master';
   const score = highSource ? 0.97 : source === 'cosmos' || source === 'internal' ? 0.92 : 0.86;
   return { score, level: toConfidenceLevel(score) };
 }
 
 function normalizeSource(source: ProductLookupResponse['source']): ResolvedProduct['source'] {
-  if (source === 'cache' || source === 'cosmos' || source === 'history' || source === 'internal' || source === 'petmol_db') {
-    return source;
+  if (source === 'cache' || source === 'cosmos' || source === 'history' || source === 'internal' || source === 'petmol_db' || source === 'petmol_master') {
+    return source === 'petmol_master' ? 'cache' : source;
   }
   return 'internal';
 }
