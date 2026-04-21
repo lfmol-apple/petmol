@@ -356,6 +356,10 @@ export function ProductDetectionSheetGold({
   const termConflictsRef = useRef<string[]>([]);
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
+  // Preserva o barcode detectado em qualquer tentativa desta sessão de foto.
+  // Sobrevive a resetPhotoAttempt() para que retentativas não percam o hint de barcode.
+  // É zerado automaticamente na remontagem do componente (sheet fechado/reaberto).
+  const photoSessionBarcodeRef = useRef<string>('');
 
   const initialStep: Step = defaultMode === 'scan'
     ? 'scanning'
@@ -512,7 +516,7 @@ export function ProductDetectionSheetGold({
         const fallbackCategory = payload.category ?? hint ?? 'other';
         return {
           product: {
-            barcode: barcodeFromPhoto ?? confirmed?.barcode ?? '',
+            barcode: barcodeFromPhoto ?? '',
             name: partialName,
             brand: payload.brand?.trim() || undefined,
             weight: detectedWeight,
@@ -576,7 +580,7 @@ export function ProductDetectionSheetGold({
       }
       return { product: null, errorCode: 'photo_ai_error' };
     }
-  }, [confirmed?.barcode, hint, petId]);
+  }, [hint, petId]);
 
   const openCameraPhotoPicker = useCallback(() => {
     setScannerError(null);
@@ -988,6 +992,10 @@ export function ProductDetectionSheetGold({
         const result = await scanner.scanFileV2(file, false);
         div.remove();
         detectedPhotoBarcode = result?.decodedText?.replace(/\D/g, '') ?? '';
+        // Persiste o barcode desta tentativa para uso em retentativas
+        if (detectedPhotoBarcode) {
+          photoSessionBarcodeRef.current = detectedPhotoBarcode;
+        }
       } catch {
         div.remove();
       }
@@ -1040,7 +1048,9 @@ export function ProductDetectionSheetGold({
       }
     }
 
-    const identifiedFromPhoto = await identifyProductFromPhoto(file, detectedPhotoBarcode || undefined);
+    // Usa o barcode desta tentativa; se não detectou, usa o de tentativa anterior da mesma sessão
+    const barcodeHint = detectedPhotoBarcode || photoSessionBarcodeRef.current || undefined;
+    const identifiedFromPhoto = await identifyProductFromPhoto(file, barcodeHint);
     if (identifiedFromPhoto.product) {
       const photoProduct = identifiedFromPhoto.product;
       // Verificar se há correção prévia para o nome sugerido pela IA
