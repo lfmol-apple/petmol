@@ -356,10 +356,6 @@ export function ProductDetectionSheetGold({
   const termConflictsRef = useRef<string[]>([]);
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
-  // Preserva o barcode detectado em qualquer tentativa desta sessão de foto.
-  // Sobrevive a resetPhotoAttempt() para que retentativas não percam o hint de barcode.
-  // É zerado automaticamente na remontagem do componente (sheet fechado/reaberto).
-  const photoSessionBarcodeRef = useRef<string>('');
 
   const initialStep: Step = defaultMode === 'scan'
     ? 'scanning'
@@ -977,80 +973,11 @@ export function ProductDetectionSheetGold({
     setScannerError(null);
     setStep('photo-processing');
 
-    let detectedPhotoBarcode = '';
-
-    try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      const tempId = `pds-file-${Date.now()}`;
-      const div = document.createElement('div');
-      div.id = tempId;
-      div.style.cssText = 'position:absolute;left:-9999px;opacity:0;pointer-events:none;width:1px;height:1px;';
-      document.body.appendChild(div);
-
-      const scanner = new Html5Qrcode(tempId);
-      try {
-        const result = await scanner.scanFileV2(file, false);
-        div.remove();
-        detectedPhotoBarcode = result?.decodedText?.replace(/\D/g, '') ?? '';
-        // Persiste o barcode desta tentativa para uso em retentativas
-        if (detectedPhotoBarcode) {
-          photoSessionBarcodeRef.current = detectedPhotoBarcode;
-        }
-      } catch {
-        div.remove();
-      }
-    } catch {
-      // Continua para leitura visual mesmo se o OCR de barcode falhar.
-    }
-
-    if (detectedPhotoBarcode) {
-      setDetectedBarcode(detectedPhotoBarcode);
-      setManualBarcode(detectedPhotoBarcode);
-      const product = await identifyProductByBarcode(detectedPhotoBarcode);
-      const resolvedFromBarcode: ScannedProduct = {
-        ...product,
-        barcode: product.barcode || detectedPhotoBarcode,
-        category: product.category === 'other' && hint ? hint : product.category,
-      };
-
-      if (resolvedFromBarcode.found) {
-        decisionSourceRef.current = 'gtin';
-        aiSuggestedNameRef.current = undefined;
-        const gtinConfidence = scoreGtinResolution();
-        aiConfidenceRef.current = gtinConfidence.score;
-        decisionScoreRef.current = gtinConfidence.score;
-        decisionResultTypeRef.current = 'complete';
-        assistedConfirmationRef.current = false;
-        probableNameRef.current = undefined;
-        productNameRef.current = undefined;
-        visibleTextRef.current = undefined;
-        rawTextBlobsRef.current = [];
-        speciesRef.current = undefined;
-        lifeStageRef.current = undefined;
-        detectedWeightRef.current = resolvedFromBarcode.weight;
-        detectedBrandRef.current = resolvedFromBarcode.brand;
-        strongTermsRef.current = [];
-        mediumTermsRef.current = [];
-        weakTermsRef.current = [];
-        termConflictsRef.current = [];
-        setScannerError(null);
-        setFromHistory(false);
-        setConfirmed(resolvedFromBarcode);
-        setStep('confirm');
-        emitProductTelemetry('resolved', {
-          origin: 'gtin',
-          result: 'complete',
-          score: gtinConfidence.score,
-          category: resolvedFromBarcode.category,
-          brand: resolvedFromBarcode.brand ?? null,
-        });
-        return;
-      }
-    }
-
-    // Usa o barcode desta tentativa; se não detectou, usa o de tentativa anterior da mesma sessão
-    const barcodeHint = detectedPhotoBarcode || photoSessionBarcodeRef.current || undefined;
-    const identifiedFromPhoto = await identifyProductFromPhoto(file, barcodeHint);
+    // O Html5Qrcode causava falsos positivos de barcode na primeira leitura, resultando em
+    // retorno antecipado com produto errado (via GTIN) sem nunca passar pela visão de IA.
+    // A segunda leitura era correta porque o Html5Qrcode falhava e caía na IA.
+    // Solução: sempre usar diretamente a visão de IA, que já detecta e interpreta barcodes.
+    const identifiedFromPhoto = await identifyProductFromPhoto(file, undefined);
     if (identifiedFromPhoto.product) {
       const photoProduct = identifiedFromPhoto.product;
       // Verificar se há correção prévia para o nome sugerido pela IA
@@ -1106,19 +1033,14 @@ export function ProductDetectionSheetGold({
       return;
     }
 
-    setScannerError(identifiedFromPhoto.errorCode ?? (detectedPhotoBarcode ? 'photo_ai_not_found' : 'photo_barcode_not_found'));
-    setManualBarcode(detectedPhotoBarcode);
-    setConfirmed(detectedPhotoBarcode ? {
-      barcode: detectedPhotoBarcode,
-      name: '',
-      category: hint ?? 'other',
-      found: false,
-    } : null);
+    setScannerError(identifiedFromPhoto.errorCode ?? 'photo_barcode_not_found');
+    setManualBarcode('');
+    setConfirmed(null);
     setStep('not-found');
     decisionScoreRef.current = 0.15;
     decisionResultTypeRef.current = 'fallback';
     emitProductTelemetry('resolved', {
-      origin: detectedPhotoBarcode ? 'gtin' : 'partial_name',
+      origin: 'partial_name',
       result: 'fallback',
       score: 0.15,
       category: hint ?? 'other',
