@@ -30,10 +30,10 @@ function formatReminderBadge(diff: number): string {
 }
 
 function getReminderTone(diff: number): string {
-  if (diff === 0) return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
-  if (diff <= 3) return 'border-orange-500/30 bg-orange-500/10 text-orange-300';
-  if (diff <= 7) return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
-  return 'border-white/10 bg-white/5 text-slate-400';
+  if (diff === 0) return 'border-amber-300 bg-amber-50 text-amber-900 shadow-[0_0_12px_rgba(251,191,36,0.2)]';
+  if (diff <= 3) return 'border-orange-200 bg-orange-50 text-orange-800';
+  if (diff <= 7) return 'border-sky-200 bg-sky-50 text-sky-800';
+  return 'border-slate-200 bg-white text-slate-600';
 }
 
 interface HomePetDashboardProps {
@@ -217,9 +217,10 @@ export function HomePetDashboard({
     onOpenMedication,
     onOpenEvents,
   ]);
+  
   return (
-    <div className="relative px-3 pt-1 space-y-4 screen-optimized pb-10">
-      <AppleControlButtons 
+    <div className="relative px-2 pt-2 pb-6 space-y-4">
+      <AppleControlButtons
         onHealthClick={onOpenHealth}
         onDocumentosClick={onOpenDocuments}
         onAlimentacaoClick={onOpenFood}
@@ -237,57 +238,53 @@ export function HomePetDashboard({
       />
 
       {upcomingReminders.length > 0 && (
-        <section className="rounded-[32px] bg-white px-4 py-6 shadow-sm border border-slate-200">
-          {/* Header do Quadro de Lembretes */}
-          <div className="mb-6 flex items-center justify-between px-1">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow-sm" />
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-0.5">Próximos lembretes</p>
-                <p className="text-[17px] font-black text-slate-900 tracking-tight leading-none italic">Agenda de {currentPet.pet_name}</p>
-              </div>
+        <section className="rounded-3xl border border-white/40 bg-white/40 px-3 py-4 shadow-xl backdrop-blur-xl ring-1 ring-black/5">
+          <div className="mb-4 flex items-center justify-between px-1">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Próximos lembretes</p>
+              <p className="text-sm font-bold text-slate-800 tracking-tight">O que vem pela frente para {currentPet.pet_name}</p>
             </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-blue-50 text-[13px] font-black text-blue-600 border border-blue-100">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-white shadow-lg ring-4 ring-white/10">
               {upcomingReminders.length}
-            </div>
+            </span>
           </div>
 
-          {/* Lista de Itens com fundo branco interno */}
-          <div className="space-y-1">
-            {upcomingReminders.map((reminder) => {
-              // Cor única padronizada para todos os títulos para clareza e uniformidade
-              const labelColor = 'text-slate-800';
-
-              return (
-                <button
-                  key={reminder.key}
-                  onClick={reminder.action}
-                  className="flex w-full items-center gap-3 rounded-[20px] bg-slate-100/60 px-3 py-2 text-left transition-all hover:bg-white hover:shadow-sm hover:border-slate-300 active:scale-[0.98] border border-slate-200/60"
-                >
-                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-white border border-slate-200 shadow-sm text-xl">
-                    {reminder.icon}
-                  </span>
-                  
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-[14px] font-black leading-tight tracking-tight ${labelColor}`}>
+          <div className="space-y-2.5">
+            {upcomingReminders.map((reminder) => (
+              <button
+                key={reminder.key}
+                onClick={reminder.action}
+                className="group relative flex w-full items-center gap-3 rounded-[20px] border border-white/60 bg-white/80 p-2.5 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:bg-white active:scale-[0.98] shadow-sm"
+              >
+                <div className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-md ring-1 ring-black/5 transition-transform group-hover:scale-110">
+                  {reminder.icon}
+                  {reminder.diff === 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 border-2 border-white"></span>
+                    </span>
+                  )}
+                </div>
+                
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="block truncate text-[14px] font-bold leading-tight text-slate-900 tracking-tight">
                       {reminder.label}
                     </span>
-                    <span className="mt-0.5 block truncate text-[10px] font-bold leading-tight text-slate-600 uppercase tracking-widest">
-                      {reminder.sublabel || 'Confirmar'}
-                    </span>
+                  </div>
+                  <span className="mt-0.5 block truncate text-[11px] font-medium leading-tight text-slate-400 uppercase tracking-wide">
+                    {reminder.sublabel || 'Toque para abrir'}
                   </span>
-                  
-                  <span className="flex flex-col items-end gap-1.5 flex-shrink-0 px-1">
-                    <span className="text-[12px] font-black text-slate-700 tracking-tight uppercase tabular-nums">
-                      {formatReminderDate(reminder.due_date)}
-                    </span>
-                    <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-wider shadow-md ${getReminderTone(reminder.diff)}`}>
-                      {formatReminderBadge(reminder.diff)}
-                    </span>
+                </div>
+
+                <div className="flex flex-col items-end gap-1.5 pr-1">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{formatReminderDate(reminder.due_date)}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${getReminderTone(reminder.diff)}`}>
+                    {formatReminderBadge(reminder.diff).toUpperCase()}
                   </span>
-                </button>
-              );
-            })}
+                </div>
+              </button>
+            ))}
           </div>
         </section>
       )}

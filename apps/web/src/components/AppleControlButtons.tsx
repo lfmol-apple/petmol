@@ -28,7 +28,6 @@ interface AppleControlButtonsProps {
   
   inactiveControls?: HomeInactiveEligibleControlId[];
   onDeactivateControl?: (controlId: HomeInactiveEligibleControlId) => void;
-  className?: string;
 }
 
 type ControlTone = 'neutral' | 'ok' | 'warning' | 'critical';
@@ -63,7 +62,6 @@ export function AppleControlButtons({
   onDocumentosClick,
   onAlimentacaoClick,
   onBanhoTosaClick,
-  onMedicacaoClick,
   onFamilyClick,
   alertHealth,
   alertGrooming,
@@ -75,7 +73,6 @@ export function AppleControlButtons({
   colorFood,
   colorMedicacao,
   inactiveControls = [],
-  className = '',
 }: AppleControlButtonsProps) {
   const { t } = useI18n();
   const [showShoppingSheet, setShowShoppingSheet] = useState(false);
@@ -84,77 +81,80 @@ export function AppleControlButtons({
   return (
     <>
       {/* Grid principal — Alimentação em destaque na primeira posição */}
-      <div className={`relative pt-1 ${className}`}>
+      <div className="relative">
         <div className="grid grid-cols-2 gap-2.5">
+          {/* 1. ALIMENTAÇÃO — hero card, primeira posição */}
           <button
             onClick={onAlimentacaoClick}
-            className="group relative overflow-hidden rounded-[24px] bg-gradient-to-br from-amber-100 to-orange-100 p-3 min-h-[90px] shadow-sm transition-all duration-300 hover:-translate-y-1 active:scale-95 border-2 border-amber-300/70"
+            className="group relative overflow-hidden rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-100 to-orange-200 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorFood, alertFood) && <AlertBadge tone={colorFood} />}
-            <span className="absolute right-3 top-3 opacity-95 pointer-events-none transition-transform group-hover:scale-125 duration-500 text-2xl drop-shadow-sm">🥣</span>
-            <div className="flex h-full flex-col justify-end pr-6 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-black leading-tight text-amber-950 tracking-tight">{t('home.food.title')}</h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] font-bold leading-tight text-amber-800 uppercase tracking-wide">{t('home.food.desc')}</p>
+            <span className="absolute right-2 top-2 opacity-95 pointer-events-none transition-transform group-hover:scale-110">
+              <span className="text-2xl">🥣</span>
+            </span>
+            <div className="flex h-full flex-col justify-center pr-8 pt-3 text-left">
+              <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
+              <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-amber-800">{t('home.food.desc')}</p>
             </div>
           </button>
 
           {/* 2. SAÚDE */}
           <button
             onClick={onHealthClick}
-            className="group relative overflow-hidden rounded-[24px] bg-gradient-to-br from-sky-100 via-blue-100 to-blue-200 p-3 min-h-[90px] shadow-sm transition-all duration-300 hover:-translate-y-1 active:scale-95 border-2 border-blue-300/70"
+            className="group relative overflow-hidden rounded-xl border border-blue-400 bg-gradient-to-br from-sky-100 via-blue-100 to-blue-200 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorHealth, alertHealth) && <AlertBadge tone={colorHealth} />}
-            <span className="absolute right-3 top-3 text-xl opacity-90 pointer-events-none transition-transform group-hover:scale-125 duration-500 drop-shadow-sm">🏥</span>
-            <div className="flex h-full flex-col justify-end pr-6 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-black leading-tight text-blue-950 tracking-tight">
+            <span className="absolute right-2 top-2 text-xl opacity-90 pointer-events-none transition-transform group-hover:scale-110">🏥</span>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[14px] sm:text-base font-semibold leading-tight text-blue-950">
                 {t('home.health.title')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] font-bold leading-tight text-blue-900 uppercase tracking-wide">{t('home.health.vaccines')}</p>
+              <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-blue-900 opacity-100">{t('home.health.vaccines')}</p>
             </div>
           </button>
 
           {/* 3. HIGIENE */}
           <button
             onClick={onBanhoTosaClick}
-            className="group relative overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-100 via-green-100 to-lime-100 p-3 min-h-[84px] shadow-sm transition-all duration-300 hover:-translate-y-1 active:scale-95 border-2 border-emerald-300/70"
+            className="group relative overflow-hidden rounded-xl border border-green-400 bg-gradient-to-br from-emerald-100 via-green-100 to-lime-100 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
             {shouldShowAlert(colorGrooming, alertGrooming) && <AlertBadge tone={colorGrooming} />}
-            <span className="absolute right-3 top-3 text-xl opacity-90 pointer-events-none transition-transform group-hover:scale-125 duration-500 drop-shadow-sm">🛁</span>
-            <div className="flex h-full flex-col justify-end pr-6 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-black leading-tight text-green-950 tracking-tight">
+            <span className="absolute right-2 top-2 text-xl opacity-90 pointer-events-none transition-transform group-hover:scale-110">🛁</span>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[14px] sm:text-base font-semibold leading-tight text-green-950">
                 {t('home.hygiene')}
               </h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] font-bold leading-tight text-green-900 uppercase tracking-wide">{t('home.hygiene.desc')}</p>
+              <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-green-900 opacity-100">{t('home.hygiene.desc')}</p>
             </div>
           </button>
 
           {/* 4. SCANNER / COMPRAS */}
           <button
             onClick={() => setShowShoppingSheet(true)}
-            className="group relative overflow-hidden rounded-[24px] bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] p-3 min-h-[84px] shadow-sm transition-all duration-300 hover:-translate-y-1 active:scale-95 border-2 border-indigo-950/40"
+            className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-[#1d4ed8] hover:to-[#6d28d9]"
           >
             {alertShopping && <AlertBadge tone="critical" />}
-            <span className="absolute right-3 top-3 text-xl pointer-events-none transition-transform group-hover:scale-125 duration-500" style={{ filter: 'brightness(0) invert(1) drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}>🛒</span>
-            <div className="flex h-full flex-col justify-end pr-6 pt-3 text-left">
-              <h3 className="truncate text-[15px] font-black leading-tight text-white drop-shadow-md tracking-tight">{t('home.shopping.title')}</h3>
-              <p className="mt-0.5 line-clamp-1 text-[11px] font-bold leading-tight text-white/80 uppercase tracking-wide">{t('home.shopping.desc')}</p>
+            <span className="absolute right-2 top-2 text-xl pointer-events-none transition-transform group-hover:scale-110" style={{ filter: 'brightness(0) invert(1)' }}>🛒</span>
+            <div className="flex h-full flex-col justify-center pr-7 pt-3 text-left">
+              <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-white drop-shadow-sm">{t('home.shopping.title')}</h3>
+              <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-white/80">{t('home.shopping.desc')}</p>
             </div>
           </button>
 
           {/* 5. DOCUMENTOS — full width */}
           <button
             onClick={onDocumentosClick}
-            className="group col-span-2 relative overflow-hidden rounded-[24px] bg-gradient-to-r from-slate-700 to-slate-800 p-3 min-h-[64px] shadow-md transition-all duration-300 hover:-translate-y-1 active:scale-[0.98] border border-slate-600"
+            className="group col-span-2 relative overflow-hidden rounded-xl border border-slate-600/50 bg-gradient-to-r from-slate-700 to-slate-800 p-3 min-h-[56px] transition-all duration-300 hover:shadow-xl active:scale-[0.98]"
           >
-            <div className="flex h-full items-center gap-3 text-left">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 transition-transform group-hover:scale-110 duration-500 shadow-inner">
-                <span className="pointer-events-none text-xl drop-shadow-sm">📁</span>
+            <div className="flex h-full items-center gap-2.5 text-left">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-transform group-hover:scale-110">
+                <span className="pointer-events-none text-lg">📁</span>
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="truncate text-[15px] font-black leading-tight text-white tracking-tight">Histórico</h3>
-                <p className="mt-0.5 line-clamp-1 text-[11px] font-bold leading-tight text-slate-300 uppercase tracking-wide">Relatórios e Consultas</p>
+                <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-white">Histórico</h3>
+                <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs font-semibold leading-[1.15] text-slate-300 opacity-80">Leve o histórico do pet para cada consulta</p>
               </div>
-              <span className="text-xl text-white/20 transition-transform group-hover:translate-x-1 duration-300 pr-1">›</span>
+              <span className="text-lg text-white/30 transition-transform group-hover:translate-x-1">›</span>
             </div>
           </button>
         </div>

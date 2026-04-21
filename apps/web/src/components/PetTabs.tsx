@@ -20,12 +20,17 @@ interface PetTabsProps {
 export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsProps) {
   const [direction, setDirection] = useState(0);
   const currentIndex = pets.findIndex((p) => p.id === selectedPetId);
+  const [prevIndex, setPrevIndex] = useState(currentIndex);
 
-  // Detecta a direção da mudança de pet para o slide
+  // Detecta a direção da mudança de pet para o efeito de slide
   useEffect(() => {
-    const newIndex = pets.findIndex((p) => p.id === selectedPetId);
-    // Não atualiza se o índice não mudar
-  }, [selectedPetId, pets]);
+    if (currentIndex !== prevIndex && currentIndex !== -1 && prevIndex !== -1) {
+      setDirection(currentIndex > prevIndex ? 1 : -1);
+      setPrevIndex(currentIndex);
+    } else if (prevIndex === -1 && currentIndex !== -1) {
+      setPrevIndex(currentIndex);
+    }
+  }, [currentIndex, prevIndex, pets]);
 
   const handleDragEnd = (event: any, info: PanInfo) => {
     const swipeThreshold = 50;
@@ -41,10 +46,10 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
   const springTransition = { type: 'spring' as const, stiffness: 300, damping: 30 };
 
   const variants: Variants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? '100%' : '-100%',
+    enter: (dir: number) => ({
+      x: dir > 0 ? '100%' : dir < 0 ? '-100%' : 0,
       opacity: 0,
-      scale: 0.95,
+      scale: 0.98,
     }),
     center: {
       x: 0,
@@ -56,14 +61,14 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
         scale: { duration: 0.3 }
       }
     },
-    exit: (direction: number) => ({
-      x: direction > 0 ? '-100%' : '100%',
+    exit: (dir: number) => ({
+      x: dir > 0 ? '-100%' : dir < 0 ? '100%' : 0,
       opacity: 0,
-      scale: 0.95,
+      scale: 0.98,
       transition: {
         x: springTransition,
         opacity: { duration: 0.2 },
-        scale: { duration: 0.3 }
+        scale: { duration: 0.2 }
       }
     }),
   };
