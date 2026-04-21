@@ -73,6 +73,10 @@ interface HomePetDashboardProps {
   colorFood?: CardTone;
   alertMedicacao?: boolean;
   colorMedicacao?: CardTone;
+  onOpenVaccines: () => void;
+  onOpenVermifugo: () => void;
+  onOpenAntipulgas: () => void;
+  onOpenColeira: () => void;
   onOpenGrooming: () => void;
   onOpenMedication: () => void;
   onOpenFood: () => void;
@@ -104,6 +108,10 @@ export function HomePetDashboard({
   colorFood,
   alertMedicacao,
   colorMedicacao,
+  onOpenVaccines,
+  onOpenVermifugo,
+  onOpenAntipulgas,
+  onOpenColeira,
   onOpenGrooming,
   onOpenMedication,
   onOpenFood,
@@ -169,10 +177,10 @@ export function HomePetDashboard({
     }
 
     const careHandlers = {
-      onOpenVaccines: onOpenHealth,
-      onOpenVermifugo: onOpenHealth,
-      onOpenAntipulgas: onOpenHealth,
-      onOpenColeira: onOpenHealth,
+      onOpenVaccines,
+      onOpenVermifugo,
+      onOpenAntipulgas,
+      onOpenColeira,
       onOpenGrooming,
       onOpenFood,
       onOpenMedication,
@@ -200,6 +208,10 @@ export function HomePetDashboard({
     feedingPlan,
     petEvents,
     onOpenHealth,
+    onOpenVaccines,
+    onOpenVermifugo,
+    onOpenAntipulgas,
+    onOpenColeira,
     onOpenGrooming,
     onOpenFood,
     onOpenMedication,

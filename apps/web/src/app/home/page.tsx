@@ -1362,6 +1362,10 @@ export default function HomePage() {
                     colorFood={selectedPetCardColors.food}
                     alertMedicacao={medicationCardStatus.alert}
                     colorMedicacao={medicationCardStatus.color}
+                    onOpenVaccines={handleOpenVaccines}
+                    onOpenVermifugo={handleOpenVermifugo}
+                    onOpenAntipulgas={handleOpenAntipulgas}
+                    onOpenColeira={handleOpenColeira}
                     onOpenGrooming={handleOpenGrooming}
                     onOpenMedication={handleOpenMedication}
                     onOpenFood={handleOpenFood}

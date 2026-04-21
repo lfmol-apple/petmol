@@ -68,11 +68,11 @@ export function useHomeSurfaceActions({
     setShowFoodSheet(true);
   }, [setShowFoodSheet]);
 
-  // SILENCIADO: aba eventos removida da UI — handler mantido para compatibilidade de tipos
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const openEvents = useCallback(() => {
-    // no-op: bloco legado de Consultas/Exames removido
-  }, []);
+    setHealthActiveTab('eventos');
+    setHealthModalMode('full');
+    setShowHealthModal(true);
+  }, [setHealthActiveTab, setHealthModalMode, setShowHealthModal]);
 
   const applyHomeSurfaceResolution = useCallback((resolution: HomeSurfaceResolution) => {
     if (resolution.kind === 'health-modal') {
