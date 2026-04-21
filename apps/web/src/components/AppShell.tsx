@@ -16,9 +16,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="h-dvh flex flex-col bg-gradient-to-b from-slate-50 to-white overflow-hidden">
+    <div className="h-dvh flex flex-col bg-white">
       <Header />
-      <main className="flex-1 overflow-y-auto min-h-0 scroll-smooth">
+      <main className="flex-1 overflow-y-auto min-h-0 scroll-smooth bg-white">
         {children}
       </main>
       <div className="hidden sm:block">

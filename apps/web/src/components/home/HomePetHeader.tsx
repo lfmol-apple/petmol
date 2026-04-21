@@ -89,13 +89,14 @@ export function HomePetHeader({
   ].filter(Boolean).join(' · ');
 
   return (
-    <>    <div className="px-4 pt-4 space-y-3">
-      {/* Container da Foto + Navegação Estilo Apple */}
-      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72">
+    <>
+      <div className="px-4 pt-4 space-y-4">
+      {/* Container da Foto Original */}
+      <div className="relative group rounded-2xl overflow-hidden bg-slate-100 shadow-lg h-60 sm:h-72 border border-slate-200">
         
         {/* Emoji de Fundo para Pets sem Foto */}
-        <div className="w-full h-full flex items-center justify-center opacity-40">
-          <span className="text-white text-6xl sm:text-7xl md:text-8xl transition-transform duration-500 group-hover:scale-110">
+        <div className="w-full h-full flex items-center justify-center opacity-40 bg-gradient-to-br from-slate-100 to-slate-200">
+          <span className="text-white text-6xl">
             {currentPet.species === 'dog' ? '🐕' : currentPet.species === 'cat' ? '🐱' : '🐾'}
           </span>
         </div>
@@ -105,69 +106,60 @@ export function HomePetHeader({
           <img
             src={getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps)!}
             alt={currentPet.pet_name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
         )}
 
-        {/* Overlay premium gradient na parte inferior da foto */}
-        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-
         {pets.length > 1 && (
           <>
             <button
               type="button"
               onClick={() => switchPetByOffset(-1)}
-              aria-label="Pet anterior"
-              className="hidden sm:flex absolute left-4 top-1/2 z-20 h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-white/20 text-white shadow-lg backdrop-blur-md transition-all hover:bg-white/40 active:scale-95"
+              className="flex absolute left-3 top-1/2 z-20 h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-md transition-all hover:bg-black/50"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
             <button
               type="button"
               onClick={() => switchPetByOffset(1)}
-              aria-label="Proximo pet"
-              className="hidden sm:flex absolute right-4 top-1/2 z-20 h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/40 bg-white/20 text-white shadow-lg backdrop-blur-md transition-all hover:bg-white/40 active:scale-95"
+              className="flex absolute right-3 top-1/2 z-20 h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-md transition-all hover:bg-black/50"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </>
         )}
 
-        {/* Badge de Status de Saúde (PRESERVADO) */}
-        
-
-        {/* Botões de Ação Rápida no Canto Superior Direito */}
-        <div className="absolute top-4 right-4 flex gap-2 z-20">
+        {/* Botões de Ação Rápida */}
+        <div className="absolute top-3 right-3 flex gap-2 z-20">
           <button
             onClick={onOpenAddPetModal}
-            className="flex items-center justify-center w-9 h-9 bg-white/20 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-white/40 active:scale-90 shadow-lg"
+            className="flex items-center justify-center w-8 h-8 bg-black/30 backdrop-blur-md text-white rounded-full transition-all hover:bg-black/50 active:scale-95 shadow-lg"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
           </button>
           <button
             onClick={onOpenEditPetModal}
-            className="flex items-center justify-center w-9 h-9 bg-white/20 backdrop-blur-md text-white rounded-full transition-all border border-white/40 hover:bg-white/40 active:scale-90 shadow-lg"
+            className="flex items-center justify-center w-8 h-8 bg-black/30 backdrop-blur-md text-white rounded-full transition-all hover:bg-black/50 active:scale-95 shadow-lg"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
         </div>
-
-
       </div>
+    </div>
 
       {/* Dados de Identidade do Pet (Abaixo da Foto) */}
-      <div className="px-1.5 pb-2">
+      <div className="px-4 pb-2">
         <div className="flex flex-col">
           {/* Nome do Pet com Dropdown Integrado */}
           <button
@@ -187,31 +179,31 @@ export function HomePetHeader({
           
           {/* Metadados em Linha (Raça · Idade · Peso · Sexo) */}
           <div className="mt-1.5 ml-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-            <span className="text-[11.5px] font-bold text-slate-500 tracking-tight uppercase whitespace-nowrap">
+            <span className="text-[11.5px] font-black text-slate-700 tracking-tight uppercase whitespace-nowrap">
               {currentPet.species === 'dog' ? '🐕' : '🐱'} {currentPet.breed}
             </span>
             {petMeta.split(' · ').slice(1).join(' · ') && (
               <>
-                <span className="opacity-40 text-slate-400 font-black tracking-tighter whitespace-nowrap">·</span>
-                <span className="text-[11.5px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap">
+                <span className="opacity-40 text-slate-500 font-black tracking-tighter whitespace-nowrap">·</span>
+                <span className="text-[11.5px] font-bold text-slate-600 tracking-tight uppercase whitespace-nowrap">
                   {petMeta.split(' · ').slice(1).join(' · ')}
                 </span>
               </>
             )}
           </div>
 
-          {/* Badge de atenção — linha separada, não sobrepõe dados */}
-          <div className="mt-1.5 ml-1">
+          {/* Badge de atenção — linha separada com distanciamento para os cards */}
+          <div className="mt-2 ml-1 mb-5">
             <div
               onClick={topAttentionPetCount > 0 ? onOpenTopAttentionModal : undefined}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border transition-all ${
                 selectedPetNeedsAttention
-                  ? 'bg-rose-50 border-rose-100 text-rose-500 cursor-pointer active:scale-95'
-                  : 'bg-emerald-50 border-emerald-100 text-emerald-500 cursor-default'
+                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-400 cursor-pointer active:scale-95 shadow-[0_0_15px_rgba(244,63,94,0.1)]'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 cursor-default'
               }`}
             >
-              <div className={`w-1 h-1 rounded-full ${selectedPetNeedsAttention ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
-              <span className="text-[10px] font-black uppercase tracking-wider">
+              <div className={`w-1.5 h-1.5 rounded-full ${selectedPetNeedsAttention ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <span className="text-[10px] font-black uppercase tracking-widest">
                 {selectedPetNeedsAttention
                   ? `${topAttentionPetCount} ${topAttentionPetCount === 1 ? 'pet' : 'pets'} · Atenção`
                   : 'Tudo OK'}
@@ -273,7 +265,6 @@ export function HomePetHeader({
           </>,
           document.body
         )}
-      </div>
       </div>
 
       <HomeAttentionOverlays

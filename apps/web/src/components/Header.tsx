@@ -64,17 +64,17 @@ export function Header() {
                 <Link
                   href={profileHref}
                   title="Abrir configurações do perfil"
-                  className="inline-flex items-center gap-2 h-9 px-4 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#0056D2] text-white text-sm font-bold hover:bg-[#0047ad] shadow-md transition-all active:scale-95"
                 >
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-base">👤</span>
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-base">👤</span>
                   <span className="flex flex-col items-start leading-none">
                     <span>{userLabel}</span>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#0056D2]/65">{profileCaption}</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.22em] text-white/70">{profileCaption}</span>
                   </span>
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="inline-flex items-center h-9 px-4 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors"
+                  className="inline-flex items-center h-10 px-4 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 text-sm font-bold hover:bg-rose-100 shadow-sm transition-all active:scale-95"
                 >
                   {t('common.logout')}
                 </button>
@@ -89,8 +89,6 @@ export function Header() {
                 </Link>
               )
             )}
-            
-            {/* Language Selector removed — BR launch only */}
           </div>
 
           {/* Mobile Navigation */}
@@ -104,18 +102,18 @@ export function Header() {
                 <Link
                   href={profileHref}
                   title="Abrir configurações do perfil"
-                  className="inline-flex items-center gap-2 h-9 px-3 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-sm font-semibold hover:bg-blue-50 shadow-sm transition-colors max-w-[170px]"
+                  className="inline-flex items-center gap-2 h-10 px-3 rounded-xl bg-[#0056D2] text-white text-sm font-bold hover:bg-[#0047ad] shadow-md transition-all active:scale-95 max-w-[170px]"
                   aria-label="Perfil"
                 >
-                  <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm">👤</span>
+                  <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white/20 text-sm">👤</span>
                   <span className="flex min-w-0 flex-col items-start leading-none">
                     <span className="truncate max-w-[100px]">{userLabel}</span>
-                    <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[#0056D2]/65">{profileCaption}</span>
+                    <span className="text-[9px] font-black uppercase tracking-[0.18em] text-white/80">{profileCaption}</span>
                   </span>
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="inline-flex items-center h-9 px-2.5 rounded-xl border border-[#0056D2]/30 text-[#0056D2] text-xs font-semibold hover:bg-blue-50 shadow-sm transition-colors"
+                  className="inline-flex items-center h-10 px-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 text-xs font-bold hover:bg-rose-100 shadow-sm transition-all active:scale-95"
                 >
                   Sair
                 </button>
@@ -130,7 +128,6 @@ export function Header() {
                 </Link>
               )
             )}
-            {/* Mobile Language Selector removed — BR launch only */}
           </div>
         </div>
       </header>

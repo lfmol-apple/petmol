@@ -1211,7 +1211,7 @@ export default function HomePage() {
       <div className="max-w-2xl mx-auto px-4 py-4">
         {/* Pet Management - if pets exist */}
         {pets.length > 0 ? (
-          <div className="mx-auto max-w-xl space-y-4 rounded-[30px] border border-slate-200 bg-white/95 p-3 shadow-[0_18px_48px_rgba(15,23,42,0.09)] sm:p-4">
+          <div className="mx-auto max-w-xl space-y-4 rounded-[30px] border border-slate-300 bg-gradient-to-b from-[#F0F4F8] to-[#E2E8F0] p-3 shadow-[0_18px_48px_rgba(15,23,42,0.09)] sm:p-4">
             {/* Atenção agora — banner inteligente: grade com todos os alertas ou banner simples */}
             {(() => {
               if (!selectedPetPrimaryAlert) return null;
@@ -1323,55 +1323,55 @@ export default function HomePage() {
                       selectedPetNeedsAttention={_selectedPetNeedsAttention}
                       selectedPetCareScore={_selectedPetCareScore}
                     />
-                  </PetTabs>
 
-                  <HomePetDashboard
-                    petEvents={petEvents}
-                    vaccines={vaccines}
-                    parasiteControls={parasiteControls}
-                    groomingRecords={groomingRecords}
-                    feedingPlan={feedingPlan}
-                    viewerPreferenceId={homePreferenceScopeId}
-                    currentPet={currentPet}
-                    tutorCheckinDay={tutorCheckinDay}
-                    selectedPetId={selectedPetId}
-                    quickMarkId={quickMarkId}
-                    setQuickMarkId={setQuickMarkId}
-                    quickMarkDate={quickMarkDate}
-                    setQuickMarkDate={setQuickMarkDate}
-                    quickMarkNotes={quickMarkNotes}
-                    setQuickMarkNotes={setQuickMarkNotes}
-                    quickMarkSaving={quickMarkSaving}
-                    setQuickMarkSaving={setQuickMarkSaving}
-                    quickMarkToast={quickMarkToast}
-                    setQuickMarkToast={setQuickMarkToast}
-                    fetchPetEvents={fetchPetEvents}
-                    onOpenHealth={handleOpenHealth}
-                    onOpenDocuments={handleOpenDocuments}
-                    alertVacinas={selectedPetCardAlerts.vacinas}
-                    colorVacinas={selectedPetCardColors.vacinas}
-                    alertVermifugo={selectedPetCardAlerts.vermifugo}
-                    colorVermifugo={selectedPetCardColors.vermifugo}
-                    alertAntipulgas={selectedPetCardAlerts.antipulgas}
-                    colorAntipulgas={selectedPetCardColors.antipulgas}
-                    alertColeira={selectedPetCardAlerts.coleira}
-                    colorColeira={selectedPetCardColors.coleira}
-                    alertGrooming={selectedPetCardAlerts.grooming}
-                    colorGrooming={selectedPetCardColors.grooming}
-                    alertFood={selectedPetCardAlerts.food}
-                    colorFood={selectedPetCardColors.food}
-                    alertMedicacao={medicationCardStatus.alert}
-                    colorMedicacao={medicationCardStatus.color}
-                    onOpenVaccines={handleOpenVaccines}
-                    onOpenVermifugo={handleOpenVermifugo}
-                    onOpenAntipulgas={handleOpenAntipulgas}
-                    onOpenColeira={handleOpenColeira}
-                    onOpenGrooming={handleOpenGrooming}
-                    onOpenMedication={handleOpenMedication}
-                    onOpenFood={handleOpenFood}
-                    onOpenEvents={handleOpenEvents}
-                    onOpenFamily={togglePetSelector}
-                  />
+                    <HomePetDashboard
+                      petEvents={petEvents}
+                      vaccines={vaccines}
+                      parasiteControls={parasiteControls}
+                      groomingRecords={groomingRecords}
+                      feedingPlan={feedingPlan}
+                      viewerPreferenceId={homePreferenceScopeId}
+                      currentPet={currentPet}
+                      tutorCheckinDay={tutorCheckinDay}
+                      selectedPetId={selectedPetId}
+                      quickMarkId={quickMarkId}
+                      setQuickMarkId={setQuickMarkId}
+                      quickMarkDate={quickMarkDate}
+                      setQuickMarkDate={setQuickMarkDate}
+                      quickMarkNotes={quickMarkNotes}
+                      setQuickMarkNotes={setQuickMarkNotes}
+                      quickMarkSaving={quickMarkSaving}
+                      setQuickMarkSaving={setQuickMarkSaving}
+                      quickMarkToast={quickMarkToast}
+                      setQuickMarkToast={setQuickMarkToast}
+                      fetchPetEvents={fetchPetEvents}
+                      onOpenHealth={handleOpenHealth}
+                      onOpenDocuments={handleOpenDocuments}
+                      alertVacinas={selectedPetCardAlerts.vacinas}
+                      colorVacinas={selectedPetCardColors.vacinas}
+                      alertVermifugo={selectedPetCardAlerts.vermifugo}
+                      colorVermifugo={selectedPetCardColors.vermifugo}
+                      alertAntipulgas={selectedPetCardAlerts.antipulgas}
+                      colorAntipulgas={selectedPetCardColors.antipulgas}
+                      alertColeira={selectedPetCardAlerts.coleira}
+                      colorColeira={selectedPetCardColors.coleira}
+                      alertGrooming={selectedPetCardAlerts.grooming}
+                      colorGrooming={selectedPetCardColors.grooming}
+                      alertFood={selectedPetCardAlerts.food}
+                      colorFood={selectedPetCardColors.food}
+                      alertMedicacao={medicationCardStatus.alert}
+                      colorMedicacao={medicationCardStatus.color}
+                      onOpenVaccines={handleOpenVaccines}
+                      onOpenVermifugo={handleOpenVermifugo}
+                      onOpenAntipulgas={handleOpenAntipulgas}
+                      onOpenColeira={handleOpenColeira}
+                      onOpenGrooming={handleOpenGrooming}
+                      onOpenMedication={handleOpenMedication}
+                      onOpenFood={handleOpenFood}
+                      onOpenEvents={handleOpenEvents}
+                      onOpenFamily={togglePetSelector}
+                    />
+                  </PetTabs>
                 </div>
               );
             })()}

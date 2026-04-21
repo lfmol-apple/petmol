@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Outfit, Fredoka } from 'next/font/google';
 import './globals.css';
+import './theme-prime.css';
 import { I18nProvider } from '@/lib/I18nContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LocationProvider } from '@/contexts/LocationContext';
@@ -77,7 +78,7 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.json" />
       </head>
-      <body className={`${inter.className} ${outfit.variable} ${fredoka.variable} antialiased bg-slate-50`}>
+      <body className={`${inter.className} ${outfit.variable} ${fredoka.variable} antialiased bg-slate-50 theme-prime`}>
         <I18nProvider>
           <AuthProvider>
             <LocationProvider>

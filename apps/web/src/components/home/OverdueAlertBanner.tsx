@@ -65,51 +65,38 @@ export function OverdueAlertBanner({
         className="overflow-hidden"
       >
         <div className="mx-4 mt-4 mb-2">
-          <div className="relative overflow-hidden rounded-[24px] bg-red-50 border border-red-100 shadow-sm p-4">
-            {/* Background Decorative Element */}
-            <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-red-100/50 rounded-full blur-3xl pointer-events-none" />
+          <div className="relative overflow-hidden rounded-[28px] bg-white/[0.03] backdrop-blur-3xl border border-white/10 p-5 shadow-2xl ring-1 ring-white/5">
+            {/* Subtle Gradient Accent */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl pointer-events-none" />
             
-            <div className="flex items-start gap-3 relative z-10">
-              {/* Icon Container */}
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <AlertCircle className="w-6 h-6 text-red-600" />
-              </div>
-
+            <div className="flex items-start gap-0 relative z-10">
               {/* Content */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[13px] font-black text-red-900 uppercase tracking-tight">
-                    Ação Necessária
-                  </h3>
-                  <button 
-                    onClick={() => setIsDismissed(true)}
-                    className="p-1 hover:bg-red-100 rounded-full transition-colors"
-                  >
-                    <X className="w-4 h-4 text-red-400" />
-                  </button>
-                </div>
-                
-                <p className="text-[14px] text-red-800 mt-1 leading-snug">
-                  <span className="font-bold">{current.label}</span> de {current.pet_id} está em atraso há {Math.abs(current.diff)} dias.
+                <p className="text-[15px] font-black text-white tracking-tight leading-tight">
+                  <span className="text-white">{current.pet_id}</span> precisa de atenção {current.status === 'today' ? 'hoje' : ''} em <span className="text-blue-400">{current.label}</span>
                 </p>
+                
+                {overdueReminders.length > 1 && (
+                  <p className="text-[11px] font-black text-slate-500 mt-1.5 uppercase tracking-[0.15em]">
+                    +{overdueReminders.length - 1} outros em atraso
+                  </p>
+                )}
 
-                <div className="flex items-center gap-2 mt-3">
+                <div className="flex items-center gap-4 mt-5">
                   <button
                     onClick={handleResolve}
-                    className="flex-1 bg-red-600 text-white text-[13px] font-bold py-2 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+                    className="text-red-500 text-[13px] font-black uppercase tracking-[0.2em] flex items-center gap-1.5 active:scale-95 transition-all group"
                   >
-                    <ChevronRight className="w-4 h-4" />
-                    Resolver agora
+                    Ver {overdueReminders.length}
+                    <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                   </button>
                   
-                  {overdueReminders.length > 1 && (
-                    <button
-                      onClick={nextReminder}
-                      className="px-3 bg-red-100 text-red-700 text-[12px] font-bold py-2 rounded-xl active:scale-95 transition-all"
-                    >
-                      Próximo ({currentIndex + 1}/{overdueReminders.length})
-                    </button>
-                  )}
+                  <button 
+                    onClick={() => setIsDismissed(true)}
+                    className="text-slate-600 text-[11px] font-black uppercase tracking-widest hover:text-slate-400 transition-colors ml-auto"
+                  >
+                    Ignorar
+                  </button>
                 </div>
               </div>
             </div>

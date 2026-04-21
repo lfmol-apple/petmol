@@ -384,51 +384,48 @@ export function ParasiteItemSheet({
   }
 
   // ── CSS helpers ───────────────────────────────────────────────────────────
-  const inputCls = `w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 ${cfg.colorRing}`;
-  const labelCls = 'block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5';
+  const inputCls = `w-full prime-input text-gray-800 ${cfg.colorRing}`;
+  const labelCls = 'block text-[10px] font-black text-gray-400 uppercase tracking-[0.16em] mb-1.5 ml-1';
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[3px] transition-opacity duration-300" onClick={onClose} />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden animate-scaleIn"
-        style={{ maxHeight: '92dvh' }}
+        className="relative w-full max-w-lg bg-white/80 backdrop-blur-3xl rounded-t-[40px] sm:rounded-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.12)] border-t border-x border-white/80 sm:border flex flex-col overflow-hidden animate-slideUp sm:animate-scaleIn h-[90vh] sm:h-auto sm:max-h-[90dvh]"
         onClick={e => e.stopPropagation()}
       >
+        {/* Prime Handle Bar (Desktop/Mobile) */}
+        <div className="sheet-handle my-3 opacity-40" />
 
         {/* Header */}
-        <div className={`px-5 pt-4 pb-3 ${cfg.colorLight} border-b border-gray-100 flex-shrink-0`}>
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl flex-shrink-0">
+        <div className={`px-6 pt-1 pb-5 ${cfg.colorLight} border-b border-gray-100 flex-shrink-0 relative overflow-hidden animate-prime-shine`}>
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-12 h-12 rounded-[18px] bg-white shadow-xl shadow-gray-200/50 flex items-center justify-center text-2xl flex-shrink-0 ring-1 ring-black/5">
               {cfg.icon}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <h2 className="text-[16px] font-bold text-gray-900 leading-tight whitespace-nowrap">{cfg.title}</h2>
-                {petName && <span className="text-sm text-gray-400 truncate">· {petName}</span>}
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="text-[17px] font-black text-gray-900 leading-tight tracking-tight">{cfg.title}</h2>
+                {petName && <span className="text-sm font-bold text-gray-400 truncate tracking-tight">· {petName}</span>}
               </div>
-              <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                {status.dot === 'bg-red-500' ? (
-                  <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
-                    !
-                  </div>
-                ) : (
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${status.dot}`} />
-                )}
-                <span className={`text-[13px] font-semibold ${status.text} truncate`}>{status.label}</span>
+              <div className="flex items-center gap-2 mt-1 min-w-0">
+                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 animate-pulse ${status.dot} ring-2 ring-white`} />
+                <span className={`text-[13px] font-black uppercase tracking-wider ${status.text} truncate`}>{status.label}</span>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+              className="w-10 h-10 rounded-full bg-white/60 backdrop-blur-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white shadow-sm flex-shrink-0 transition-all active:scale-90"
               aria-label="Fechar"
             >
-              ✕
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
