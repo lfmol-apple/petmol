@@ -535,7 +535,7 @@ export function MedicationItemSheet({
                                   onClick={() => handleApplyDose(ev.id, 'apply', todayStr)}
                                   className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-95 transition-all disabled:opacity-40"
                                 >
-                                  {isBusy ? '...' : '✓ Aplicar dose'}
+                                  {isBusy ? '...' : '✓ Aplicar dose de hoje'}
                                 </button>
                                 <button
                                   type="button"
