@@ -43,39 +43,34 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     }
   };
 
-  const springTransition = { type: 'spring' as const, stiffness: 300, damping: 30 };
+  const springTransition = { type: 'spring' as const, stiffness: 400, damping: 40 };
 
   const variants: Variants = {
     enter: (dir: number) => ({
       x: dir > 0 ? '100%' : dir < 0 ? '-100%' : 0,
       opacity: 0,
-      scale: 0.98,
     }),
     center: {
       x: 0,
       opacity: 1,
-      scale: 1,
       transition: {
         x: springTransition,
         opacity: { duration: 0.2 },
-        scale: { duration: 0.3 }
       }
     },
     exit: (dir: number) => ({
       x: dir > 0 ? '-100%' : dir < 0 ? '100%' : 0,
       opacity: 0,
-      scale: 0.98,
       transition: {
         x: springTransition,
         opacity: { duration: 0.2 },
-        scale: { duration: 0.2 }
       }
     }),
   };
 
   return (
     <div className="w-full relative overflow-hidden">
-      <AnimatePresence initial={false} custom={direction} mode="popLayout">
+      <AnimatePresence initial={false} custom={direction} mode="wait">
         <motion.div
           key={selectedPetId}
           custom={direction}
