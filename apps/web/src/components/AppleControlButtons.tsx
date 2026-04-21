@@ -12,8 +12,9 @@ interface AppleControlButtonsProps {
   onAlimentacaoClick?: () => void;
   onBanhoTosaClick?: () => void;
   onMedicacaoClick?: () => void;
-  onFamilyClick?: () => void; // Added from reference pattern
-  
+  onFamilyClick?: () => void;
+  hasFoodData?: boolean;
+
   // Alert overrides from engine H1
   alertHealth?: boolean;
   alertGrooming?: boolean;
@@ -63,6 +64,7 @@ export function AppleControlButtons({
   onAlimentacaoClick,
   onBanhoTosaClick,
   onFamilyClick,
+  hasFoodData,
   alertHealth,
   alertGrooming,
   alertFood,
@@ -94,7 +96,9 @@ export function AppleControlButtons({
             </span>
             <div className="flex h-full flex-col justify-center pr-8 pt-3 text-left">
               <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
-              <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-amber-800">{t('home.food.desc')}</p>
+              <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-amber-800">
+                {hasFoodData ? t('home.food.desc') : 'Toque para escanear a ração'}
+              </p>
             </div>
           </button>
 

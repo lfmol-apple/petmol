@@ -25,6 +25,8 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
   const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
   const [snoozing, setSnoozing] = useState(false);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [restocking, setRestocking] = useState(false);
+  const [restockFeedback, setRestockFeedback] = useState<string | null>(null);
   const [foodBrand, setFoodBrand] = useState<string>('');
   const [foodState, setFoodState] = useState<FoodControlTabState>({
     showForm: false,
@@ -36,6 +38,45 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
   const overlayRef = useRef<HTMLDivElement>(null);
   const hasFood = !foodState.showForm && foodState.commerceStatus !== null;
   const shouldShowCommerceActions = hasFood;
+
+  const handleRestock = async () => {
+    setRestocking(true);
+    setRestockFeedback(null);
+    try {
+      const token = getToken();
+      const d = new Date();
+      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const res = await fetch(
+        `${API_BASE_URL}/api/health/pets/${pet.pet_id}/feeding/plan/restock`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+          body: JSON.stringify({ refill_date: today }),
+        },
+      );
+      if (res.ok) {
+        try {
+          const key = `petmol_food_control_${pet.pet_id}`;
+          const raw = localStorage.getItem(key);
+          const data = raw ? JSON.parse(raw) : {};
+          data.last_purchase_date = today;
+          localStorage.setItem(key, JSON.stringify(data));
+        } catch { /* silent */ }
+        setRestockFeedback('✅ Compra registrada! Novo ciclo iniciado.');
+        setTimeout(() => { onSaved?.(); onClose(); }, 1500);
+      } else {
+        setRestockFeedback('Não foi possível registrar. Tente novamente.');
+      }
+    } catch {
+      setRestockFeedback('Sem conexão. Tente novamente.');
+    } finally {
+      setRestocking(false);
+    }
+  };
 
   const handleSnooze = async (days: number) => {
     setSnoozing(true);
@@ -204,6 +245,34 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
               {/* Action buttons */}
               {shouldShowCommerceActions && (
                 <div className="px-4 pb-6 -mt-2 flex flex-col gap-2">
+                  {/* Restock feedback */}
+                  {restockFeedback && (
+                    <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-xs text-green-800 flex items-center gap-2">
+                      <span className="flex-shrink-0">🔄</span><span>{restockFeedback}</span>
+                    </div>
+                  )}
+
+                  {/* Comprei — primary loop-closer */}
+                  <button
+                    onClick={handleRestock}
+                    disabled={restocking}
+                    className="w-full flex items-center justify-between rounded-2xl border border-green-300 bg-green-50 px-4 py-3 hover:bg-green-100 transition-all active:scale-[0.98] shadow-sm disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
+                        ✅
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-green-900">Comprei</p>
+                        <p className="text-xs text-green-700/70">Registrar reposição e reiniciar ciclo</p>
+                      </div>
+                    </div>
+                    {restocking
+                      ? <div className="h-5 w-5 rounded-full border-2 border-green-500 border-t-transparent animate-spin flex-shrink-0" />
+                      : <span className="text-green-500 text-lg font-bold">›</span>
+                    }
+                  </button>
+
                   <button
                     onClick={() => setMode('buy')}
                     className="w-full flex items-center justify-between rounded-2xl border border-blue-400/30 bg-blue-300 px-4 py-3 hover:bg-blue-400/40 transition-all active:scale-[0.98] shadow-sm"

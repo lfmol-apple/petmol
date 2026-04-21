@@ -91,7 +91,7 @@ export function HomePetDashboard({
   groomingRecords,
   feedingPlan,
   currentPet,
-  tutorCheckinDay,
+  tutorCheckinDay: _tutorCheckinDay,
   onOpenHealth,
   onOpenDocuments,
   alertVacinas,
@@ -143,39 +143,6 @@ export function HomePetDashboard({
       },
     );
 
-    // Injetar lembrete de check-up mensal a partir do dia configurado pelo tutor
-    if (tutorCheckinDay > 0) {
-      const todayMs = new Date();
-      todayMs.setHours(0, 0, 0, 0);
-      const todayDay = todayMs.getDate();
-      let targetYear = todayMs.getFullYear();
-      let targetMonth = todayMs.getMonth(); // 0-based
-      if (todayDay > tutorCheckinDay) {
-        targetMonth += 1;
-        if (targetMonth > 11) { targetMonth = 0; targetYear += 1; }
-      }
-      const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
-      const effectiveDay = Math.min(tutorCheckinDay, lastDayOfMonth);
-      const dueDate = new Date(targetYear, targetMonth, effectiveDay);
-      const diff = Math.round((dueDate.getTime() - todayMs.getTime()) / 86400000);
-      const dueDateStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-${String(effectiveDay).padStart(2, '0')}`;
-      if (diff >= 0) {
-        reminders.push({
-          key: `${currentPet.pet_id}|monthly_checkin|${dueDateStr}`,
-          pet_id: currentPet.pet_id,
-          domain: 'event' as const,
-          label: 'Check-up mensal',
-          sublabel: 'Revisão geral de saúde',
-          icon: '📋',
-          due_date: dueDateStr,
-          diff,
-          status: diff === 0 ? ('today' as const) : ('upcoming' as const),
-          action_target: 'health/events' as const,
-          is_derived: true,
-        });
-      }
-    }
-
     const careHandlers = {
       onOpenVaccines,
       onOpenVermifugo,
@@ -201,7 +168,6 @@ export function HomePetDashboard({
       }));
   }, [
     currentPet,
-    tutorCheckinDay,
     vaccines,
     parasiteControls,
     groomingRecords,
@@ -218,6 +184,9 @@ export function HomePetDashboard({
     onOpenEvents,
   ]);
   
+  const hasFoodData = Object.keys(feedingPlan).length > 0 &&
+    !!feedingPlan[currentPet.pet_id]?.items?.length;
+
   return (
     <div className="relative px-2 pt-2 pb-6 space-y-4">
       <AppleControlButtons
@@ -227,6 +196,7 @@ export function HomePetDashboard({
         onBanhoTosaClick={onOpenGrooming}
         onMedicacaoClick={onOpenMedication}
         onFamilyClick={onOpenFamily}
+        hasFoodData={hasFoodData}
         alertHealth={alertHealth}
         alertGrooming={alertGrooming}
         alertFood={alertFood}
