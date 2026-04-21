@@ -28,6 +28,7 @@ interface AppleControlButtonsProps {
   
   inactiveControls?: HomeInactiveEligibleControlId[];
   onDeactivateControl?: (controlId: HomeInactiveEligibleControlId) => void;
+  className?: string;
 }
 
 type ControlTone = 'neutral' | 'ok' | 'warning' | 'critical';
