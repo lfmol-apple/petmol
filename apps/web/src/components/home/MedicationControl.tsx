@@ -347,7 +347,7 @@ export function MedicationControl({ petName, petEvents, onRefreshEvents, onOpenF
                         }`}>
                           {todayDone ? '✓ Hoje' : daysLeft === 0 ? 'Último dia' : `${daysLeft}d`}
                         </span>
-                        <span className="text-gray-300 text-xs">{isOpen ? '▲' : '▼'}</span>
+                        <span className={`text-xs font-bold ${isOpen ? 'text-purple-400' : todayDone ? 'text-gray-300' : 'text-purple-500'}`}>{isOpen ? '▲' : '▼'}</span>
                       </div>
                     </button>
 
@@ -358,6 +358,18 @@ export function MedicationControl({ petName, petEvents, onRefreshEvents, onOpenF
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">{pct}% concluído</p>
                     </div>
+
+                    {/* CTA strip — só aparece quando não expandido e dose pendente */}
+                    {!isOpen && !todayDone && (
+                      <div className="mx-3 mb-3 rounded-xl bg-purple-500 text-white text-[13px] font-bold py-2.5 text-center tracking-wide shadow-sm">
+                        Registrar dose de hoje →
+                      </div>
+                    )}
+                    {!isOpen && todayDone && (
+                      <div className="mx-3 mb-3 rounded-xl bg-green-100 border border-green-200 text-green-700 text-[12px] font-semibold py-2 text-center">
+                        ✓ Dose de hoje registrada · toque para detalhes
+                      </div>
+                    )}
 
                     {/* Expanded actions */}
                     {isOpen && (() => {
