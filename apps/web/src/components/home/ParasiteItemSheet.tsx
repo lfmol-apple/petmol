@@ -5,6 +5,7 @@ import { API_BASE_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 import type { ParasiteControl } from '@/lib/types/home';
 import { trackPartnerClicked, trackV1Metric } from '@/lib/v1Metrics';
+import { HOME_SHOPPING_PARTNERS, openHomeShoppingPartner } from '@/features/commerce/homeShoppingPartners';
 import { ModalPortal } from '@/components/ModalPortal';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
@@ -784,34 +785,39 @@ export function ParasiteItemSheet({
               >
                 ‹ Voltar
               </button>
-              <h3 className="text-[16px] font-bold text-gray-900">Onde comprar</h3>
-              <p className="text-sm text-gray-500">Escolha onde encontrar {cfg.title.toLowerCase()}:</p>
+
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[20px] leading-none">🛍️</span>
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold text-gray-900">Compras Pet</h3>
+                  <p className="text-xs text-gray-500">Escolha onde comprar</p>
+                </div>
+              </div>
 
               <div className="space-y-3">
-                {[
-                  { name: 'Cobasi', url: 'https://www.cobasi.com.br', emoji: '🐾' },
-                  { name: 'Petz', url: 'https://www.petz.com.br', emoji: '🐕' },
-                  { name: 'Petlove', url: 'https://www.petlove.com.br', emoji: '❤️' },
-                  { name: 'Amazon Pet', url: 'https://www.amazon.com.br/s?k=pet+saude', emoji: '📦' },
-                ].map(store => (
+                {HOME_SHOPPING_PARTNERS.map(partner => (
                   <button
-                    key={store.name}
+                    key={partner.id}
                     onClick={() => {
                       trackPartnerClicked({
                         source: 'parasite_sheet',
-                        partner: store.name.toLowerCase(),
+                        partner: partner.id,
                         pet_id: petId,
                         control_type: type,
                         product_name: current?.product_name ?? null,
                       });
-                      window.open(store.url, '_blank', 'noopener,noreferrer');
+                      void openHomeShoppingPartner(partner.id);
                     }}
-                    className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all text-left"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl hover:shadow-md active:scale-[0.98] transition-all text-left"
                   >
-                    <span className="text-2xl">{store.emoji}</span>
+                    <div className="w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center bg-white border border-gray-100 flex-shrink-0 p-1">
+                      <img src={partner.logoSrc} alt={partner.logoAlt} className="w-full h-full object-contain" loading="lazy" decoding="async" />
+                    </div>
                     <div className="flex-1">
-                      <p className="font-bold text-gray-900 text-sm">{store.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Comprar {cfg.title.toLowerCase()}</p>
+                      <p className="font-bold text-gray-900 text-sm">{partner.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{partner.description}</p>
                     </div>
                     <span className="text-gray-400 text-lg">›</span>
                   </button>
