@@ -513,15 +513,49 @@ export function MedicationItemSheet({
                           </div>
                         )}
 
-                        <div className="mx-4 mb-3 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(ev)}
-                            className="flex-1 rounded-xl border border-purple-200 bg-white py-2 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 active:scale-95"
-                          >
-                            ✏️ Editar
-                          </button>
-                        </div>
+                        {/* CTA inline — visível sem precisar expandir */}
+                        {!isOpen && (
+                          <div className="mx-4 mb-3 flex gap-2">
+                            {appliedDates.includes(todayStr) ? (
+                              <>
+                                <div className="flex-1 rounded-xl border border-green-200 bg-green-50 py-2.5 text-sm font-semibold text-green-700 text-center">
+                                  ✓ Aplicada hoje
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(ev)}
+                                  className="rounded-xl border border-purple-200 bg-white px-3 py-2.5 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 active:scale-95"
+                                >✏️</button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleApplyDose(ev.id, 'apply', todayStr)}
+                                  className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-bold text-white shadow-sm active:scale-95 transition-all disabled:opacity-40"
+                                >
+                                  {isBusy ? '...' : '✓ Aplicar dose'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpandedTreatmentId(ev.id);
+                                    setActionDate(todayStr);
+                                    setActionNotes('');
+                                  }}
+                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
+                                  title="Ver histórico"
+                                >⋯</button>
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(ev)}
+                                  className="rounded-xl border border-purple-200 bg-white px-3 py-2.5 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 active:scale-95"
+                                >✏️</button>
+                              </>
+                            )}
+                          </div>
+                        )}
 
                         {/* Expanded: day calendar */}
                         {isOpen && (
