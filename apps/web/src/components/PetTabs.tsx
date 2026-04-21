@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, PanInfo, type Variants } from 'framer-motion';
 
 interface Pet {
   id: number | string;
@@ -38,7 +38,9 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     }
   };
 
-  const variants = {
+  const springTransition = { type: 'spring' as const, stiffness: 300, damping: 30 };
+
+  const variants: Variants = {
     enter: (direction: number) => ({
       x: direction > 0 ? '100%' : '-100%',
       opacity: 0,
@@ -49,7 +51,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
       opacity: 1,
       scale: 1,
       transition: {
-        x: { type: 'spring', stiffness: 300, damping: 30 },
+        x: springTransition,
         opacity: { duration: 0.2 },
         scale: { duration: 0.3 }
       }
@@ -59,7 +61,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
       opacity: 0,
       scale: 0.95,
       transition: {
-        x: { type: 'spring', stiffness: 300, damping: 30 },
+        x: springTransition,
         opacity: { duration: 0.2 },
         scale: { duration: 0.3 }
       }
