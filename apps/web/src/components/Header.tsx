@@ -45,7 +45,7 @@ export function Header() {
           >
             <span className="flex flex-col leading-none">
               <span className="text-2xl font-black text-[#0056D2] tracking-tight flex items-center gap-1.5">
-                <span>🐾</span>Petmol
+                Petmol<span className="ml-1">🐾</span>
               </span>
               <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#0056D2]/65">
                 {brandCaption}
