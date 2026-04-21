@@ -22,7 +22,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
   const currentIndex = pets.findIndex((p) => p.id === selectedPetId);
   const [prevIndex, setPrevIndex] = useState(currentIndex);
 
-  // Detecta a direção da mudança de pet para o efeito de slide
+  // Detecta a direção da mudança de pet
   useEffect(() => {
     if (currentIndex !== prevIndex && currentIndex !== -1 && prevIndex !== -1) {
       setDirection(currentIndex > prevIndex ? 1 : -1);
@@ -32,7 +32,8 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     }
   }, [currentIndex, prevIndex, pets]);
 
-  const handleDragEnd = (event: any, info: PanInfo) => {
+  // Usamos PanEnd em vez de DragEnd para evitar alteração física contínua no DOM durante o toque
+  const handlePanEnd = (event: any, info: PanInfo) => {
     const swipeThreshold = 50;
     if (info.offset.x > swipeThreshold && currentIndex > 0) {
       setDirection(-1);
@@ -43,7 +44,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     }
   };
 
-  const springTransition = { type: 'spring' as const, stiffness: 400, damping: 40 };
+  const springTransition = { type: 'spring' as const, stiffness: 450, damping: 45 };
 
   const variants: Variants = {
     enter: (dir: number) => ({
@@ -55,7 +56,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
       opacity: 1,
       transition: {
         x: springTransition,
-        opacity: { duration: 0.2 },
+        opacity: { duration: 0.25 },
       }
     },
     exit: (dir: number) => ({
@@ -63,32 +64,32 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
       opacity: 0,
       transition: {
         x: springTransition,
-        opacity: { duration: 0.2 },
+        opacity: { duration: 0.25 },
       }
     }),
   };
 
   return (
-    <div className="w-full relative overflow-hidden">
-      <AnimatePresence initial={false} custom={direction} mode="wait">
-        <motion.div
-          key={selectedPetId}
-          custom={direction}
-          variants={variants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.2}
-          onDragEnd={handleDragEnd}
-          className="w-full touch-pan-y"
-          style={{ cursor: 'grab' }}
-          whileTap={{ cursor: 'grabbing' }}
-        >
-          {children}
-        </motion.div>
-      </AnimatePresence>
+    <div className="w-full relative overflow-x-hidden">
+      {/* O Grid garante que ambos os componentes (antigo e novo) ocupem o mesmo espaço sem salto de altura */}
+      <div className="grid grid-cols-1 grid-rows-1 items-start">
+        <AnimatePresence initial={false} custom={direction}>
+          <motion.div
+            key={selectedPetId}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            onPanEnd={handlePanEnd}
+            className="w-full touch-pan-y"
+            style={{ gridColumn: 1, gridRow: 1 }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
+
