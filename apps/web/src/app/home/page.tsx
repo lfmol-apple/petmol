@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/I18nContext';
 
 import { EditPetModal } from '@/components/EditPetModal';
@@ -117,7 +117,6 @@ const getPhotoUrl = (photoPath: string | undefined | null, petId?: string, photo
 
 export default function HomePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [forceCheckin, setForceCheckin] = useState(false);
   // Ref que sempre aponta para a função de refresh mais recente (evita closure stale no event listener)
   const refreshAllRef = useRef<() => void>(() => {});
@@ -1061,7 +1060,7 @@ export default function HomePage() {
   // Suportado: vaccines | parasites | medication | eventos | grooming | health | food
   useEffect(() => {
     if (!pets.length) return; // aguarda os pets carregarem
-    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const modal = params.get('modal');
     if (!modal) return;
 
@@ -1097,7 +1096,7 @@ export default function HomePage() {
 
     // limpa query string sem recarregar a página
     window.history.replaceState({}, '', '/home');
-  }, [applyHomeSurfaceResolution, pets, searchParams, selectedPetId]);
+  }, [applyHomeSurfaceResolution, pets, selectedPetId]);
 
 
   // Fetch documents when vet history modal opens
