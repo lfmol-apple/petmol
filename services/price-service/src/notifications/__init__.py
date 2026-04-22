@@ -1153,7 +1153,7 @@ def _food_push_body(brand: str, days_left: int) -> str:
 
 
 def send_food_reminder_pushes() -> None:
-    """Daily job at 11:00 BRT.
+    """Daily job window starting at 11:00 BRT.
 
     Simplified and isolated food push rule:
     - Plan exists and enabled (independent from other domains)
@@ -1167,8 +1167,9 @@ def send_food_reminder_pushes() -> None:
     brt = _tz(_td(hours=-3))
     now = datetime.now(brt)
 
-    # Only fire at 11:00 BRT
-    if now.hour != 11 or now.minute != 0:
+    # Open a daily window from 11:00 BRT onwards.
+    # This avoids missing the day when the process restarts after 11:00.
+    if now.hour < 11:
         return
 
     today = now.date()
