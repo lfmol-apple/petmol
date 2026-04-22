@@ -153,7 +153,7 @@ export function HomePetHeader({
   return (
     <>    <div className="px-4 pt-4 space-y-3">
       {/* Container da Foto + Navegação Estilo Apple */}
-      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-all duration-500 h-64 sm:h-72">
+      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 transition-shadow transition-colors duration-500 h-64 sm:h-72">
         
         {/* Emoji de Fundo para Pets sem Foto */}
         <div className="w-full h-full flex items-center justify-center opacity-40">
@@ -167,7 +167,7 @@ export function HomePetHeader({
           <img
             src={getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps)!}
             alt={currentPet.pet_name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 will-change-transform transform-gpu origin-center"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
