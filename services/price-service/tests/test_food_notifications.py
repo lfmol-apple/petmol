@@ -131,3 +131,40 @@ def test_send_food_pushes_respects_daily_dedup(monkeypatch):
     assert sent_payloads == []
     assert fake_session.commit_calls == 0
 
+
+def test_send_food_pushes_skips_when_days_left_above_threshold(monkeypatch):
+    plan = SimpleNamespace(
+        id="plan-3",
+        pet_id="pet-3",
+        next_reminder_date=date(2026, 5, 30),  # legacy field no longer gates eligibility
+        enabled=True,
+        no_consumption_control=False,
+        deleted_at=None,
+        last_food_push_date=None,
+        estimated_end_date=date(2026, 5, 2),   # 10 days ahead from frozen today
+        next_purchase_date=None,
+        food_brand="Ração Z",
+    )
+    pet = SimpleNamespace(id="pet-3", user_id="user-3", name="Nina")
+    fake_session = FakeSession({"FeedingPlan": [plan], "Pet": [pet]})
+    sent_payloads = []
+
+    monkeypatch.setattr(notifications, "datetime", FrozenDateTime)
+    monkeypatch.setattr(
+        notifications,
+        "_load_subscriptions",
+        lambda: {"user-3": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}},
+    )
+    monkeypatch.setattr(notifications, "SessionLocal", lambda: fake_session)
+    monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
+    monkeypatch.setattr(notifications, "_save_subscriptions", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        notifications,
+        "_send_push",
+        lambda subscription, payload: sent_payloads.append((subscription, payload)) or True,
+    )
+
+    send_food_reminder_pushes()
+
+    assert sent_payloads == []
+    assert fake_session.commit_calls == 0
