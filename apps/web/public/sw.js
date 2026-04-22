@@ -26,22 +26,25 @@ self.addEventListener('push', (event) => {
     payload = { title: 'PETMOL', body: event.data.text() };
   }
 
-  const title = payload.title || 'PETMOL';
+  const normalized = normalizePushPayload(payload);
+  const title = normalized.title;
   const options = {
-    body: payload.body || '',
-    icon: payload.icon || '/icons/icon-192x192.png',
-    badge: payload.badge || '/icons/badge-mono.png',
-    tag: payload.tag || 'petmol',
-    data: payload.data || { url: '/home' },
-    requireInteraction: payload.requireInteraction === true,
+    body: normalized.body,
+    icon: normalized.icon,
+    badge: normalized.badge,
+    image: normalized.image,
+    tag: normalized.tag,
+    data: normalized.data,
+    requireInteraction: normalized.requireInteraction === true,
+    renotify: normalized.renotify === true,
   };
 
   const notifPromise = self.registration.showNotification(title, options);
 
-  if (payload.autoCloseMs && payload.autoCloseMs > 0 && !payload.requireInteraction) {
+  if (normalized.autoCloseMs && normalized.autoCloseMs > 0 && !normalized.requireInteraction) {
     event.waitUntil(
       notifPromise.then(() =>
-        new Promise((resolve) => setTimeout(resolve, payload.autoCloseMs))
+        new Promise((resolve) => setTimeout(resolve, normalized.autoCloseMs))
           .then(() =>
             self.registration.getNotifications({ tag: options.tag }).then((notifs) => {
               notifs.forEach((notification) => notification.close());
@@ -53,6 +56,36 @@ self.addEventListener('push', (event) => {
     event.waitUntil(notifPromise);
   }
 });
+
+function normalizePushPayload(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const sourceData = source.data && typeof source.data === 'object' ? source.data : {};
+  const rawTitle = String(source.title || '').trim();
+  const rawBody = String(source.body || '').trim();
+  const url = String(sourceData.url || source.url || '/home').trim() || '/home';
+
+  const titleBase = rawTitle || 'PETMOL';
+  const title = titleBase.startsWith('🐾') ? titleBase : `🐾 ${titleBase}`;
+
+  let autoCloseMs = Number(source.autoCloseMs || 0);
+  if (!Number.isFinite(autoCloseMs) || autoCloseMs < 0) autoCloseMs = 0;
+
+  const requireInteraction = source.requireInteraction === true;
+  if (requireInteraction) autoCloseMs = 0;
+
+  return {
+    title,
+    body: rawBody,
+    icon: String(source.icon || '/icons/icon-192x192.png'),
+    badge: String(source.badge || '/icons/badge-mono.png'),
+    image: String(source.image || '/brand/notification-banner.png'),
+    tag: String(source.tag || 'petmol'),
+    data: { url },
+    requireInteraction,
+    autoCloseMs,
+    renotify: source.renotify === true,
+  };
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

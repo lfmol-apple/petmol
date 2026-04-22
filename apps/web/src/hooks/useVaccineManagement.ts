@@ -328,8 +328,8 @@ export function useVaccineManagement({
           ? Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
           : null;
         let statusLabel = 'Em dia';
-        if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Vencendo';
-        if (diff !== null && diff < 0) statusLabel = 'Atrasada';
+        if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Pode estar na hora de revisar';
+        if (diff !== null && diff < 0) statusLabel = 'Vale confirmar com seu veterinário';
         let msg = `Vacina registrada.\nStatus: ${statusLabel}\nLembrete ativo`;
         if (saved.next_due_on) msg += `\nPróxima previsão: ${saved.next_due_on}`;
         showAppToast(msg, { title: 'Registro salvo', tone: 'success', durationMs: 3600 });
@@ -553,7 +553,7 @@ export function useVaccineManagement({
     name: string;
     icon: string;
     code: string;
-  }) => {
+  }, when: 'today' | 'this_month' | 'unknown') => {
     const currentPet = getCurrentPet();
     if (!currentPet) return;
 
@@ -564,6 +564,13 @@ export function useVaccineManagement({
     }
 
     const countryCode = locale.startsWith('pt') ? 'BR' : locale.startsWith('en') ? 'US' : 'BR';
+    const today = localTodayISO();
+    const firstDayOfMonth = `${today.slice(0, 8)}01`;
+    const appliedOn = when === 'today' ? today : when === 'this_month' ? firstDayOfMonth : today;
+    const isUnknownDate = when === 'unknown';
+    const quickNotes = isUnknownDate
+      ? 'Data aproximada (date_unknown=true). Vale confirmar com seu veterinário.'
+      : t('health.added_via_quick');
 
     try {
       const res = await fetch(
@@ -580,11 +587,12 @@ export function useVaccineManagement({
             vaccines: [
               {
                 display_name: selectedVaccine.name,
-                applied_on: quickAddData.date_administered,
+                applied_on: appliedOn,
                 source: 'quick_add',
                 confirmed_by_user: true,
-                notes: t('health.added_via_quick'),
-                record_type: 'confirmed_application',
+                notes: quickNotes,
+                record_type: isUnknownDate ? 'estimated_control_start' : 'confirmed_application',
+                ...(isUnknownDate ? { next_due_on: calculateNextDose(today, 365) } : {}),
               },
             ],
           }),
@@ -607,8 +615,8 @@ export function useVaccineManagement({
         next_dose_date: saved.next_due_on || undefined,
         veterinarian: '',
         clinic_name: '',
-        notes: saved.notes || t('health.added_via_quick'),
-        record_type: saved.record_type || 'confirmed_application',
+        notes: saved.notes || quickNotes,
+        record_type: saved.record_type || (isUnknownDate ? 'estimated_control_start' : 'confirmed_application'),
         vaccine_code: saved.vaccine_code || undefined,
         country_code: saved.country_code || undefined,
         next_due_source: saved.next_due_source || 'unknown',
@@ -636,8 +644,8 @@ export function useVaccineManagement({
         ? Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         : null;
       let statusLabel = 'Em dia';
-      if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Vencendo';
-      if (diff !== null && diff < 0) statusLabel = 'Atrasada';
+      if (diff !== null && diff <= 30 && diff >= 0) statusLabel = 'Pode estar na hora de revisar';
+      if (diff !== null && diff < 0) statusLabel = 'Vale confirmar com seu veterinário';
       let msg = `✅ ${selectedVaccine.name} registrada!\nStatus: ${statusLabel}\nLembrete ativo`;
       if (saved.next_due_on) msg += `\nPróxima previsão: ${saved.next_due_on}`;
       showBlockingNotice(msg);

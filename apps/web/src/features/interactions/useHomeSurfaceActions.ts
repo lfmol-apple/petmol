@@ -5,6 +5,7 @@ import type { HomeSurfaceResolution } from '@/features/interactions/homeModalRou
 
 interface UseHomeSurfaceActionsInput {
   setShowVaccineSheet: (value: boolean) => void;
+  setShowQuickAddVaccine: (value: boolean) => void;
   setShowVermifugoSheet: (value: boolean) => void;
   setShowAntipulgasSheet: (value: boolean) => void;
   setShowColeiraSheet: (value: boolean) => void;
@@ -22,6 +23,7 @@ interface UseHomeSurfaceActionsInput {
 
 export function useHomeSurfaceActions({
   setShowVaccineSheet,
+  setShowQuickAddVaccine,
   setShowVermifugoSheet,
   setShowAntipulgasSheet,
   setShowColeiraSheet,
@@ -94,6 +96,8 @@ export function useHomeSurfaceActions({
         setShowFoodSheet(true);
       } else if (resolution.sheet === 'vaccines') {
         setShowVaccineSheet(true);
+      } else if (resolution.sheet === 'vaccines_quick') {
+        setShowQuickAddVaccine(true);
       } else if (resolution.sheet === 'vermifugo') {
         setShowVermifugoSheet(true);
       } else if (resolution.sheet === 'antipulgas') {
@@ -127,6 +131,7 @@ export function useHomeSurfaceActions({
     setShowHealthOptionsModal,
     setShowMedicalVault,
     setShowMedicationSheet,
+    setShowQuickAddVaccine,
     setShowVaccineSheet,
     setShowVermifugoSheet,
   ]);

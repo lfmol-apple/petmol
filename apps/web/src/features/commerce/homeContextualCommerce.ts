@@ -47,9 +47,9 @@ export function resolveFoodCommerceSnapshot(
   if (input.daysLeft == null) {
     return {
       status: 'steady',
-      title: 'Deixe a próxima recompra preparada',
-      description: 'Abrimos um handoff direto para você pesquisar a mesma ração quando quiser.',
-      ctaLabel: 'Ver opções de recompra',
+      title: 'Anote onde comprar para não buscar de novo',
+      description: 'Registre sua loja preferida e a próxima compra fica a um toque de distância.',
+      ctaLabel: 'Ver onde comprar',
       searchQuery,
     };
   }
@@ -58,7 +58,7 @@ export function resolveFoodCommerceSnapshot(
     return {
       status: 'urgent',
       title: 'A ração já deve ter acabado',
-      description: 'Leve você direto para a recompra agora, sem precisar refazer a busca manualmente.',
+      description: 'Já está na hora de comprar. Vamos direto para a loja.',
       ctaLabel: 'Comprar agora',
       searchQuery,
     };
@@ -69,18 +69,18 @@ export function resolveFoodCommerceSnapshot(
       status: 'attention',
       title: 'Hora de preparar a próxima compra',
       description: input.estimatedEndDate
-        ? `Pela previsão atual, a ração termina por volta de ${input.estimatedEndDate}.`
-        : 'O estoque está entrando na janela de atenção para recompra.',
-      ctaLabel: 'Planejar recompra',
+        ? `A ração termina por volta de ${input.estimatedEndDate}.`
+        : 'Já é hora de pensar na próxima compra.',
+      ctaLabel: 'Ver onde comprar',
       searchQuery,
     };
   }
 
   return {
     status: 'steady',
-    title: 'Ciclo de alimentação sob controle',
-    description: 'Deixe salvo o caminho da recompra para agir rápido quando a janela de reposição chegar.',
-    ctaLabel: 'Salvar caminho de recompra',
+    title: 'Alimentação em dia',
+    description: 'Quando acabar, você vai saber exatamente onde comprar.',
+    ctaLabel: 'Ver onde comprar',
     searchQuery,
   };
 }

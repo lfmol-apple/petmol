@@ -30,11 +30,11 @@ function fmtDate(s?: string | null): string {
 function computeStatus(overdue: number, nextDiff: number | null) {
   if (overdue > 0)
     return {
-      label: `${overdue} vacina${overdue !== 1 ? 's' : ''} em atraso`,
+      label: `Pode estar na hora de revisar ${overdue} registro${overdue !== 1 ? 's' : ''}`,
       bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500',
     };
   if (nextDiff === null)
-    return { label: 'Sem próxima dose agendada', bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' };
+    return { label: 'Sem data de revisão definida', bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' };
   if (nextDiff === 0)
     return { label: 'Dose hoje!', bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' };
   if (nextDiff <= 7)
@@ -204,8 +204,14 @@ export function VaccineItemSheet({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <h2 className="text-[16px] font-bold text-gray-900 leading-tight whitespace-nowrap">Vacinas</h2>
-                {petName && <span className="text-sm text-gray-400 truncate">· {petName}</span>}
               </div>
+              {petName && (
+                <p className="mt-1">
+                  <span className="inline-flex max-w-full items-center px-2.5 py-1 rounded-full bg-white text-sky-800 text-xs font-black tracking-[0.04em] shadow-sm border border-sky-100 whitespace-normal break-all leading-tight">
+                    Pet: {petName}
+                  </span>
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-0.5">
                 {status.dot === 'bg-red-500' ? (
                   <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold animate-pulse shadow-sm border border-white/50 flex-shrink-0">
@@ -254,7 +260,7 @@ export function VaccineItemSheet({
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-sm font-semibold text-gray-700"
               >
-                📸 Tirar foto
+                📸 Carteirinha (opcional)
               </button>
               <button
                 onClick={() => onFullFormVaccine({ date_administered: today, frequency_days: 365 })}
@@ -296,7 +302,7 @@ export function VaccineItemSheet({
                     <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Detalhes</span>
                     {overdue.length > 0 && (
                       <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
-                        ⚠️ {overdue.length} em atraso
+                        ⚠️ {overdue.length} para revisar
                       </span>
                     )}
                     {overdue.length === 0 && upcoming.length > 0 && (
@@ -321,8 +327,8 @@ export function VaccineItemSheet({
                           <span className="text-sm flex-shrink-0">⚠️</span>
                           <p className="flex-1 text-sm font-bold text-red-700 truncate">
                             {overdue.length === 1
-                              ? `${overdue[0].vaccine_name} em atraso`
-                              : `${overdue.length} vacinas em atraso`}
+                              ? `${overdue[0].vaccine_name}: vale revisar`
+                              : `${overdue.length} vacinas para revisar`}
                           </p>
                           <span className="text-red-400 text-xs">{overdueExpanded ? '▲' : '▼'}</span>
                         </button>
@@ -337,7 +343,7 @@ export function VaccineItemSheet({
                                 onEdit={onEditVaccine}
                                 onDeleteClick={handleDeleteClick}
                                 borderColor="border-l-red-500"
-                                statusBadge={<span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">⚠️ Vencida</span>}
+                                statusBadge={<span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">🔎 Revisar</span>}
                               />
                             ))}
                             {overdue.length > 2 && (
@@ -477,7 +483,7 @@ export function VaccineItemSheet({
                       </div>
                       <div className="rounded-2xl bg-red-50 border border-red-200 px-3 py-2.5 text-center">
                         <p className="text-xl font-black text-red-600">{overdue.length}</p>
-                        <p className="text-[10px] text-red-500 font-medium mt-0.5">Em atraso</p>
+                        <p className="text-[10px] text-red-500 font-medium mt-0.5">Revisar</p>
                       </div>
                     </div>
 
@@ -572,7 +578,7 @@ export function VaccineItemSheet({
         <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-2 sm:p-4" onClick={() => { setShowImportModal(false); setPendingCardFiles([]); }}>
           <div className="bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 p-5 sm:p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg sm:text-xl font-bold text-gray-800">📷 Importar Cartão de Vacina</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-gray-800">📷 Fotografar carteirinha (opcional)</h3>
               <button
                 onClick={() => { setShowImportModal(false); setPendingCardFiles([]); }}
                 className="w-11 h-11 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-colors flex-shrink-0"
@@ -622,7 +628,7 @@ export function VaccineItemSheet({
                 >
                   <div className="text-4xl mb-2">📸</div>
                   <div className="text-sm font-semibold text-sky-700">Câmera</div>
-                  <div className="text-xs text-sky-600 mt-1">Tirar foto agora</div>
+                  <div className="text-xs text-sky-600 mt-1">Você pode pular esta etapa</div>
                 </button>
 
                 <button

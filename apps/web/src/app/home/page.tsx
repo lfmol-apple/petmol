@@ -38,8 +38,6 @@ import { resolveHomeDeepLinkDestination, resolvePushActionSheetFullDestination, 
 import { useHomeModalUtilityActions } from '@/features/interactions/useHomeModalUtilityActions';
 import { useHomeSurfaceActions } from '@/features/interactions/useHomeSurfaceActions';
 import { useHomeInteractionCenter } from '@/features/interactions/useHomeInteractionCenter';
-import { useHomeNotificationBridge } from '@/features/interactions/useHomeNotificationBridge';
-import { useMasterInteractionRules } from '@/features/interactions/useMasterInteractionRules';
 import { requestUserConfirmation, showAppToast, showBlockingNotice } from '@/features/interactions/userPromptChannel';
 import { trackV1Metric } from '@/lib/v1Metrics';
 import { getPetCareCollections } from '@/features/pets/healthCollections';
@@ -53,7 +51,6 @@ import { useGroomingManagement } from '@/hooks/useGroomingManagement';
 import { useFoodPlanSync } from '@/hooks/useFoodPlanSync';
 import { useQuickMark } from '@/hooks/useQuickMark';
 import { vaccineInfo, commonVaccines } from '@/data/vaccineInfo';
-import { usePendencies } from '@/hooks/usePendencies';
 
 import { hasCompletedOnboarding } from '@/lib/ownerProfile';
 import { API_BASE_URL } from '@/lib/api';
@@ -171,7 +168,7 @@ export default function HomePage() {
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editPetInitialSection, setEditPetInitialSection] = useState<'food' | 'grooming' | undefined>(undefined);
-  const [pushActionSheet, setPushActionSheet] = useState<{ type: ActionSheetType; itemName?: string; eventId?: string } | null>(null);
+  const [pushActionSheet, setPushActionSheet] = useState<{ type: ActionSheetType; petId: string; itemName?: string; eventId?: string } | null>(null);
   const pushActionSheetWasOpenRef = useRef(false);
   const editModalWasOpenRef = useRef(false);
   const vaccineSheetWasOpenRef = useRef(false);
@@ -293,7 +290,7 @@ export default function HomePage() {
     feedbackVaccine, setFeedbackVaccine,
     feedbackFormData, setFeedbackFormData,
     vaccineFormData, setVaccineFormData,
-    quickAddData, setQuickAddData,
+    quickAddData,
     loadVaccines,
     resetVaccineForm,
     calculateNextDose,
@@ -670,27 +667,7 @@ export default function HomePage() {
     selectedPetId,
   );
 
-  // ── Notification dispatcher — conecta eventos reais às policies ──
-  const { rules: masterRules } = useMasterInteractionRules();
-  useHomeNotificationBridge(multipetInteractions.canonicalEvents, masterRules);
-
-  // ── Pendências persistentes (in-app) — complementam o push ──
-  const { refetch: refetchPendencies } = usePendencies();
-
-  // fire-and-forget: dispara push para itens vencidos ao abrir o app (loggedUserId set by usePetBootstrap)
-  useEffect(() => {
-    if (!loggedUserId) return;
-    const tok = getToken();
-    if (!tok) return;
-    fetch(`${API_BASE_URL}/notifications/send-on-open`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${tok}` },
-    }).then(() => {
-      setTimeout(() => refetchPendencies(), 1500);
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loggedUserId]);
+  // Dispatcher frontend e pendencies sem superfície foram desativados.
 
   const homePreferenceScopeId = useMemo(
     () => String(loggedUserId || tutor?.id || currentPet?.owner_user_id || 'petmol-home'),
@@ -801,6 +778,7 @@ export default function HomePage() {
     openHealth: handleOpenHealth,
   } = useHomeSurfaceActions({
     setShowVaccineSheet,
+    setShowQuickAddVaccine,
     setShowVermifugoSheet,
     setShowAntipulgasSheet,
     setShowColeiraSheet,
@@ -959,11 +937,14 @@ export default function HomePage() {
   });
 
   const handlePushActionCommerceOpen = useCallback(() => {
-    if (!pushActionSheet || !currentPet) return;
+    if (!pushActionSheet) return;
+    if (selectedPetId !== pushActionSheet.petId) {
+      setSelectedPetId(pushActionSheet.petId);
+    }
 
     const intent = resolvePushActionSheetCommerceIntent({
       type: pushActionSheet.type,
-      petId: currentPet.pet_id,
+      petId: pushActionSheet.petId,
       itemName: pushActionSheet.itemName,
     });
 
@@ -977,7 +958,7 @@ export default function HomePage() {
       openFoodSheet: handleOpenFood,
       openParasiteSheet: handleOpenVermifugo,
     });
-  }, [currentPet, handleOpenFood, handleOpenVermifugo, pushActionSheet]);
+  }, [handleOpenFood, handleOpenVermifugo, pushActionSheet, selectedPetId, setSelectedPetId]);
 
   const handleGlobalProductScan = useCallback((product: ScannedProduct) => {
     if (!currentPet) return;
@@ -1106,7 +1087,12 @@ export default function HomePage() {
 
     const destination = resolveHomeDeepLinkDestination(modal, params.get('tab'));
     if (destination?.kind === 'push-action-sheet' && resolvedPetId) {
-      setPushActionSheet({ type: destination.actionSheetType as ActionSheetType, eventId, itemName });
+      setPushActionSheet({
+        type: destination.actionSheetType as ActionSheetType,
+        petId: resolvedPetId,
+        eventId,
+        itemName,
+      });
     } else if (destination) {
       applyHomeSurfaceResolution(destination);
     }
@@ -1564,7 +1550,6 @@ export default function HomePage() {
       {showQuickAddVaccine && (
         <QuickAddVaccineModal
           quickAddData={quickAddData}
-          setQuickAddData={setQuickAddData}
           commonVaccines={commonVaccines}
           handleQuickAddVaccine={handleQuickAddVaccine}
           onClose={closeQuickAddVaccine}
@@ -1615,21 +1600,33 @@ export default function HomePage() {
   {/* Sistema automático removido — sem geolocalização */}
 
       {/* ── PushActionSheet — tela curta de decisão (push → ação rápida) ── */}
-      {pushActionSheet && currentPet && (
+      {pushActionSheet && (() => {
+        const pushSheetPet = pets.find((pet) => pet.pet_id === pushActionSheet.petId) || currentPet;
+        if (!pushSheetPet) return null;
+        return (
         <PushActionSheet
           type={pushActionSheet.type}
-          petName={currentPet.pet_name || ''}
-          petId={currentPet.pet_id}
+          petName={pushSheetPet.pet_name || ''}
+          petId={pushSheetPet.pet_id}
           itemName={pushActionSheet.itemName}
           eventId={pushActionSheet.eventId}
-          onClose={() => setPushActionSheet(null)}
+          onClose={() => {
+            if (selectedPetId !== pushActionSheet.petId) {
+              setSelectedPetId(pushActionSheet.petId);
+            }
+            setPushActionSheet(null);
+          }}
           onOpenCommerce={handlePushActionCommerceOpen}
           onOpenFull={() => {
+            if (selectedPetId !== pushActionSheet.petId) {
+              setSelectedPetId(pushActionSheet.petId);
+            }
             setPushActionSheet(null);
             applyHomeSurfaceResolution(resolvePushActionSheetFullDestination(pushActionSheet.type));
           }}
         />
-      )}
+        );
+      })()}
 
       {/* ── Sheets modernos por item ─────────────────────────────────────── */}
       {showVermifugoSheet && selectedPetId && (

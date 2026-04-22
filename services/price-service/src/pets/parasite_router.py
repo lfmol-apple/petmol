@@ -12,7 +12,6 @@ from ..user_auth.models import User
 from .models import Pet
 from .parasite_models import ParasiteControlRecord
 from .parasite_schemas import ParasiteControlCreate, ParasiteControlUpdate, ParasiteControlOut
-from ..family.utils import send_family_push
 
 router = APIRouter(prefix="/pets/{pet_id}/parasites", tags=["Parasite Controls"])
 
@@ -62,19 +61,7 @@ def create_parasite_control(
     db.add(record)
     db.commit()
     db.refresh(record)
-    # Notificar família
-    pet_obj = db.query(Pet).filter(Pet.id == pet_id).first()
-    pet_name = pet_obj.name if pet_obj else "pet"
-    actor_name = (user.name or user.email).split()[0]
-    product = getattr(record, 'product_name', None) or getattr(record, 'type', '')
-    send_family_push(pet_id, user.id, {
-        "title": f"🦟 Antiparasitário de {pet_name}",
-        "body": f"{actor_name} registrou {product} em {pet_name}",
-        "icon": "/icons/icon-192x192.png",
-        "badge": "/icons/icon-96x96.png",
-        "tag": f"parasite-{record.id}",
-        "data": {"url": f"/home?modal=parasites&petId={pet_id}"},
-    }, db)
+    # Push família desativado: notificações centralizadas no modelo oficial de 4 camadas.
     return record
 
 

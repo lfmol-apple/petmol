@@ -21,6 +21,30 @@ export function usePetBootstrap() {
   const [tutorCheckinMinute, setTutorCheckinMinute] = useState<number>(0);
   const [photoTimestamps, setPhotoTimestamps] = useState<Record<string, number>>({});
 
+  const readDeepLinkPetId = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return new URLSearchParams(window.location.search).get('petId');
+    } catch {
+      return null;
+    }
+  };
+
+  const resolveSelectedPetId = (
+    availablePets: PetHealthProfile[],
+    currentSelectedId: string | null,
+  ): string | null => {
+    if (availablePets.length === 0) return null;
+    const deepLinkPetId = readDeepLinkPetId();
+    if (deepLinkPetId && availablePets.some((pet) => pet.pet_id === deepLinkPetId)) {
+      return deepLinkPetId;
+    }
+    if (currentSelectedId && availablePets.some((pet) => pet.pet_id === currentSelectedId)) {
+      return currentSelectedId;
+    }
+    return availablePets[0]?.pet_id ?? null;
+  };
+
   // ── Efeito 1: forceLoadPets — disparado quando tutor (AuthContext) muda ──
   useEffect(() => {
     const forceLoadPets = async () => {
@@ -63,7 +87,7 @@ export function usePetBootstrap() {
             const convertedPets = normalizeBackendPetProfiles(backendPets);
             setPets(convertedPets);
             if (convertedPets.length > 0) {
-              setSelectedPetId(convertedPets[0].pet_id);
+              setSelectedPetId((prev) => resolveSelectedPetId(convertedPets, prev));
               console.log('[FORÇA] Pets carregados:', convertedPets.map((p: PetHealthProfile) => p.pet_name));
             } else {
               console.log('[FORÇA] Nenhum pet encontrado — redirecionando para cadastro');
@@ -149,9 +173,7 @@ export function usePetBootstrap() {
         setPets(convertedPets);
         if (convertedPets.length > 0) {
           console.log('[LoadPets] SUCESSO - Carregados', convertedPets.length, 'pets');
-          if (!selectedPetId) {
-            setSelectedPetId(convertedPets[0].pet_id);
-          }
+          setSelectedPetId((prev) => resolveSelectedPetId(convertedPets, prev));
         } else {
           console.log('[LoadPets] Nenhum pet — redirecionando para cadastro');
           router.push('/register-pet');

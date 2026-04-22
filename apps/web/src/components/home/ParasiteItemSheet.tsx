@@ -136,6 +136,12 @@ export function ParasiteItemSheet({
   const [historyExpanded, setHistoryExpanded] = useState(true);
   const [historyShowAll, setHistoryShowAll] = useState(false);
 
+  useEffect(() => {
+    void onRefresh();
+    // onRefresh is intentionally excluded to avoid effect loops when parent recreates callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [petId, type]);
+
   // Sorted most-recent-first
   const sorted = [...parasiteControls].sort(
     (a, b) => new Date(b.date_applied).getTime() - new Date(a.date_applied).getTime(),
@@ -339,7 +345,10 @@ export function ParasiteItemSheet({
     setSaving(true);
     try {
       const token = getToken();
-      if (!token) return;
+      if (!token) {
+        showToast('⚠️ Sessão expirada. Faça login novamente.');
+        return;
+      }
       const res = await fetch(`${API_BASE_URL}/pets/${petId}/parasites/${editRecord.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -362,7 +371,8 @@ export function ParasiteItemSheet({
         setEditRecord(null);
         await onRefresh();
       } else {
-        showToast('❌ Erro ao atualizar. Tente novamente.');
+        const errorText = await res.text().catch(() => '');
+        showToast(`❌ Erro ao atualizar (${res.status}). ${errorText || 'Tente novamente.'}`);
       }
     } finally {
       setSaving(false);
@@ -372,7 +382,10 @@ export function ParasiteItemSheet({
   async function handleDelete(id: string) {
     setConfirmDeleteId(null);
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      showToast('⚠️ Sessão expirada. Faça login novamente.');
+      return;
+    }
     const res = await fetch(`${API_BASE_URL}/pets/${petId}/parasites/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -380,6 +393,9 @@ export function ParasiteItemSheet({
     if (res.ok) {
       showToast('🗑️ Registro removido');
       await onRefresh();
+    } else {
+      const errorText = await res.text().catch(() => '');
+      showToast(`❌ Erro ao remover (${res.status}). ${errorText || 'Tente novamente.'}`);
     }
   }
 
@@ -411,8 +427,14 @@ export function ParasiteItemSheet({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="text-[17px] font-black text-gray-900 leading-tight tracking-tight">{cfg.title}</h2>
-                {petName && <span className="text-sm font-bold text-gray-400 truncate tracking-tight">· {petName}</span>}
               </div>
+              {petName && (
+                <p className="mt-1.5">
+                  <span className="inline-flex max-w-full items-center px-2.5 py-1 rounded-full bg-white text-gray-800 text-xs font-black tracking-[0.04em] shadow-sm border border-white/90 whitespace-normal break-all leading-tight">
+                    Pet: {petName}
+                  </span>
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-1 min-w-0">
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 animate-pulse ${status.dot} ring-2 ring-white`} />
                 <span className={`text-[13px] font-black uppercase tracking-wider ${status.text} truncate`}>{status.label}</span>

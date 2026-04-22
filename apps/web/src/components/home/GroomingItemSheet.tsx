@@ -1,13 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api';
+import { getToken } from '@/lib/auth-token';
 import type { GroomingRecord, GroomingType } from '@/lib/types/home';
 import { ModalPortal } from '@/components/ModalPortal';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
-import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
-import type { ScannedProduct } from '@/lib/productScanner';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function addDays(dateStr: string, days: number): string {
@@ -88,10 +87,17 @@ export function GroomingItemSheet({
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  useEffect(() => {
+    void onRefresh();
+    // onRefresh is intentionally excluded to avoid effect loops when parent recreates callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [petId]);
+
   const sorted = [...groomingRecords].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   );
   const last = sorted[0] ?? null;
+  const nextEditableRecord = sorted.find((r) => !!r.next_recommended_date) ?? last;
   const nextDate = last?.next_recommended_date?.split('T')[0] ?? null;
   const status = computeStatus(nextDate);
 
@@ -124,25 +130,6 @@ export function GroomingItemSheet({
     reminder_time: '09:00',
   });
 
-  // ── Scanner ───────────────────────────────────────────────────────────────
-  function applyScannedProductToAdd(product: ScannedProduct) {
-    setAddForm(f => ({
-      ...f,
-      product_name: [product.brand, product.name].filter(Boolean).join(' ').trim() || f.product_name,
-      barcode: product.barcode,
-    }));
-    if (!product.found) showToast('Não encontramos os dados. Preencha manualmente.');
-  }
-
-  function applyScannedProductToEdit(product: ScannedProduct) {
-    setEditForm(f => ({
-      ...f,
-      product_name: [product.brand, product.name].filter(Boolean).join(' ').trim() || f.product_name,
-      barcode: product.barcode,
-    }));
-    if (!product.found) showToast('Não encontramos os dados. Preencha manualmente.');
-  }
-
   // ── Toast ─────────────────────────────────────────────────────────────────
   function showToast(msg: string) {
     setToast(msg);
@@ -154,7 +141,7 @@ export function GroomingItemSheet({
     if (!addForm.date) return;
     setSaving(true);
     try {
-      const token = localStorage.getItem('petmol_token');
+      const token = getToken();
       if (!token) { showToast('⚠️ Sessão expirada. Faça login novamente.'); return; }
 
       const freq = parseInt(addForm.frequency_days, 10) || FREQ_DEFAULTS[addForm.type];
@@ -201,7 +188,8 @@ export function GroomingItemSheet({
         setAddForm(f => ({ ...f, date: localTodayISO(), cost: '', notes: '', location: '', product_name: '', barcode: '' }));
         await onRefresh();
       } else {
-        showToast('❌ Erro ao salvar. Tente novamente.');
+        const errorText = await res.text().catch(() => '');
+        showToast(`❌ Erro ao salvar (${res.status}). ${errorText || 'Tente novamente.'}`);
       }
     } finally {
       setSaving(false);
@@ -237,8 +225,11 @@ export function GroomingItemSheet({
     if (!editRecord || !editForm.date) return;
     setSaving(true);
     try {
-      const token = localStorage.getItem('petmol_token');
-      if (!token) return;
+      const token = getToken();
+      if (!token) {
+        showToast('⚠️ Sessão expirada. Faça login novamente.');
+        return;
+      }
 
       const editFreq = parseInt(editForm.frequency_days, 10) || FREQ_DEFAULTS[editForm.type];
       const productLine = editForm.product_name.trim()
@@ -269,7 +260,8 @@ export function GroomingItemSheet({
         setEditRecord(null);
         await onRefresh();
       } else {
-        showToast('❌ Erro ao atualizar. Tente novamente.');
+        const errorText = await res.text().catch(() => '');
+        showToast(`❌ Erro ao atualizar (${res.status}). ${errorText || 'Tente novamente.'}`);
       }
     } finally {
       setSaving(false);
@@ -278,8 +270,11 @@ export function GroomingItemSheet({
 
   async function handleDelete(id: string) {
     setConfirmDeleteId(null);
-    const token = localStorage.getItem('petmol_token');
-    if (!token) return;
+    const token = getToken();
+    if (!token) {
+      showToast('⚠️ Sessão expirada. Faça login novamente.');
+      return;
+    }
     const res = await fetch(`${API_BASE_URL}/pets/${petId}/grooming/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
@@ -287,6 +282,9 @@ export function GroomingItemSheet({
     if (res.ok) {
       showToast('🗑️ Registro removido');
       await onRefresh();
+    } else {
+      const errorText = await res.text().catch(() => '');
+      showToast(`❌ Erro ao remover (${res.status}). ${errorText || 'Tente novamente.'}`);
     }
   }
 
@@ -316,7 +314,13 @@ export function GroomingItemSheet({
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-[17px] font-bold text-gray-900 leading-tight">Higiene e Petshop</h2>
-              {petName && <p className="text-sm text-gray-500 mt-0.5">{petName}</p>}
+              {petName && (
+                <p className="mt-1.5">
+                  <span className="inline-flex max-w-full items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black tracking-[0.04em] whitespace-normal break-all leading-tight">
+                    Pet: {petName}
+                  </span>
+                </p>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -410,20 +414,30 @@ export function GroomingItemSheet({
               )}
 
               {/* Main CTA */}
-              <button
-                onClick={() => setMode('add')}
-                className="w-full py-4 rounded-2xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-[15px] font-bold shadow-md transition-colors"
-              >
-                🛁 Fiz hoje
-              </button>
-
-              {/* Secondary */}
-              <button
-                onClick={() => setMode('add')}
-                className="w-full py-3 rounded-xl bg-sky-50 text-sky-700 text-sm font-semibold active:bg-sky-100"
-              >
-                ➕ Registrar outro serviço
-              </button>
+              {last ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => nextEditableRecord && startEdit(nextEditableRecord)}
+                    disabled={!nextEditableRecord}
+                    className="w-full py-3 rounded-2xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
+                  >
+                    ✏️ Editar próximo
+                  </button>
+                  <button
+                    onClick={() => setMode('add')}
+                    className="w-full py-3 rounded-2xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-sm font-bold shadow-md transition-colors"
+                  >
+                    🛁 Fiz hoje
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setMode('add')}
+                  className="w-full py-4 rounded-2xl bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white text-[15px] font-bold shadow-md transition-colors"
+                >
+                  🛁 Registrar serviço
+                </button>
+              )}
 
               {/* History */}
               {sorted.length > 0 && (
@@ -490,14 +504,6 @@ export function GroomingItemSheet({
                 ‹ Voltar
               </button>
               <h3 className="text-[16px] font-bold text-gray-900">Registrar serviço</h3>
-
-              <ProductBarcodeScanner
-                label="Escanear produto (shampoo, etc.)"
-                expectedCategory="hygiene"
-                petId={petId}
-                petName={petName}
-                onProductConfirmed={applyScannedProductToAdd}
-              />
 
               <div>
                 <label className={labelCls}>Produto utilizado (opcional)</label>
@@ -604,14 +610,6 @@ export function GroomingItemSheet({
                 ‹ Voltar
               </button>
               <h3 className="text-[16px] font-bold text-gray-900">Editar registro</h3>
-
-              <ProductBarcodeScanner
-                label="Escanear produto (shampoo, etc.)"
-                expectedCategory="hygiene"
-                petId={petId}
-                petName={petName}
-                onProductConfirmed={applyScannedProductToEdit}
-              />
 
               <div>
                 <label className={labelCls}>Produto utilizado (opcional)</label>

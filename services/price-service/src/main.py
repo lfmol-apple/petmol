@@ -297,7 +297,7 @@ def init_db():
 
 @app.on_event("startup")
 def start_push_scheduler():
-    """Start APScheduler to send monthly checkin push notifications."""
+    """Start APScheduler for PETMOL notification jobs (4-layer model)."""
     from .config import get_settings
     settings = get_settings()
     
@@ -309,25 +309,26 @@ def start_push_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from .notifications import (
-            send_checkin_pushes,
             send_medication_pushes,
             send_care_pushes,
+            send_care_urgent_pushes,
             send_monthly_docs_reminder,
             send_no_control_pushes,
             send_food_reminder_pushes,
         )
 
         scheduler = BackgroundScheduler()
-        # Verificações frequentes para check-ins e remédios (cada minuto)
-        scheduler.add_job(send_checkin_pushes, "interval", minutes=1, id="checkin_pushes")
+        # Camada 1 (crítico): medicação continua no horário exato configurado
         scheduler.add_job(send_medication_pushes, "interval", minutes=1, id="medication_pushes")
-        # Cuidados diários (vacinas, vermífugos, etc) - rotina às 9h é tratada dentro da função
+        # Camada 1 (crítico): controles vencidos consolidados às 20h BRT
         scheduler.add_job(send_care_pushes, "interval", minutes=1, id="care_pushes")
-        # Lembrete mensal de documentos — dia 12, 18h BRT; filtro interno na função
+        # Camada 2 (urgente): controles próximos do vencimento, 1 push/pet/dia (filtro interno)
+        scheduler.add_job(send_care_urgent_pushes, "interval", minutes=1, id="care_urgent_pushes")
+        # Camada 4 (revisão mensal): dia 12 às 20h BRT; somente sem crítico/urgente ativo
         scheduler.add_job(send_monthly_docs_reminder, "interval", minutes=1, id="monthly_docs_reminder")
-        # Lembrete semanal pets sem controle — segunda-feira 20h BRT; filtro interno na função
+        # Camada 3 (progressivo): pets sem controles recentes — segunda-feira 20h BRT
         scheduler.add_job(send_no_control_pushes, "interval", minutes=1, id="no_control_pushes")
-        # Lembrete diário ração acabando — 09h BRT; filtro interno na função
+        # Camadas 1/2 (ração): prioridade crítica quando acabou e urgente quando está acabando
         scheduler.add_job(send_food_reminder_pushes, "interval", minutes=1, id="food_reminder_pushes")
         scheduler.start()
         logger = __import__("logging").getLogger(__name__)

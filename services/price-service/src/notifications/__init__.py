@@ -148,15 +148,17 @@ def _send_push(subscription: dict, payload: dict) -> bool:
     """Returns True on success, False if subscription is expired."""
     settings = get_settings()
     if not settings.vapid_private_key or not settings.vapid_public_key:
-        logger.warning("VAPID keys nao configuradas")
-        return True
+        logger.error("Push desativado: VAPID keys nao configuradas (vapid_private_key/vapid_public_key ausentes)")
+        raise RuntimeError("VAPID keys nao configuradas")
+
+    normalized = _normalize_push_payload(payload)
     try:
         webpush(
             subscription_info={
                 "endpoint": subscription["endpoint"],
                 "keys": {"p256dh": subscription["p256dh"], "auth": subscription["auth"]},
             },
-            data=json.dumps(payload),
+            data=json.dumps(normalized),
             vapid_private_key=settings.vapid_private_key,
             vapid_claims={"sub": settings.vapid_claims_email},
         )
@@ -171,6 +173,49 @@ def _send_push(subscription: dict, payload: dict) -> bool:
         return True
 
 
+def _normalize_push_payload(payload: dict) -> dict:
+    """Apply a fixed visual/content model to every outgoing push payload."""
+    if not isinstance(payload, dict):
+        payload = {}
+
+    raw_title = str(payload.get("title") or "").strip()
+    raw_body = str(payload.get("body") or "").strip()
+    raw_data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    raw_url = str(raw_data.get("url") or payload.get("url") or "/home").strip() or "/home"
+
+    title = raw_title or "PETMOL"
+    if not title.startswith("🐾"):
+        title = f"🐾 {title}"
+
+    body = raw_body
+    tag = str(payload.get("tag") or "petmol").strip() or "petmol"
+    require_interaction = bool(payload.get("requireInteraction", True))
+
+    auto_close_ms = 0
+    try:
+        auto_close_ms = max(0, int(payload.get("autoCloseMs", 0)))
+    except Exception:
+        auto_close_ms = 0
+
+    # Notificações persistentes não devem auto-fechar.
+    if require_interaction:
+        auto_close_ms = 0
+
+    normalized = {
+        "title": title,
+        "body": body,
+        "icon": str(payload.get("icon") or "/icons/icon-192x192.png"),
+        "badge": str(payload.get("badge") or "/icons/badge-mono.png"),
+        "image": str(payload.get("image") or "/brand/notification-banner.png"),
+        "tag": tag,
+        "data": {"url": raw_url},
+        "requireInteraction": require_interaction,
+        "autoCloseMs": auto_close_ms,
+        "renotify": bool(payload.get("renotify", False)),
+    }
+    return normalized
+
+
 def _parasite_modal_for_type(type_key: str) -> str:
     normalized = (type_key or "").lower().strip()
     if normalized == "flea_tick":
@@ -181,59 +226,8 @@ def _parasite_modal_for_type(type_key: str) -> str:
 
 
 def send_checkin_pushes() -> None:
-    """Called every minute by APScheduler. Sends push at configured day+hour+minute (Brasilia time)."""
-    from datetime import timezone, timedelta
-    brt = timezone(timedelta(hours=-3))
-    now = datetime.now(brt)
-    today_day = now.day
-    today_hour = now.hour
-    today_minute = now.minute
-    subscriptions = _load_subscriptions()
-    if not subscriptions:
-        return
-    try:
-        db = SessionLocal()
-        try:
-            users = (
-                db.query(User)
-                .filter(
-                    User.monthly_checkin_day == today_day,
-                    User.monthly_checkin_hour == today_hour,
-                    User.monthly_checkin_minute == today_minute,
-                )
-                .all()
-            )
-            expired_ids = []
-            for user in users:
-                sub = subscriptions.get(str(user.id))
-                if not sub:
-                    continue
-                name = getattr(user, "name", None) or "tutor"
-                payload = {
-                    "title": "Lembrete mensal PETMOL",
-                    "body": f"Hora de registrar a saude dos seus pets, {name}!",
-                    "icon": "/icons/icon-192x192.png",
-                    "badge": "/icons/badge-mono.png",
-
-                    "image": "/brand/notification-banner.png",
-                    "tag": "petmol-monthly-checkin",
-                    "data": {"url": "/home?checkin=1"},
-                    "requireInteraction": True,
-                    "autoCloseMs": 0,
-                }
-                ok = _send_push(sub, payload)
-                if not ok:
-                    expired_ids.append(str(user.id))
-                else:
-                    logger.info(f"Push mensal enviado -> user {user.id}")
-            if expired_ids:
-                for uid in expired_ids:
-                    subscriptions.pop(uid, None)
-                _save_subscriptions(subscriptions)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"send_checkin_pushes erro: {e}")
+    """Deprecated in 4-layer model: monthly review is handled by send_monthly_docs_reminder."""
+    return
 
 
 def _parse_hhmm(value: str) -> Optional[Tuple[int, int]]:
@@ -281,6 +275,88 @@ def _safe_local_date(value, tzinfo) -> Optional[object]:
         return value.astimezone(tzinfo).date()
     except Exception:
         return value.date() if hasattr(value, "date") else value
+
+
+def _has_active_blocker(
+    db,
+    *,
+    user_id: str,
+    min_priority: int,
+    pet_id: Optional[str] = None,
+) -> bool:
+    """Return True when there is an active pendency at/above min_priority.
+
+    If pet_id is provided, matches pet-specific rows and also user-wide rows (pet_id is null).
+    """
+    from .pendencies import NotificationPendency
+
+    query = db.query(NotificationPendency).filter(
+        NotificationPendency.user_id == str(user_id),
+        NotificationPendency.status == "active",
+        NotificationPendency.priority >= int(min_priority),
+    )
+    if pet_id is not None:
+        query = query.filter(
+            (NotificationPendency.pet_id == str(pet_id))
+            | (NotificationPendency.pet_id.is_(None))
+        )
+    return query.first() is not None
+
+
+def _has_active_type(
+    db,
+    *,
+    user_id: str,
+    type_prefix: str,
+    pet_id: Optional[str] = None,
+) -> bool:
+    from .pendencies import NotificationPendency
+
+    query = db.query(NotificationPendency).filter(
+        NotificationPendency.user_id == str(user_id),
+        NotificationPendency.status == "active",
+        NotificationPendency.type.like(f"{type_prefix}%"),
+    )
+    if pet_id is not None:
+        query = query.filter(NotificationPendency.pet_id == str(pet_id))
+    return query.first() is not None
+
+
+def _has_dismissed_prefix(
+    db,
+    *,
+    user_id: str,
+    id_prefix: str,
+    pet_id: Optional[str] = None,
+) -> bool:
+    """Dismissed progressive reminders should not be recreated automatically."""
+    from .pendencies import NotificationPendency
+
+    query = db.query(NotificationPendency).filter(
+        NotificationPendency.user_id == str(user_id),
+        NotificationPendency.status == "dismissed",
+        NotificationPendency.id.like(f"{id_prefix}%"),
+    )
+    if pet_id is not None:
+        query = query.filter(NotificationPendency.pet_id == str(pet_id))
+    return query.first() is not None
+
+
+def _pendency_exists(db, pend_id: str) -> bool:
+    from .pendencies import NotificationPendency
+    return db.query(NotificationPendency.id).filter(NotificationPendency.id == str(pend_id)).first() is not None
+
+
+def _matches_any_preferred_time(
+    now: datetime,
+    preferred_times: List[str],
+    default_time: str,
+) -> bool:
+    """Return True when `now` matches any user-configured time, else fallback."""
+    valid = sorted({str(t) for t in preferred_times if _parse_hhmm(str(t))})
+    if valid:
+        return any(_matches_reminder_time(now, t, default_time) for t in valid)
+    return _matches_reminder_time(now, default_time, default_time)
 
 
 def send_medication_pushes() -> None:
@@ -489,30 +565,44 @@ def send_medication_pushes() -> None:
 
 
 def send_care_pushes() -> None:
-    """Called every minute. Sends care pushes only when the date rule matches.
+    """Single source of truth for overdue controls.
 
-    Rules:
-    - Overdue (days_left < 0): push every day at FIXED 09:00 BRT (independent of reminder_time)
-    - Today (days_left == 0): push at the configured reminder_time (or 09:00 default)
-    - Advance reminder (days_left > 0): push only when days_left == alert_days_before
-      (or reminder_days_before for grooming) at the configured reminder_time.
-
-    Applies latest-by-type rule: only the most recent record per type per pet drives urgency.
-    Dedup: tag includes pet_id + category + type + today_date → one push per item per day.
+    Runs every minute.
+    Sends once/day per pet at:
+    - user-defined control time (if any overdue item has reminder time)
+    - otherwise default 20:00 BRT.
+    Scope: overdue vaccines, parasite controls, and grooming/hygiene controls.
+    Rules: at most one push per pet per day, only if still overdue.
     """
     from datetime import timezone
+    import re as _re_v
+    import unicodedata as _ud_v
 
     brt = timezone(timedelta(hours=-3))
     now = datetime.now(brt)
 
     today = now.date()
     today_str = today.isoformat()
-
     subscriptions = _load_subscriptions()
     if not subscriptions:
         return
 
-    user_ids = list(subscriptions.keys())
+    subscription_user_ids = [
+        uid for uid, value in subscriptions.items()
+        if _is_subscription_entry(value)
+    ]
+    if not subscription_user_ids:
+        return
+
+    def _vgroup_key(vr) -> str:
+        if getattr(vr, "vaccine_code", None):
+            return vr.vaccine_code
+        n = (getattr(vr, "vaccine_name", None) or getattr(vr, "vaccine_type", None) or "").lower().strip()
+        n = "".join(c for c in _ud_v.normalize("NFD", n) if _ud_v.category(c) != "Mn")
+        n = _re_v.sub(r"\(.*?\)", "", n)
+        n = _re_v.sub(r"\b(anual|annual|booster|reforco|dose\s*\d+|\d+[a]\s*dose)\b", "", n)
+        n = _re_v.sub(r"[-\u2013\u2014]", " ", n)
+        return _re_v.sub(r"\s+", " ", n).strip()
 
     try:
         db = SessionLocal()
@@ -522,93 +612,43 @@ def send_care_pushes() -> None:
             from ..pets.parasite_models import ParasiteControlRecord
             from ..pets.grooming_models import GroomingRecord
 
-            pets = db.query(Pet).filter(Pet.user_id.in_(user_ids)).all()
+            pets = db.query(Pet).filter(Pet.user_id.in_(subscription_user_ids)).all()
 
             for pet in pets:
                 sub = subscriptions.get(str(pet.user_id))
-                if not sub:
+                if not _is_subscription_entry(sub):
                     continue
 
-                payloads: list[dict] = []
-
-                # ── Vacinas: latest por grupo canônico ────────────────────────────────
-                # Fire when: overdue OR today OR exactly 10 days before due.
-                # 10-day advance is fixed (no per-vaccine config needed).
-                #
-                # Dedup key priority:
-                #   1. vaccine_code (canonical e.g. "DOG_RABIES") — avoids name-variant splits
-                #   2. Normalised vaccine_name — strips "(Múltipla)", "anual", etc. so
-                #      "V10", "V10 (Múltipla)", "V10 anual" collapse to the same group.
-                _VACCINE_ADVANCE_DAYS = 10
-                import re as _re_v, unicodedata as _ud_v
-
-                def _vgroup_key(vr) -> str:
-                    if getattr(vr, "vaccine_code", None):
-                        return vr.vaccine_code
-                    n = (getattr(vr, "vaccine_name", None) or getattr(vr, "vaccine_type", None) or "").lower().strip()
-                    n = "".join(c for c in _ud_v.normalize("NFD", n) if _ud_v.category(c) != "Mn")
-                    n = _re_v.sub(r"\(.*?\)", "", n)
-                    n = _re_v.sub(r"\b(anual|annual|booster|reforco|dose\s*\d+|\d+[a]\s*dose)\b", "", n)
-                    n = _re_v.sub(r"[-\u2013\u2014]", " ", n)
-                    return _re_v.sub(r"\s+", " ", n).strip()
+                overdue_items: list[dict] = []
+                preferred_times: list[str] = []
 
                 vaccines = db.query(VaccineRecord).filter(
                     VaccineRecord.pet_id == pet.id,
                     VaccineRecord.deleted == False,
                 ).all()
-                _latest_v: dict = {}
+                latest_vaccines: dict = {}
                 for v in vaccines:
                     key = _vgroup_key(v)
-                    prev = _latest_v.get(key)
+                    prev = latest_vaccines.get(key)
                     if not prev or v.applied_date > prev.applied_date:
-                        _latest_v[key] = v
-                for key, v in _latest_v.items():
+                        latest_vaccines[key] = v
+                for v in latest_vaccines.values():
                     if not v.next_dose_date:
                         continue
                     due = _safe_local_date(v.next_dose_date, brt)
-                    days_left = (due - today).days
-                    advance = getattr(v, "alert_days_before", None)
-                    if advance is None:
-                        advance = _VACCINE_ADVANCE_DAYS
-                    if days_left > 0 and days_left != advance:
+                    if not due or due >= today:
                         continue
-                    # Overdue → slot fixo 09:00 BRT; due/advance → reminder_time do registro
-                    if days_left < 0:
-                        if now.hour != 9 or now.minute != 0:
-                            continue
-                    else:
-                        if not _matches_reminder_time(now, getattr(v, "reminder_time", None)):
-                            continue
-                    if days_left < 0:
-                        title = f"💉 {pet.name} — vacina atrasada"
-                        body = f"Vacina {v.vaccine_name} venceu há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
-                    elif days_left == 0:
-                        title = f"💉 {pet.name} — vacina vence hoje"
-                        body = f"Hoje vence a vacina {v.vaccine_name}"
-                    else:
-                        title = f"💉 {pet.name} — reforço de vacina em breve"
-                        body = f"Vacina {v.vaccine_name} vence em {days_left} dias — agende o reforço"
-                    from urllib.parse import quote as _quote
-                    _vname = _quote(v.vaccine_name or "")
-                    payloads.append({
-                        "title": title,
-                        "body": body,
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-
-                        "image": "/brand/notification-banner.png",
-                        "tag": f"petmol-care-vaccine-{pet.id}-{key}-{today_str}",
-                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}&itemName={_vname}&buy=1"},
-                        "requireInteraction": True,
-                        "autoCloseMs": 0,
+                    overdue_items.append({
+                        "label": f"Vacina {v.vaccine_name}",
+                        "url": f"/home?modal=vaccines&petId={pet.id}",
                     })
+                    if getattr(v, "reminder_time", None):
+                        preferred_times.append(str(v.reminder_time))
 
-                # ── Antiparasitários: latest por type ─────────────────────────────────
-                # Fire when: overdue OR today OR days_left == alert_days_before (tutor-set).
-                parasite_type_labels: dict[str, str] = {
+                parasite_labels = {
                     "flea_tick": "Antipulgas",
                     "dewormer": "Vermífugo",
-                    "collar": "Coleira antiparasitária",
+                    "collar": "Coleira",
                     "heartworm": "Antiparasitário cardíaco",
                     "leishmaniasis": "Leishmaniose",
                 }
@@ -616,149 +656,344 @@ def send_care_pushes() -> None:
                     ParasiteControlRecord.pet_id == pet.id,
                     ParasiteControlRecord.deleted == False,
                 ).all()
-                _latest_p: dict = {}
-                for c in parasites:
-                    key = (c.type or "").lower().strip()
-                    prev = _latest_p.get(key)
-                    if not prev or c.date_applied > prev.date_applied:
-                        _latest_p[key] = c
-                for key, c in _latest_p.items():
-                    if not c.next_due_date:
+                latest_parasites: dict = {}
+                for control in parasites:
+                    key = (control.type or "").lower().strip()
+                    prev = latest_parasites.get(key)
+                    if not prev or control.date_applied > prev.date_applied:
+                        latest_parasites[key] = control
+                for key, control in latest_parasites.items():
+                    if not control.next_due_date:
                         continue
-                    due = _safe_local_date(c.next_due_date, brt)
-                    days_left = (due - today).days
-                    advance = c.alert_days_before or c.reminder_days or 0
-                    if days_left > 0 and days_left != advance:
+                    due = _safe_local_date(control.next_due_date, brt)
+                    if not due or due >= today:
                         continue
-                    # Overdue → slot fixo 09:00 BRT; due/advance → reminder_time do registro
-                    if days_left < 0:
-                        if now.hour != 9 or now.minute != 0:
-                            continue
-                    else:
-                        if not _matches_reminder_time(now, getattr(c, "reminder_time", None)):
-                            continue
-                    label = parasite_type_labels.get(key) or c.product_name or key
-                    if days_left < 0:
-                        body = f"{label} venceu há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
-                    elif days_left == 0:
-                        body = f"Hoje vence o {label.lower()} de {pet.name}"
-                    else:
-                        body = f"{label} de {pet.name} vence em {days_left} dia{'s' if days_left != 1 else ''} — hora de comprar"
-                    from urllib.parse import quote as _pquote
-                    _plabel = _pquote(label or "")
-                    _pmodal = _parasite_modal_for_type(key)
-                    payloads.append({
-                        "title": f"🛡️ {pet.name}" + (" — atrasado" if days_left < 0 else ""),
-                        "body": body,
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-
-                        "image": "/brand/notification-banner.png",
-                        "tag": f"petmol-care-parasite-{pet.id}-{key}-{today_str}",
-                        "data": {"url": f"/home?modal={_pmodal}&petId={pet.id}&itemName={_plabel}&buy=1"},
-                        "requireInteraction": True,
-                        "autoCloseMs": 0,
+                    label = parasite_labels.get(key) or control.product_name or "Antiparasitário"
+                    overdue_items.append({
+                        "label": label,
+                        "url": f"/home?modal={_parasite_modal_for_type(key)}&petId={pet.id}",
                     })
+                    if getattr(control, "reminder_time", None):
+                        preferred_times.append(str(control.reminder_time))
 
-                # ── Banho/Tosa: latest por type ───────────────────────────────────────
-                # Fire when: overdue OR today OR days_left == reminder_days_before (tutor-set).
-                groom_type_labels: dict[str, str] = {
+                grooming_labels = {
                     "bath": "Banho",
                     "grooming": "Tosa",
-                    "bath_grooming": "Banho & Tosa",
+                    "bath_grooming": "Banho e Tosa",
+                    "hygiene": "Higiene",
                 }
                 groomings = db.query(GroomingRecord).filter(
                     GroomingRecord.pet_id == pet.id,
                     GroomingRecord.deleted == False,
                     GroomingRecord.reminder_enabled == True,
                 ).all()
-                _latest_g: dict = {}
-                for r in groomings:
-                    key = (r.type or "").lower().strip()
-                    prev = _latest_g.get(key)
-                    if not prev or r.date > prev.date:
-                        _latest_g[key] = r
-                for key, r in _latest_g.items():
-                    if not r.next_recommended_date:
+                latest_groomings: dict = {}
+                for record in groomings:
+                    key = (record.type or "").lower().strip()
+                    prev = latest_groomings.get(key)
+                    if not prev or record.date > prev.date:
+                        latest_groomings[key] = record
+                for key, record in latest_groomings.items():
+                    if not record.next_recommended_date:
                         continue
-                    due = _safe_local_date(r.next_recommended_date, brt)
-                    days_left = (due - today).days
-                    advance = r.reminder_days_before or r.alert_days_before or 0
-                    if days_left > 0 and days_left != advance:
+                    due = _safe_local_date(record.next_recommended_date, brt)
+                    if not due or due >= today:
                         continue
-                    # Overdue → slot fixo 09:00 BRT; due/advance → scheduled_time do registro
-                    if days_left < 0:
-                        if now.hour != 9 or now.minute != 0:
-                            continue
-                    else:
-                        if not _matches_reminder_time(now, getattr(r, "scheduled_time", None)):
-                            continue
-                    label = groom_type_labels.get(key, key)
-                    if days_left < 0:
-                        body = f"{label} de {pet.name} está em atraso há {abs(days_left)} dia{'s' if abs(days_left) != 1 else ''}"
-                    elif days_left == 0:
-                        body = f"Hoje é dia de {label.lower()} para {pet.name}"
-                    else:
-                        body = f"{label} de {pet.name} em {days_left} dia{'s' if days_left != 1 else ''} — hora de agendar"
-                    from urllib.parse import quote as _gquote
-                    _glabel = _gquote(label or "")
-                    payloads.append({
-                        "title": f"🛁 {pet.name}" + (" — atrasado" if days_left < 0 else ""),
-                        "body": body,
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-
-                        "image": "/brand/notification-banner.png",
-                        "tag": f"petmol-care-grooming-{pet.id}-{key}-{today_str}",
-                        "data": {"url": f"/home?modal=grooming&petId={pet.id}&itemName={_glabel}"},
-                        "requireInteraction": False,
-                        "autoCloseMs": 4000,
+                    label = grooming_labels.get(key, "Higiene")
+                    overdue_items.append({
+                        "label": label,
+                        "url": f"/home?modal=grooming&petId={pet.id}",
                     })
+                    if getattr(record, "scheduled_time", None):
+                        preferred_times.append(str(record.scheduled_time))
 
-                # ── Enviar tudo para este pet ─────────────────────────────────────────
-                for payload in payloads:
-                    ok = _send_push(sub, payload)
-                    if not ok:
-                        subscriptions.pop(str(pet.user_id), None)
-                        _save_subscriptions(subscriptions)
-                        break  # subscription expired — skip remaining pushes for this user
-                    else:
-                        logger.info(f"Push cuidado enviado: {payload['tag']}")
-                        # Mirror as in-app pendency (best-effort)
-                        tag = payload.get("tag", "")
-                        url = (payload.get("data") or {}).get("url", "/home")
-                        ptype = "vaccine" if "vaccine" in tag else "parasite" if "parasite" in tag else "grooming"
-                        prio = 75 if "atrasad" in (payload.get("body") or "").lower() else 50
-                        _upsert_pend(
-                            user_id=pet.user_id,
-                            pet_id=pet.id,
-                            pend_id=tag,
-                            type_=ptype,
-                            title=payload.get("title", "Cuidados do pet"),
-                            message=payload.get("body", ""),
-                            deep_link=url,
-                            priority=prio,
-                        )
+                if not overdue_items:
+                    continue
 
+                if not _matches_any_preferred_time(now, preferred_times, "20:00"):
+                    continue
+
+                unique_labels = list(dict.fromkeys([str(item.get("label", "")).strip() for item in overdue_items if item.get("label")]))
+                if len(unique_labels) == 1:
+                    detail = unique_labels[0]
+                elif len(unique_labels) == 2:
+                    detail = f"{unique_labels[0]} e {unique_labels[1]}"
+                else:
+                    detail = f"{unique_labels[0]}, {unique_labels[1]} e mais {len(unique_labels) - 2}"
+
+                deep_link = overdue_items[0]["url"] if len(overdue_items) == 1 else f"/home?modal=health&petId={pet.id}"
+                payload = {
+                    "title": f"🐾 {pet.name} — Pode estar na hora de revisar",
+                    "body": f"{detail}. Vale confirmar com seu veterinário.",
+                    "icon": "/icons/icon-192x192.png",
+                    "badge": "/icons/badge-mono.png",
+                    "image": "/brand/notification-banner.png",
+                    "tag": f"petmol-care-overdue-{pet.id}-{today_str}",
+                    "data": {"url": deep_link},
+                    "requireInteraction": True,
+                    "autoCloseMs": 0,
+                }
+
+                if _pendency_exists(db, payload["tag"]):
+                    continue
+
+                _upsert_pend(
+                    user_id=pet.user_id,
+                    pet_id=pet.id,
+                    pend_id=payload["tag"],
+                    type_="care_overdue",
+                    title=payload["title"],
+                    message=payload["body"],
+                    deep_link=deep_link,
+                    priority=75,
+                )
+                ok = _send_push(sub, payload)
+                if not ok:
+                    subscriptions.pop(str(pet.user_id), None)
+                    continue
+
+                logger.info("Push overdue diário enviado: %s", payload["tag"])
+            _save_subscriptions(subscriptions)
         finally:
             db.close()
     except Exception as e:
         logger.error(f"send_care_pushes erro: {e}")
 
 
-def send_monthly_docs_reminder() -> None:
-    """Send a monthly document-reminder push + pendency (1x per month per user).
+def send_care_urgent_pushes() -> None:
+    """Layer 2 (urgent): upcoming/today care controls, consolidated once per pet/day.
 
-    Fires on day 12 of each month at 18:00 BRT.
-    Pendency ID: petmol-docs-monthly-{user_id}-{YYYY-MM}
-    → Naturally deduplicates: same ID for the whole month, so only one record.
+    Rules:
+    - Fires once/day per pet at:
+      * user-defined control time (if any urgent item has reminder time)
+      * otherwise 11:00 BRT.
+    - Skips when there is active critical pendency (priority >= 75) for the pet/user.
+    - Skips when pet already has overdue controls (handled by layer 1 at 20:00).
+    - One consolidated push per pet/day.
+    """
+    from datetime import timezone
+    import re as _re_v
+    import unicodedata as _ud_v
+
+    brt = timezone(timedelta(hours=-3))
+    now = datetime.now(brt)
+
+    today = now.date()
+    today_str = today.isoformat()
+    subscriptions = _load_subscriptions()
+    if not subscriptions:
+        return
+
+    subscription_user_ids = [
+        uid for uid, value in subscriptions.items()
+        if _is_subscription_entry(value)
+    ]
+    if not subscription_user_ids:
+        return
+
+    def _vgroup_key(vr) -> str:
+        if getattr(vr, "vaccine_code", None):
+            return vr.vaccine_code
+        n = (getattr(vr, "vaccine_name", None) or getattr(vr, "vaccine_type", None) or "").lower().strip()
+        n = "".join(c for c in _ud_v.normalize("NFD", n) if _ud_v.category(c) != "Mn")
+        n = _re_v.sub(r"\(.*?\)", "", n)
+        n = _re_v.sub(r"\b(anual|annual|booster|reforco|dose\s*\d+|\d+[a]\s*dose)\b", "", n)
+        n = _re_v.sub(r"[-\u2013\u2014]", " ", n)
+        return _re_v.sub(r"\s+", " ", n).strip()
+
+    try:
+        db = SessionLocal()
+        try:
+            from ..pets.models import Pet
+            from ..pets.vaccine_models import VaccineRecord
+            from ..pets.parasite_models import ParasiteControlRecord
+            from ..pets.grooming_models import GroomingRecord
+
+            pets = db.query(Pet).filter(Pet.user_id.in_(subscription_user_ids)).all()
+
+            for pet in pets:
+                sub = subscriptions.get(str(pet.user_id))
+                if not _is_subscription_entry(sub):
+                    continue
+
+                if _has_active_blocker(db, user_id=pet.user_id, pet_id=pet.id, min_priority=75):
+                    continue
+
+                has_overdue = False
+                urgent_items: list[dict] = []
+                preferred_times: list[str] = []
+
+                # Vaccines
+                vaccines = db.query(VaccineRecord).filter(
+                    VaccineRecord.pet_id == pet.id,
+                    VaccineRecord.deleted == False,
+                ).all()
+                latest_vaccines: dict = {}
+                for record in vaccines:
+                    key = _vgroup_key(record)
+                    prev = latest_vaccines.get(key)
+                    if not prev or record.applied_date > prev.applied_date:
+                        latest_vaccines[key] = record
+                for record in latest_vaccines.values():
+                    if not record.next_dose_date:
+                        continue
+                    due = _safe_local_date(record.next_dose_date, brt)
+                    if not due:
+                        continue
+                    days_left = (due - today).days
+                    if days_left < 0:
+                        has_overdue = True
+                        continue
+                    advance = getattr(record, "alert_days_before", None)
+                    if advance is None:
+                        advance = 10
+                    if days_left > advance:
+                        continue
+                    urgent_items.append({
+                        "label": f"Vacina {record.vaccine_name}",
+                        "url": f"/home?modal=vaccines&petId={pet.id}",
+                    })
+                    if getattr(record, "reminder_time", None):
+                        preferred_times.append(str(record.reminder_time))
+
+                # Parasites
+                parasite_labels = {
+                    "flea_tick": "Antipulgas",
+                    "dewormer": "Vermífugo",
+                    "collar": "Coleira",
+                    "heartworm": "Antiparasitário cardíaco",
+                    "leishmaniasis": "Leishmaniose",
+                }
+                parasite_controls = db.query(ParasiteControlRecord).filter(
+                    ParasiteControlRecord.pet_id == pet.id,
+                    ParasiteControlRecord.deleted == False,
+                ).all()
+                latest_parasites: dict = {}
+                for control in parasite_controls:
+                    key = (control.type or "").lower().strip()
+                    prev = latest_parasites.get(key)
+                    if not prev or control.date_applied > prev.date_applied:
+                        latest_parasites[key] = control
+                for key, control in latest_parasites.items():
+                    if not control.next_due_date:
+                        continue
+                    due = _safe_local_date(control.next_due_date, brt)
+                    if not due:
+                        continue
+                    days_left = (due - today).days
+                    if days_left < 0:
+                        has_overdue = True
+                        continue
+                    advance = control.alert_days_before or control.reminder_days or 3
+                    if days_left > advance:
+                        continue
+                    urgent_items.append({
+                        "label": parasite_labels.get(key) or control.product_name or "Antiparasitário",
+                        "url": f"/home?modal={_parasite_modal_for_type(key)}&petId={pet.id}",
+                    })
+                    if getattr(control, "reminder_time", None):
+                        preferred_times.append(str(control.reminder_time))
+
+                # Grooming / hygiene
+                grooming_labels = {
+                    "bath": "Banho",
+                    "grooming": "Tosa",
+                    "bath_grooming": "Banho e Tosa",
+                    "hygiene": "Higiene",
+                }
+                groomings = db.query(GroomingRecord).filter(
+                    GroomingRecord.pet_id == pet.id,
+                    GroomingRecord.deleted == False,
+                    GroomingRecord.reminder_enabled == True,
+                ).all()
+                latest_groomings: dict = {}
+                for record in groomings:
+                    key = (record.type or "").lower().strip()
+                    prev = latest_groomings.get(key)
+                    if not prev or record.date > prev.date:
+                        latest_groomings[key] = record
+                for key, record in latest_groomings.items():
+                    if not record.next_recommended_date:
+                        continue
+                    due = _safe_local_date(record.next_recommended_date, brt)
+                    if not due:
+                        continue
+                    days_left = (due - today).days
+                    if days_left < 0:
+                        has_overdue = True
+                        continue
+                    advance = record.reminder_days_before or record.alert_days_before or 3
+                    if days_left > advance:
+                        continue
+                    urgent_items.append({
+                        "label": grooming_labels.get(key, "Higiene"),
+                        "url": f"/home?modal=grooming&petId={pet.id}",
+                    })
+                    if getattr(record, "scheduled_time", None):
+                        preferred_times.append(str(record.scheduled_time))
+
+                if has_overdue or not urgent_items:
+                    continue
+
+                if not _matches_any_preferred_time(now, preferred_times, "11:00"):
+                    continue
+
+                unique_labels = list(dict.fromkeys([str(item.get("label", "")).strip() for item in urgent_items if item.get("label")]))
+                if len(unique_labels) == 1:
+                    detail = unique_labels[0]
+                elif len(unique_labels) == 2:
+                    detail = f"{unique_labels[0]} e {unique_labels[1]}"
+                else:
+                    detail = f"{unique_labels[0]}, {unique_labels[1]} e mais {len(unique_labels) - 2}"
+
+                deep_link = urgent_items[0]["url"] if len(urgent_items) == 1 else f"/home?modal=health&petId={pet.id}"
+                payload = {
+                    "title": f"🐾 {pet.name} — Vale se programar",
+                    "body": f"{detail}. Para não esquecer, vale revisar estes cuidados.",
+                    "icon": "/icons/icon-192x192.png",
+                    "badge": "/icons/badge-mono.png",
+                    "image": "/brand/notification-banner.png",
+                    "tag": f"petmol-care-urgent-{pet.id}-{today_str}",
+                    "data": {"url": deep_link},
+                    "requireInteraction": False,
+                    "autoCloseMs": 7000,
+                }
+
+                if _pendency_exists(db, payload["tag"]):
+                    continue
+
+                _upsert_pend(
+                    user_id=pet.user_id,
+                    pet_id=pet.id,
+                    pend_id=payload["tag"],
+                    type_="care_urgent",
+                    title=payload["title"],
+                    message=payload["body"],
+                    deep_link=deep_link,
+                    priority=60,
+                )
+                ok = _send_push(sub, payload)
+                if not ok:
+                    subscriptions.pop(str(pet.user_id), None)
+                    continue
+
+            _save_subscriptions(subscriptions)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"send_care_urgent_pushes erro: {e}")
+
+
+def send_monthly_docs_reminder() -> None:
+    """Layer 4 (monthly review): one light monthly reminder.
+
+    Fires on user-configured day/hour/minute (fallback: day 12, 20:00 BRT)
+    and only when there is no active urgent/critical block.
     """
     from datetime import timezone as _tz
 
     brt = _tz(timedelta(hours=-3))
     now = datetime.now(brt)
-    if now.day != 12 or now.hour != 18 or now.minute != 0:
-        return
 
     month_key = now.strftime("%Y-%m")
     subscriptions = _load_subscriptions()
@@ -775,29 +1010,64 @@ def send_monthly_docs_reminder() -> None:
             users = db.query(User).filter(User.id.in_(str_ids)).all()
             expired_ids = []
             for user in users:
+                day_pref = getattr(user, "monthly_checkin_day", None)
+                hour_pref = getattr(user, "monthly_checkin_hour", None)
+                minute_pref = getattr(user, "monthly_checkin_minute", None)
+
+                try:
+                    target_day = int(day_pref) if day_pref is not None else 12
+                except Exception:
+                    target_day = 12
+                try:
+                    target_hour = int(hour_pref) if hour_pref is not None else 20
+                except Exception:
+                    target_hour = 20
+                try:
+                    target_minute = int(minute_pref) if minute_pref is not None else 0
+                except Exception:
+                    target_minute = 0
+
+                if target_hour < 0 or target_hour > 23:
+                    target_hour = 20
+                if target_minute < 0 or target_minute > 59:
+                    target_minute = 0
+
+                if target_day == 0:
+                    import calendar
+                    target_day = calendar.monthrange(now.year, now.month)[1]
+                if target_day < 1 or target_day > 31:
+                    target_day = 12
+
+                if now.day != target_day or now.hour != target_hour or now.minute != target_minute:
+                    continue
+
                 sub = subscriptions.get(str(user.id))
                 if not sub:
                     continue
-                pend_id = f"petmol-docs-monthly-{user.id}-{month_key}"
+                # Priority order: monthly review only if no urgent/critical is active.
+                if _has_active_blocker(db, user_id=user.id, min_priority=60):
+                    continue
+
+                pend_id = f"petmol-monthly-review-{user.id}-{month_key}"
                 # Upsert pendency first (survives even if push fails / not subscribed)
                 _upsert_pend(
                     user_id=user.id,
                     pet_id=None,
                     pend_id=pend_id,
-                    type_="documents",
-                    title="📁 Documentos do pet",
-                    message="Teve consulta, exame ou intercorrência este mês? Vale guardar os documentos do seu pet.",
-                    deep_link="/home?modal=documents",
+                    type_="monthly_review",
+                    title="🐾 Revisão mensal do pet",
+                    message="Um check-in rápido já ajuda bastante. Vale revisar os cuidados do mês.",
+                    deep_link="/home",
                     priority=30,
                 )
                 payload = {
-                    "title": "📁 Documentos do pet",
-                    "body": "Teve consulta, exame ou intercorrência este mês? Vale guardar os documentos.",
+                    "title": "🐾 Revisão mensal do pet",
+                    "body": "Um lembrete leve para revisar como seu pet está neste mês.",
                     "icon": "/icons/icon-192x192.png",
                     "badge": "/icons/badge-mono.png",
                     "image": "/brand/notification-banner.png",
                     "tag": pend_id,
-                    "data": {"url": "/home?modal=documents"},
+                    "data": {"url": "/home"},
                     "requireInteraction": False,
                     "autoCloseMs": 6000,
                 }
@@ -805,7 +1075,7 @@ def send_monthly_docs_reminder() -> None:
                 if not ok:
                     expired_ids.append(str(user.id))
                 else:
-                    logger.info(f"Push docs mensais enviado -> user {user.id}")
+                    logger.info(f"Push revisao mensal enviado -> user {user.id}")
             if expired_ids:
                 for uid in expired_ids:
                     subscriptions.pop(uid, None)
@@ -817,13 +1087,14 @@ def send_monthly_docs_reminder() -> None:
 
 
 def send_no_control_pushes() -> None:
-    """Weekly job — every Monday at 20:00 BRT.
+    """Layer 3 (progressive): suggest starting controls for inactive pets.
 
-    For each user: find pets with NO control records in the last 90 days across
-    vaccine, parasite, and grooming domains.
-    Sends a single aggregated push + creates a pendency (type='no_control', priority=40,
-    expires_at=+7d).
-    Dedup tag: petmol-no-control-{user_id}-{ISO_week}  → one push per user per week.
+    Rules:
+    - Monday at 20:00 BRT.
+    - Never fires when urgent/critical is active for that pet.
+    - Keeps at most one progressive active per pet.
+    - Cooldown 72h between activations (stored in subscriptions metadata).
+    - Dismissed progressive pendencies are not recreated automatically.
     """
     from datetime import timezone as _tz, timedelta as _td
 
@@ -863,7 +1134,7 @@ def send_no_control_pushes() -> None:
                 if not pets:
                     continue
 
-                inactive_pets: list[str] = []
+                candidate_pets: list[Pet] = []
                 for pet in pets:
                     # Any vaccine record in last 90 days?
                     has_vaccine = db.query(VaccineRecord).filter(
@@ -892,53 +1163,75 @@ def send_no_control_pushes() -> None:
                     if has_grooming:
                         continue
 
-                    inactive_pets.append(pet.name)
+                    candidate_pets.append(pet)
 
-                if not inactive_pets:
+                if not candidate_pets:
                     continue
 
-                count = len(inactive_pets)
-                names = ", ".join(inactive_pets[:3]) + ("…" if count > 3 else "")
-                title = f"🐾 {names} sem registros de cuidado"
-                body = (
-                    f"{count} pet{'s' if count > 1 else ''} sem nenhum controle registrado nos últimos 90 dias. "
-                    "Que tal registrar uma vacina ou vermífugo?"
-                )
-                pend_id = f"petmol-no-control-{user.id}-{week_key}"
+                # One progressive suggestion per user tick to reduce noise.
+                for pet in candidate_pets:
+                    if _has_active_blocker(db, user_id=user.id, pet_id=pet.id, min_priority=60):
+                        continue
+                    if _has_active_type(db, user_id=user.id, pet_id=pet.id, type_prefix="no_control"):
+                        continue
+                    if _has_dismissed_prefix(
+                        db,
+                        user_id=user.id,
+                        pet_id=pet.id,
+                        id_prefix=f"petmol-no-control-{pet.id}-",
+                    ):
+                        continue
 
-                # Upsert pendency (survives even if push fails)
-                _upsert_pend(
-                    user_id=user.id,
-                    pet_id=None,
-                    pend_id=pend_id,
-                    type_="no_control",
-                    title=title,
-                    message=body,
-                    deep_link="/home?modal=vaccines",
-                    priority=40,
-                )
+                    cooldown_key = f"_progressive_last_{pet.id}"
+                    last_ts = subscriptions.get(cooldown_key)
+                    if last_ts:
+                        try:
+                            last_dt = datetime.fromisoformat(str(last_ts))
+                            if last_dt.tzinfo is None:
+                                last_dt = last_dt.replace(tzinfo=brt)
+                            if (now - last_dt).total_seconds() < (72 * 3600):
+                                continue
+                        except Exception:
+                            pass
 
-                payload = {
-                    "title": title,
-                    "body": body,
-                    "icon": "/icons/icon-192x192.png",
-                    "badge": "/icons/badge-mono.png",
-                    "image": "/brand/notification-banner.png",
-                    "tag": pend_id,
-                    "data": {"url": "/home?modal=vaccines"},
-                    "requireInteraction": False,
-                    "autoCloseMs": 6000,
-                }
-                ok = _send_push(sub, payload)
-                if not ok:
-                    expired_ids.append(str(user.id))
-                else:
-                    logger.info(f"Push sem-controle enviado -> user {user.id} pets={inactive_pets}")
+                    title = f"🐾 {pet.name} — vale iniciar os controles"
+                    body = "Sem registros recentes de vacina, antipulgas, vermífugo ou higiene. Quer começar pelo registro rápido?"
+                    pend_id = f"petmol-no-control-{pet.id}-{week_key}"
+
+                    _upsert_pend(
+                        user_id=user.id,
+                        pet_id=pet.id,
+                        pend_id=pend_id,
+                        type_="no_control",
+                        title=title,
+                        message=body,
+                        deep_link=f"/home?modal=vaccines&petId={pet.id}",
+                        priority=40,
+                    )
+
+                    payload = {
+                        "title": title,
+                        "body": body,
+                        "icon": "/icons/icon-192x192.png",
+                        "badge": "/icons/badge-mono.png",
+                        "image": "/brand/notification-banner.png",
+                        "tag": pend_id,
+                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}"},
+                        "requireInteraction": False,
+                        "autoCloseMs": 6000,
+                    }
+                    ok = _send_push(sub, payload)
+                    if not ok:
+                        expired_ids.append(str(user.id))
+                    else:
+                        subscriptions[cooldown_key] = now.isoformat()
+                        logger.info(f"Push progressivo sem-controle enviado -> user {user.id} pet={pet.id}")
+                    break
 
             if expired_ids:
                 for uid in expired_ids:
                     subscriptions.pop(uid, None)
-                _save_subscriptions(subscriptions)
+            _save_subscriptions(subscriptions)
         finally:
             db.close()
     except Exception as e:
@@ -967,7 +1260,9 @@ def send_food_reminder_pushes() -> None:
 
     For each feeding plan where next_reminder_date <= today:
       - enabled=true, no_consumption_control=false, deleted_at IS NULL
-    Creates pendency (type='food', priority=60) and sends push.
+    Creates pendency and sends push.
+    - days_left <= 0 => critical priority (80)
+    - days_left > 0  => urgent priority (60), skipped when critical is active
     Dedup: plan.last_food_push_date persisted in DB — survives service restarts.
     One push per pet per calendar day.
     """
@@ -1019,6 +1314,14 @@ def send_food_reminder_pushes() -> None:
                     if plan.estimated_end_date
                     else 0
                 )
+                priority = 80 if days_left <= 0 else 60
+                if priority < 75 and _has_active_blocker(
+                    db,
+                    user_id=pet.user_id,
+                    pet_id=pet.id,
+                    min_priority=75,
+                ):
+                    continue
                 brand = plan.food_brand or "Ração"
                 pend_id = (
                     f"petmol-food-{plan.pet_id}-"
@@ -1037,7 +1340,7 @@ def send_food_reminder_pushes() -> None:
                     title=title,
                     message=body,
                     deep_link=deep_link,
-                    priority=60,
+                    priority=priority,
                 )
 
                 payload = {
@@ -1203,234 +1506,19 @@ async def send_notification(
     request: SendNotificationRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Envia push para o dispositivo assinado do usuário atual."""
-    subscriptions = _load_subscriptions()
-    sub = subscriptions.get(str(current_user.id))
-    if not sub:
-        return {"success": False, "reason": "no_subscription"}
-    payload = {
-        "title": request.title,
-        "body": request.body,
-        "icon": request.icon or "/icons/icon-192x192.png",
-        "badge": "/icons/badge-mono.png",
-
-        "image": "/brand/notification-banner.png",
-        "tag": request.tag or "petmol",
-        "data": {"url": request.url or "/home"},
-        "requireInteraction": True,
-        "autoCloseMs": 0,
+    """Desativado: envio genérico fora do modelo oficial de 4 camadas."""
+    return {
+        "success": False,
+        "reason": "disabled_use_official_4_layer_jobs",
+        "user_id": str(current_user.id),
     }
-    ok = _send_push(sub, payload)
-    if not ok:
-        subscriptions.pop(str(current_user.id), None)
-        _save_subscriptions(subscriptions)
-    return {"success": ok}
 
 
 @router.post("/send-on-open")
 async def send_on_open(current_user: User = Depends(get_current_user)):
-    """Chamado quando o usuário abre o app. Envia push para cada item VENCIDO (não apenas hoje).
-    Cooldown de 1 hora por usuário para evitar spam.
-    Retorna {"sent": N} com quantos pushs foram disparados."""
-    from datetime import timezone
-    import re as _re
-    import unicodedata as _ud
-
-    subscriptions = _load_subscriptions()
-    sub = subscriptions.get(str(current_user.id))
-    if not sub:
-        return {"sent": 0, "reason": "no_subscription"}
-
-    # ── Cooldown: 1 h entre chamadas do mesmo usuário ────────────────────────
-    cooldown_key = f"_on_open_last_{current_user.id}"
-    subs_meta = _load_subscriptions()
-    last_str = subs_meta.get(cooldown_key)
-    brt = timezone(timedelta(hours=-3))
-    now = datetime.now(brt)
-    if last_str:
-        try:
-            last_dt = datetime.fromisoformat(last_str)
-            if (now - last_dt).total_seconds() < 3600:
-                return {"sent": 0, "reason": "cooldown"}
-        except Exception:
-            pass
-    # NÃO salvar cooldown ainda — só salva se realmente enviar
-
-    today = now.date()
-    payloads: list[dict] = []
-
-    try:
-        db = SessionLocal()
-        try:
-            from ..pets.models import Pet
-            from ..pets.vaccine_models import VaccineRecord
-            from ..pets.parasite_models import ParasiteControlRecord
-            from ..pets.grooming_models import GroomingRecord
-
-            pets = db.query(Pet).filter(Pet.user_id == current_user.id).all()
-
-            for pet in pets:
-                # ── Vacinas vencidas ──────────────────────────────────────────
-                def _vkey(vr) -> str:
-                    if getattr(vr, "vaccine_code", None):
-                        return vr.vaccine_code
-                    n = (getattr(vr, "vaccine_name", None) or getattr(vr, "vaccine_type", None) or "").lower().strip()
-                    n = "".join(c for c in _ud.normalize("NFD", n) if _ud.category(c) != "Mn")
-                    n = _re.sub(r"\(.*?\)", "", n)
-                    n = _re.sub(r"\b(anual|annual|booster|reforco|dose\s*\d+|\d+[a]\s*dose)\b", "", n)
-                    n = _re.sub(r"[-\u2013\u2014]", " ", n)
-                    return _re.sub(r"\s+", " ", n).strip()
-
-                vaccines = db.query(VaccineRecord).filter(
-                    VaccineRecord.pet_id == pet.id,
-                    VaccineRecord.deleted == False,
-                ).all()
-                _latest_v: dict = {}
-                for v in vaccines:
-                    k = _vkey(v)
-                    prev = _latest_v.get(k)
-                    if not prev or v.applied_date > prev.applied_date:
-                        _latest_v[k] = v
-                for k, v in _latest_v.items():
-                    if not v.next_dose_date:
-                        continue
-                    due = v.next_dose_date.astimezone(brt).date() if hasattr(v.next_dose_date, "astimezone") else v.next_dose_date.date()
-                    days_late = (today - due).days
-                    if days_late <= 0:
-                        continue  # não vencido
-                    from urllib.parse import quote as _q
-                    payloads.append({
-                        "title": f"💉 {pet.name} — vacina em atraso",
-                        "body": f"{v.vaccine_name} venceu há {days_late} dia{'s' if days_late != 1 else ''}",
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-
-                        "image": "/brand/notification-banner.png",
-                        "tag": f"petmol-open-vaccine-{pet.id}-{k}",
-                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}&itemName={_q(v.vaccine_name or '')}"},
-                        "requireInteraction": True,
-                        "autoCloseMs": 0,
-                    })
-
-                # ── Antiparasitários vencidos ─────────────────────────────────
-                parasite_labels = {
-                    "flea_tick": "Antipulgas",
-                    "dewormer": "Vermífugo",
-                    "collar": "Coleira antiparasitária",
-                    "heartworm": "Antiparasitário cardíaco",
-                    "leishmaniasis": "Leishmaniose",
-                }
-                parasites = db.query(ParasiteControlRecord).filter(
-                    ParasiteControlRecord.pet_id == pet.id,
-                    ParasiteControlRecord.deleted == False,
-                ).all()
-                _latest_p: dict = {}
-                for c in parasites:
-                    k = (c.type or "").lower().strip()
-                    prev = _latest_p.get(k)
-                    if not prev or c.date_applied > prev.date_applied:
-                        _latest_p[k] = c
-                for k, c in _latest_p.items():
-                    if not c.next_due_date:
-                        continue
-                    due = c.next_due_date.astimezone(brt).date() if hasattr(c.next_due_date, "astimezone") else c.next_due_date.date()
-                    days_late = (today - due).days
-                    if days_late <= 0:
-                        continue
-                    label = parasite_labels.get(k) or c.product_name or k
-                    from urllib.parse import quote as _q2
-                    _pmodal = _parasite_modal_for_type(k)
-                    payloads.append({
-                        "title": f"🛡️ {pet.name} — {label.lower()} em atraso",
-                        "body": f"Venceu há {days_late} dia{'s' if days_late != 1 else ''}",
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-
-                        "image": "/brand/notification-banner.png",
-                        "tag": f"petmol-open-parasite-{pet.id}-{k}",
-                        "data": {"url": f"/home?modal={_pmodal}&petId={pet.id}&itemName={_q2(label)}"},
-                        "requireInteraction": True,
-                        "autoCloseMs": 0,
-                    })
-
-                # ── Grooming vencido ──────────────────────────────────────────
-                groom_labels = {
-                    "bath": "Banho",
-                    "grooming": "Tosa",
-                    "bath_grooming": "Banho & Tosa",
-                }
-                groomings = db.query(GroomingRecord).filter(
-                    GroomingRecord.pet_id == pet.id,
-                    GroomingRecord.deleted == False,
-                    GroomingRecord.reminder_enabled == True,
-                ).all()
-                _latest_g: dict = {}
-                for r in groomings:
-                    gk = (r.type or "").lower().strip()
-                    prev = _latest_g.get(gk)
-                    if not prev or r.date > prev.date:
-                        _latest_g[gk] = r
-                for gk, r in _latest_g.items():
-                    if not r.next_recommended_date:
-                        continue
-                    due = r.next_recommended_date.astimezone(brt).date() if hasattr(r.next_recommended_date, "astimezone") else r.next_recommended_date.date()
-                    days_late = (today - due).days
-                    if days_late <= 0:
-                        continue
-                    label = groom_labels.get(gk, gk)
-                    from urllib.parse import quote as _q3
-                    payloads.append({
-                        "title": f"🛁 {pet.name} — {label.lower()} em atraso",
-                        "body": f"Está em atraso há {days_late} dia{'s' if days_late != 1 else ''}",
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-                        "image": "/brand/notification-banner.png",
-                        "tag": f"petmol-open-grooming-{pet.id}-{gk}",
-                        "data": {"url": f"/home?modal=grooming&petId={pet.id}&itemName={_q3(label)}"},
-                        "requireInteraction": True,
-                        "autoCloseMs": 0,
-                    })
-
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"send_on_open erro: {e}")
-        return {"sent": 0, "reason": "error"}
-
-    if not payloads:
-        return {"sent": 0, "reason": "nothing_overdue", "overdue": []}
-
-    overdue_items = [
-        {"title": p["title"], "body": p["body"], "url": p["data"]["url"]}
-        for p in payloads
-    ]
-
-    sent = 0
-    for payload in payloads:
-        ok = _send_push(sub, payload)
-        if not ok:
-            subscriptions.pop(str(current_user.id), None)
-            _save_subscriptions(subscriptions)
-            break
-        sent += 1
-        logger.warning(f"[on_open] Push enviado: {payload['tag']}")
-        # Mirror as in-app pendency (best-effort — user always sees overdue items)
-        tag = payload.get("tag", "")
-        url = (payload.get("data") or {}).get("url", "/home")
-        ptype = "vaccine" if "vaccine" in tag else "parasite" if "parasite" in tag else "grooming"
-        _upsert_pend(
-            user_id=current_user.id,
-            pet_id=None,
-            pend_id=tag,
-            type_=ptype,
-            title=payload.get("title", "Cuidado do pet"),
-            message=payload.get("body", ""),
-            deep_link=url,
-            priority=75,  # on-open = always overdue → high priority
-        )
-
-    # Salva cooldown só se processou (com ou sem pushes enviados)
-    subs_meta[cooldown_key] = now.isoformat()
-    _save_subscriptions(subs_meta)
-
-    return {"sent": sent, "overdue": overdue_items}
+    """Deprecated: overdue controls are now dispatched only by the 20:00 daily job."""
+    return {
+        "sent": 0,
+        "reason": "disabled_use_daily_20h_job",
+        "user_id": str(current_user.id),
+    }

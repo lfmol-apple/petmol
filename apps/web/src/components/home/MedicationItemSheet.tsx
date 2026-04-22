@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { API_BASE_URL } from '@/lib/api';
+import { getToken } from '@/lib/auth-token';
 import { parsePetEventExtraData, type PetEventRecord } from '@/lib/petEvents';
 import { ModalPortal } from '@/components/ModalPortal';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
@@ -116,6 +117,12 @@ export function MedicationItemSheet({
   const [actionDate, setActionDate] = useState(localTodayISO());
   const [actionNotes, setActionNotes] = useState('');
 
+  useEffect(() => {
+    void onRefresh();
+    // onRefresh is intentionally excluded to avoid effect loops when parent recreates callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [petId]);
+
   const medications = petEvents.filter(
     ev => ev.type === 'medicacao' || ev.type === 'medication',
   );
@@ -209,7 +216,7 @@ export function MedicationItemSheet({
     if (!form.title.trim()) return;
     setSaving(true);
     try {
-      const token = localStorage.getItem('petmol_token');
+      const token = getToken();
       if (!token) {
         showToast('⚠️ Sessão expirada. Faça login novamente.');
         return;
@@ -283,8 +290,11 @@ export function MedicationItemSheet({
   }
 
   async function handleApplyDose(evId: string, action: 'apply' | 'skip' | 'unskip' | 'remove', date: string) {
-    const token = localStorage.getItem('petmol_token');
-    if (!token) return;
+    const token = getToken();
+    if (!token) {
+      showToast('⚠️ Sessão expirada. Faça login novamente.');
+      return;
+    }
     setSaving(true);
     setApplyingId(evId);
     try {
@@ -319,12 +329,20 @@ export function MedicationItemSheet({
   }
 
   async function handleDelete(evId: string) {
-    const token = localStorage.getItem('petmol_token');
+    const token = getToken();
+    if (!token) {
+      showToast('⚠️ Sessão expirada. Faça login novamente.');
+      return false;
+    }
     try {
-      await fetch(`${API_BASE_URL}/events/${evId}`, {
+      const res = await fetch(`${API_BASE_URL}/events/${evId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        showToast(`❌ Erro ao excluir registro (${res.status}).`);
+        return false;
+      }
       showToast('🗑️ Registro removido');
       await onRefresh();
       return true;
@@ -390,8 +408,14 @@ export function MedicationItemSheet({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <h2 className="text-[16px] font-bold text-gray-900 leading-tight whitespace-nowrap">Medicação</h2>
-                {petName && <span className="text-sm text-gray-400 truncate">· {petName}</span>}
               </div>
+              {petName && (
+                <p className="mt-1">
+                  <span className="inline-flex max-w-full items-center px-2.5 py-1 rounded-full bg-white text-purple-800 text-xs font-black tracking-[0.04em] shadow-sm border border-purple-100 whitespace-normal break-all leading-tight">
+                    Pet: {petName}
+                  </span>
+                </p>
+              )}
               {mode === 'view' && (
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotCls}`} />

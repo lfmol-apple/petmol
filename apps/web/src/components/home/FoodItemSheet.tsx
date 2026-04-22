@@ -20,6 +20,19 @@ export interface FoodItemSheetProps {
   initialMode?: 'view' | 'buy';
 }
 
+type PreferredStore = 'petz' | 'petlove' | 'cobasi';
+
+interface PendingPurchase {
+  petId: string;
+  partner: PreferredStore;
+  timestamp: number;
+  brand: string;
+}
+
+const PREFERRED_STORE_KEY = 'petmol_preferred_store';
+
+const STORE_PARTNERS: PreferredStore[] = ['petz', 'petlove', 'cobasi'];
+
 export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSheetProps) {
   const [mode, setMode] = useState<'view' | 'buy'>(initialMode ?? 'view');
   const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
@@ -35,6 +48,8 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
     daysLeft: null,
     restockDate: null,
   });
+  const [preferredStore, setPreferredStore] = useState<PreferredStore | null>(null);
+  const [pendingPurchase, setPendingPurchase] = useState<PendingPurchase | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const hasFood = !foodState.showForm && foodState.commerceStatus !== null;
   const shouldShowCommerceActions = hasFood;
@@ -116,7 +131,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Load food brand for contextual buy mode
+  // Load food brand + preferred store; detect pending purchase
   useEffect(() => {
     try {
       const raw = localStorage.getItem(`petmol_food_control_${pet.pet_id}`);
@@ -129,7 +144,39 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
         if (brand) setFoodBrand(brand);
       }
     } catch { /* silent */ }
+
+    try {
+      const stored = localStorage.getItem(PREFERRED_STORE_KEY) as PreferredStore | null;
+      if (stored && STORE_PARTNERS.includes(stored)) setPreferredStore(stored);
+    } catch { /* silent */ }
+
+    try {
+      const pendingRaw = localStorage.getItem(`petmol_pending_purchase_${pet.pet_id}`);
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw) as PendingPurchase;
+        const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
+        if (Date.now() - pending.timestamp < TWENTY_FOUR_H) {
+          setPendingPurchase(pending);
+        } else {
+          localStorage.removeItem(`petmol_pending_purchase_${pet.pet_id}`);
+        }
+      }
+    } catch { /* silent */ }
   }, [pet.pet_id]);
+
+  const handlePartnerClick = (partnerId: PreferredStore) => {
+    try { localStorage.setItem(PREFERRED_STORE_KEY, partnerId); } catch { /* silent */ }
+    try {
+      localStorage.setItem(
+        `petmol_pending_purchase_${pet.pet_id}`,
+        JSON.stringify({ petId: pet.pet_id, partner: partnerId, timestamp: Date.now(), brand: foodBrand }),
+      );
+    } catch { /* silent */ }
+    setPreferredStore(partnerId);
+    trackPartnerClicked({ source: 'food_sheet', partner: partnerId, pet_id: pet.pet_id, control_type: 'food' });
+    const url = buildFoodHandoffUrl(foodBrand || '', pet.pet_id, partnerId as HomeShoppingPartnerId);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   // Prevent body scroll while open
   useEffect(() => {
@@ -154,15 +201,19 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 flex-shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+        <div className="flex items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-3 flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-amber-700">
               <path d="M3 13h18"/><path d="M5 13a7 7 0 0014 0"/><path d="M8 7V5M12 7V4M16 7V5"/>
             </svg>
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-gray-900 leading-tight">Alimentação</h2>
-            <p className="text-xs text-gray-500 leading-tight truncate">{pet.pet_name}</p>
+            <p className="mt-1">
+              <span className="inline-flex max-w-full items-center rounded-full border border-amber-100 bg-white px-2.5 py-1 text-xs font-black leading-tight tracking-[0.04em] text-amber-800 shadow-sm whitespace-normal break-all">
+                Pet: {pet.pet_name}
+              </span>
+            </p>
           </div>
           <button
             onClick={mode === 'buy' ? () => setMode('view') : onClose}
@@ -242,6 +293,39 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
                 </div>
               )}
 
+              {/* Pending purchase banner — shown when user returned from a store in the last 24h */}
+              {pendingPurchase && (
+                <div className="mx-4 mb-1 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
+                  <p className="text-sm font-bold text-amber-900">
+                    Você comprou a ração de {pet.pet_name}?
+                  </p>
+                  <p className="text-xs text-amber-700 leading-snug">
+                    Da última vez você foi para a {HOME_SHOPPING_PARTNERS.find(p => p.id === pendingPurchase.partner)?.name ?? pendingPurchase.partner}. Chegou a comprar?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setPendingPurchase(null);
+                        try { localStorage.removeItem(`petmol_pending_purchase_${pet.pet_id}`); } catch { /* silent */ }
+                        handleRestock();
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-bold active:scale-95 transition-transform"
+                    >
+                      Sim, comprei ✅
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPendingPurchase(null);
+                        try { localStorage.removeItem(`petmol_pending_purchase_${pet.pet_id}`); } catch { /* silent */ }
+                      }}
+                      className="flex-1 py-2.5 rounded-xl bg-white border border-amber-300 text-sm font-semibold text-amber-800 active:scale-95 transition-transform"
+                    >
+                      Ainda não
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Action buttons */}
               {shouldShowCommerceActions && (
                 <div className="px-4 pb-6 -mt-2 flex flex-col gap-2">
@@ -264,7 +348,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
                       </div>
                       <div className="text-left">
                         <p className="text-sm font-bold text-green-900">Comprei</p>
-                        <p className="text-xs text-green-700/70">Registrar reposição e reiniciar ciclo</p>
+                        <p className="text-xs text-green-700/70">Anotar que a ração chegou</p>
                       </div>
                     </div>
                     {restocking
@@ -282,8 +366,8 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
                         🛒
                       </div>
                       <div className="text-left">
-                        <p className="text-sm font-bold text-blue-900">Preciso comprar</p>
-                        <p className="text-xs text-blue-700/70">Ver onde encontrar ração</p>
+                        <p className="text-sm font-bold text-blue-900">Comprar agora →</p>
+                        <p className="text-xs text-blue-700/70">Ir direto para a loja</p>
                       </div>
                     </div>
                     <span className="text-blue-400 text-lg font-bold">›</span>
@@ -335,56 +419,103 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
           ) : (
             /* ── BUY MODE ─────────────────────────────────────────────────── */
             <div className="p-5 pb-8 space-y-4">
-              <h3 className="text-base font-bold text-gray-900">Onde comprar</h3>
-              <p className="text-sm text-gray-500">
-                Escolha onde encontrar ração{foodBrand ? ` (${foodBrand})` : ''}:
-              </p>
+              <div>
+                <p className="text-base font-bold text-gray-900">
+                  {foodBrand ? `Comprar ${foodBrand}` : `Comprar ração para ${pet.pet_name}`}
+                </p>
+                {foodBrand && (
+                  <p className="text-xs text-gray-400 mt-0.5">Ração para {pet.pet_name}</p>
+                )}
+              </div>
 
-              <div className="space-y-3">
-                {HOME_SHOPPING_PARTNERS.filter(
-                  (p) => p.id === 'petz' || p.id === 'cobasi' || p.id === 'petlove',
-                ).map((partner) => {
-                  const url = buildFoodHandoffUrl(
-                    foodBrand || '',
-                    pet.pet_id,
-                    partner.id as HomeShoppingPartnerId,
-                  );
-                  return (
+              {preferredStore ? (
+                /* Has preference — 1 dominant button */
+                <>
+                  {(() => {
+                    const partner = HOME_SHOPPING_PARTNERS.find(p => p.id === preferredStore);
+                    if (!partner) return null;
+                    return (
+                      <button
+                        onClick={() => handlePartnerClick(preferredStore)}
+                        className="w-full flex items-center gap-4 p-5 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-lg active:scale-[0.98] transition-all text-left"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={partner.logoSrc}
+                          alt={partner.logoAlt}
+                          className="w-12 h-12 rounded-xl object-contain bg-white p-1.5 flex-shrink-0 shadow-sm"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-white text-base leading-tight">Comprar na {partner.name} →</p>
+                        </div>
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={() => setPreferredStore(null)}
+                    className="w-full text-center text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
+                  >
+                    compro em outro lugar ›
+                  </button>
+                </>
+              ) : (
+                /* No preference — Petz as default + Cobasi/Petlove as text links */
+                <>
+                  {(() => {
+                    const petz = HOME_SHOPPING_PARTNERS.find(p => p.id === 'petz');
+                    if (!petz) return null;
+                    return (
+                      <button
+                        onClick={() => handlePartnerClick('petz')}
+                        className="w-full flex items-center gap-4 p-5 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-lg active:scale-[0.98] transition-all text-left"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={petz.logoSrc}
+                          alt={petz.logoAlt}
+                          className="w-12 h-12 rounded-xl object-contain bg-white p-1.5 flex-shrink-0 shadow-sm"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-white text-base leading-tight">Comprar na Petz →</p>
+                        </div>
+                      </button>
+                    );
+                  })()}
+                  <div className="flex items-center justify-center gap-5">
+                    {(['cobasi', 'petlove'] as const).map((id) => {
+                      const p = HOME_SHOPPING_PARTNERS.find(partner => partner.id === id);
+                      if (!p) return null;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => handlePartnerClick(id)}
+                          className="text-xs text-gray-400 hover:text-gray-700 transition-colors underline underline-offset-2 decoration-gray-300"
+                        >
+                          {p.name}
+                        </button>
+                      );
+                    })}
                     <button
-                      key={partner.id}
                       onClick={() => {
-                        trackPartnerClicked({
-                          source: 'food_sheet',
-                          partner: partner.id,
-                          pet_id: pet.pet_id,
-                          control_type: 'food',
-                        });
+                        trackPartnerClicked({ source: 'food_sheet', partner: 'amazon', pet_id: pet.pet_id, control_type: 'food' });
+                        const url = buildFoodHandoffUrl(foodBrand || '', pet.pet_id, 'amazon');
                         window.open(url, '_blank', 'noopener,noreferrer');
                       }}
-                      className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md active:scale-[0.98] transition-all text-left"
+                      className="text-xs text-gray-400 hover:text-gray-700 transition-colors underline underline-offset-2 decoration-gray-300"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={partner.logoSrc}
-                        alt={partner.logoAlt}
-                        className="w-10 h-10 rounded-xl object-contain bg-gray-50 p-1 flex-shrink-0"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                      />
-                      <div className="flex-1">
-                        <p className="font-bold text-gray-900 text-base">{partner.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{partner.description}</p>
-                      </div>
-                      <span className="text-gray-400 text-lg">›</span>
+                      outro lugar
                     </button>
-                  );
-                })}
-              </div>
+                  </div>
+                </>
+              )}
 
               <button
                 onClick={() => setMode('view')}
                 className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200"
               >
-                Voltar para controle
+                ← Voltar
               </button>
             </div>
           )}

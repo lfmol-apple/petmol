@@ -23,6 +23,9 @@ export function resolveTopAttentionDestination(target: CanonicalEventActionTarge
   if (target === 'health/eventos') {
     return { kind: 'health-modal', healthModalMode: 'health', healthActiveTab: 'eventos' };
   }
+  if (target === 'health/vaccines') {
+    return { kind: 'sheet', sheet: 'vaccines_quick' };
+  }
 
   const modal = resolveCanonicalActionTargetModal(target);
   return resolveHomeDeepLinkDestination(modal, null);
@@ -52,7 +55,7 @@ export type HomeSurfaceResolution =
     }
   | {
       kind: 'sheet';
-      sheet: 'grooming' | 'food' | 'vaccines' | 'vermifugo' | 'antipulgas' | 'coleira' | 'medication';
+      sheet: 'grooming' | 'food' | 'vaccines' | 'vaccines_quick' | 'vermifugo' | 'antipulgas' | 'coleira' | 'medication';
     }
   | {
       kind: 'edit-pet';
