@@ -346,7 +346,13 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           const plan = json.plan;
           if (plan?.enabled) {
             const loadedItems = normalizeLoadedItems(plan);
-            setReminderDays(String(plan.manual_reminder_days_before ?? 3));
+            setReminderDays(
+              String(
+                plan.no_consumption_control
+                  ? (plan.manual_reminder_days_before ?? 3)
+                  : (plan.safety_buffer_days ?? plan.manual_reminder_days_before ?? 3),
+              ),
+            );
             setReminderTime(plan.reminder_time ?? '09:00');
             setItems(loadedItems);
             // Capture API-calculated estimate — no local recalculation
@@ -467,7 +473,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
         package_size_kg: packageSizeKg,
         daily_amount_g: dailyAmountG,
         last_refill_date: primaryRequestItem?.last_refill_date ?? null,
-        safety_buffer_days: 3,
+        safety_buffer_days: parseInt(reminderDays, 10) || 3,
         mode: 'kibble',
         enabled: true,
         notes: buildNotes(requestItems),

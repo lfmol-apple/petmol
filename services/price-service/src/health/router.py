@@ -284,11 +284,19 @@ def _calculate_feeding_schedule_dates(
             next_reminder = last_refill_date
         return next_purchase_date, next_reminder
 
+    effective_buffer_days = (
+        int(manual_reminder_days_before)
+        if manual_reminder_days_before is not None
+        else int(safety_buffer_days if safety_buffer_days is not None else 3)
+    )
+    if effective_buffer_days < 0:
+        effective_buffer_days = 0
+
     estimated_end, next_reminder, _ = calculate_food_stock_estimates(
         package_size_kg=package_size_kg,
         daily_amount_g=daily_amount_g,
         last_refill_date=last_refill_date,
-        safety_buffer_days=safety_buffer_days,
+        safety_buffer_days=effective_buffer_days,
         enabled=enabled,
         no_consumption_control=no_consumption_control,
     )
