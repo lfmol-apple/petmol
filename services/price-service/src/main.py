@@ -311,7 +311,6 @@ def start_push_scheduler():
         from .notifications import (
             send_medication_pushes,
             send_care_pushes,
-            send_care_urgent_pushes,
             send_monthly_docs_reminder,
             send_no_control_pushes,
             send_food_reminder_pushes,
@@ -320,10 +319,8 @@ def start_push_scheduler():
         scheduler = BackgroundScheduler()
         # Camada 1 (crítico): medicação continua no horário exato configurado
         scheduler.add_job(send_medication_pushes, "interval", minutes=1, id="medication_pushes")
-        # Camada 1 (crítico): controles vencidos consolidados às 20h BRT
+        # Camada simples para vacinas/parasitas/grooming no mesmo padrão operacional da medicação
         scheduler.add_job(send_care_pushes, "interval", minutes=1, id="care_pushes")
-        # Camada 2 (urgente): controles próximos do vencimento, 1 push/pet/dia (filtro interno)
-        scheduler.add_job(send_care_urgent_pushes, "interval", minutes=1, id="care_urgent_pushes")
         # Camada 4 (revisão mensal): dia 12 às 20h BRT; somente sem crítico/urgente ativo
         scheduler.add_job(send_monthly_docs_reminder, "interval", minutes=1, id="monthly_docs_reminder")
         # Camada 3 (progressivo): pets sem controles recentes — segunda-feira 20h BRT

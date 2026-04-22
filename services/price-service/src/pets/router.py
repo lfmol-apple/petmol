@@ -220,6 +220,8 @@ def create_vaccine(
         dose_number=payload.dose_number,
         applied_date=payload.applied_date,
         next_dose_date=payload.next_dose_date,
+        alert_days_before=payload.alert_days_before,
+        reminder_time=payload.reminder_time,
         notes=payload.notes,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),

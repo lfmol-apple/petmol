@@ -242,6 +242,7 @@ export function useGroomingManagement({
         const updatedRecord: Partial<GroomingRecord> = {
           type: groomingFormData.type,
           date: groomingFormData.date,
+          scheduled_time: groomingFormData.scheduled_time || undefined,
           location: groomingFormData.location,
           location_address: groomingFormData.location_address,
           location_phone: groomingFormData.location_phone,
@@ -267,6 +268,7 @@ export function useGroomingManagement({
           pet_id: pet.pet_id,
           type: groomingFormData.type,
           date: groomingFormData.date,
+          scheduled_time: groomingFormData.scheduled_time || undefined,
           location: groomingFormData.location,
           location_address: groomingFormData.location_address,
           location_phone: groomingFormData.location_phone,
