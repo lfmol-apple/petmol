@@ -196,17 +196,19 @@ if [ "$RESTART_WEB" = true ]; then
 
     log "Building Next.js..."
     npm run web:build
-
-    # ── Copy static assets into standalone build ──────────────────────────
-    # Next.js standalone mode requires public/ and .next/static/ to be
-    # manually copied next to the server.js entry point.
-    log "Copying static assets to standalone..."
-    STANDALONE="$APP_DIR/apps/web/.next/standalone/apps/web"
-    mkdir -p "$STANDALONE/.next"
-    cp -r "$APP_DIR/apps/web/public"       "$STANDALONE/"
-    cp -r "$APP_DIR/apps/web/.next/static" "$STANDALONE/.next/"
-    # ──────────────────────────────────────────────────────────────────────
 fi
+
+# ── ALWAYS copy static assets to standalone (critical for CSS/fonts) ────────
+# Next.js standalone mode requires public/ and .next/static/ to be
+# manually copied next to the server.js entry point, even if no rebuild occurred.
+# This ensures CSS, fonts, and other assets are available when the app restarts.
+log "Syncing static assets to standalone..."
+STANDALONE="$APP_DIR/apps/web/.next/standalone/apps/web"
+mkdir -p "$STANDALONE/.next"
+rm -rf "$STANDALONE/.next/static" "$STANDALONE/public"
+cp -r "$APP_DIR/apps/web/public"       "$STANDALONE/" 2>/dev/null || true
+cp -r "$APP_DIR/apps/web/.next/static" "$STANDALONE/.next/" 2>/dev/null || true
+# ──────────────────────────────────────────────────────────────────────────
 
 # Fix permissions again after install
 chown -R petmol:petmol "$APP_DIR" 2>/dev/null || true
