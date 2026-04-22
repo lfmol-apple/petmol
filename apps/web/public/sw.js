@@ -90,25 +90,34 @@ function normalizePushPayload(payload) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const url = event.notification.data?.url || '/home';
+  const rawUrl = event.notification.data?.url || '/home';
+  const targetUrl = normalizeNotificationClickUrl(rawUrl);
 
   event.waitUntil(
     clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
         for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.focus();
-            client.navigate(url);
-            return;
+          if (client.url.includes(self.location.origin) && 'focus' in client && 'navigate' in client) {
+            return client.focus().then(() => client.navigate(targetUrl));
           }
         }
         if (clients.openWindow) {
-          return clients.openWindow(url);
+          return clients.openWindow(targetUrl);
         }
       })
   );
 });
+
+function normalizeNotificationClickUrl(rawUrl) {
+  try {
+    const normalized = new URL(String(rawUrl || '/home'), self.location.origin);
+    if (normalized.origin !== self.location.origin) return `${self.location.origin}/home`;
+    return normalized.toString();
+  } catch {
+    return `${self.location.origin}/home`;
+  }
+}
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));

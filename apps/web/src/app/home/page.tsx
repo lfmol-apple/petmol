@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useI18n } from '@/lib/I18nContext';
 
 import { EditPetModal } from '@/components/EditPetModal';
@@ -117,8 +117,8 @@ const getPhotoUrl = (photoPath: string | undefined | null, petId?: string, photo
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [forceCheckin, setForceCheckin] = useState(false);
-  const deepLinkHandledRef = useRef(false);
   // Ref que sempre aponta para a função de refresh mais recente (evita closure stale no event listener)
   const refreshAllRef = useRef<() => void>(() => {});
 
@@ -1060,12 +1060,10 @@ export default function HomePage() {
   // URL pattern: /home?modal=vaccines&petId=<id>
   // Suportado: vaccines | parasites | medication | eventos | grooming | health | food
   useEffect(() => {
-    if (deepLinkHandledRef.current) return;
     if (!pets.length) return; // aguarda os pets carregarem
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
     const modal = params.get('modal');
     if (!modal) return;
-    deepLinkHandledRef.current = true;
 
     const requestedPetId = params.get('petId');
     const resolvedPetId = requestedPetId && pets.some((pet) => pet.pet_id === requestedPetId)
@@ -1099,7 +1097,7 @@ export default function HomePage() {
 
     // limpa query string sem recarregar a página
     window.history.replaceState({}, '', '/home');
-  }, [applyHomeSurfaceResolution, pets.length, selectedPetId]);
+  }, [applyHomeSurfaceResolution, pets, searchParams, selectedPetId]);
 
 
   // Fetch documents when vet history modal opens

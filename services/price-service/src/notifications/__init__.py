@@ -232,9 +232,28 @@ def send_checkin_pushes() -> None:
 
 def _parse_hhmm(value: str) -> Optional[Tuple[int, int]]:
     try:
-        hh, mm = str(value).strip().split(":")
-        hour = int(hh)
-        minute = int(mm)
+        if value is None:
+            return None
+
+        # Python/SQL TIME objects (e.g. datetime.time) arrive with hour/minute attrs.
+        if hasattr(value, "hour") and hasattr(value, "minute"):
+            hour = int(getattr(value, "hour"))
+            minute = int(getattr(value, "minute"))
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                return hour, minute
+            return None
+
+        raw = str(value).strip()
+        if not raw:
+            return None
+
+        # Accept HH:MM and HH:MM:SS (common DB TIME serialization).
+        parts = raw.split(":")
+        if len(parts) < 2:
+            return None
+
+        hour = int(parts[0])
+        minute = int(parts[1])
         if 0 <= hour <= 23 and 0 <= minute <= 59:
             return hour, minute
     except Exception:
