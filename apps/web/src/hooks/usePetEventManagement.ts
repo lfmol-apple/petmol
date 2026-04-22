@@ -157,15 +157,15 @@ export function usePetEventManagement({
       if (extraData.treatment_days) treatmentDays = String(extraData.treatment_days);
       if (Array.isArray(extraData.reminder_times) && extraData.reminder_times.length > 0) {
         reminderTimes = extraData.reminder_times;
+      } else if (extraData.reminder_time) {
+        reminderTimes = [extraData.reminder_time];
       }
-      // Preservar campos que não são editáveis no formulário
-      const preserved: Record<string, unknown> = {};
-      if (Array.isArray(extraData.applied_dates) && extraData.applied_dates.length > 0)
-        preserved.applied_dates = extraData.applied_dates;
-      if (Array.isArray(extraData.skipped_dates) && extraData.skipped_dates.length > 0)
-        preserved.skipped_dates = extraData.skipped_dates;
-      if (extraData.dose_notes && typeof extraData.dose_notes === 'object')
-        preserved.dose_notes = extraData.dose_notes;
+      // Preservar campos não editáveis no formulário para evitar perda de histórico ao editar.
+      const preserved: Record<string, unknown> = { ...extraData };
+      delete preserved.reminder_time;
+      delete preserved.reminder_times;
+      delete preserved.frequency;
+      delete preserved.treatment_days;
       if (Object.keys(preserved).length > 0) preservedExtra = preserved;
     } catch {}
 

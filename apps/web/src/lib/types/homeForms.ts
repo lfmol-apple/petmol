@@ -53,6 +53,7 @@ export interface ParasiteFormData {
   notes: string;
   collar_expiry_date: string;
   alert_days_before: number;
+  reminder_time: string;
   purchase_location: string;
   reminder_enabled: boolean;
 }

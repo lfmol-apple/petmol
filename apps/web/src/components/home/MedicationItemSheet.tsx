@@ -180,13 +180,16 @@ export function MedicationItemSheet({
     const { dose, route, frequency, cleanNotes } = parseMedNotes(ev.notes || '');
     let treatmentDays = '';
     let reminderTimes = ['08:00'];
+    let reminderTime = '08:00';
     let reminderDate = '';
     const nextDue = ev.next_due_date ? ev.next_due_date.split('T')[0] : '';
     try {
       const ex = parsePetEventExtraData(ev.extra_data);
+      if (typeof ex.reminder_time === 'string' && ex.reminder_time) reminderTime = ex.reminder_time;
       if (ex.treatment_days) treatmentDays = String(ex.treatment_days);
       if (Array.isArray(ex.reminder_times) && (ex.reminder_times as string[]).length > 0)
         reminderTimes = ex.reminder_times as string[];
+      else reminderTimes = [reminderTime];
     } catch {}
     if (nextDue) reminderDate = nextDue;
 
@@ -256,14 +259,31 @@ export function MedicationItemSheet({
             try { extra = { ...parsePetEventExtraData(existing.extra_data) }; } catch { /* silent */ }
           }
         }
+        const normalizedTimes = form.reminder_times.filter(Boolean);
         extra.frequency = form.frequency;
-        if (form.reminder_times.length > 0) {
-          extra.reminder_times = form.reminder_times;
-          extra.reminder_time = form.reminder_times[0];
+        if (normalizedTimes.length > 0) {
+          extra.reminder_times = normalizedTimes;
+          extra.reminder_time = normalizedTimes[0];
+        } else {
+          extra.reminder_times = ['08:00'];
+          extra.reminder_time = '08:00';
         }
         if (form.treatment_days) extra.treatment_days = parseInt(form.treatment_days);
         payload.extra_data = JSON.stringify(extra);
         if (form.reminder_date) payload.next_due_date = new Date(form.reminder_date + 'T00:00:00').toISOString();
+      } else if (editingId) {
+        // Ao desativar lembretes, limpar rastros de agendamento para não reativar silenciosamente no reload.
+        let extra: Record<string, unknown> = {};
+        const existing = medications.find(ev => ev.id === editingId);
+        if (existing?.extra_data) {
+          try { extra = { ...parsePetEventExtraData(existing.extra_data) }; } catch { /* silent */ }
+        }
+        delete extra.reminder_time;
+        delete extra.reminder_times;
+        delete extra.frequency;
+        delete extra.treatment_days;
+        payload.next_due_date = null;
+        payload.extra_data = Object.keys(extra).length > 0 ? JSON.stringify(extra) : null;
       }
 
       const url = editingId
@@ -387,13 +407,13 @@ export function MedicationItemSheet({
 
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-x-hidden overscroll-x-none touch-pan-y p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden animate-scaleIn"
+        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-x-hidden overflow-y-hidden animate-scaleIn"
         style={{ maxHeight: '92dvh' }}
         onClick={e => e.stopPropagation()}
       >
@@ -439,7 +459,7 @@ export function MedicationItemSheet({
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 overscroll-contain">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 overscroll-contain">
 
           {/* ── VIEW MODE ─────────────────────────────────────────────────── */}
           {mode === 'view' && (

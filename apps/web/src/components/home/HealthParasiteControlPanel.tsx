@@ -262,19 +262,27 @@ export function HealthParasiteControlPanel({
                 </div>
               </div>
               {parasiteFormData.reminder_enabled && (
-                <select
-                  value={parasiteFormData.alert_days_before || 7}
-                  onChange={(e) => setParasiteFormData((prev) => ({ ...prev, alert_days_before: parseInt(e.target.value, 10) }))}
-                  className="w-full p-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-[#0056D2] bg-white text-sm"
-                >
-                  <option value={3}>3 dias antes (compra local)</option>
-                  <option value={5}>5 dias antes</option>
-                  <option value={7}>7 dias antes (recomendado)</option>
-                  <option value={10}>10 dias antes</option>
-                  <option value={15}>15 dias antes (compra online)</option>
-                  <option value={20}>20 dias antes</option>
-                  <option value={30}>30 dias antes</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={parasiteFormData.alert_days_before || 7}
+                    onChange={(e) => setParasiteFormData((prev) => ({ ...prev, alert_days_before: parseInt(e.target.value, 10) }))}
+                    className="w-full p-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-[#0056D2] bg-white text-sm"
+                  >
+                    <option value={3}>3 dias antes</option>
+                    <option value={5}>5 dias antes</option>
+                    <option value={7}>7 dias antes</option>
+                    <option value={10}>10 dias antes</option>
+                    <option value={15}>15 dias antes</option>
+                    <option value={20}>20 dias antes</option>
+                    <option value={30}>30 dias antes</option>
+                  </select>
+                  <input
+                    type="time"
+                    value={parasiteFormData.reminder_time || '09:00'}
+                    onChange={(e) => setParasiteFormData((prev) => ({ ...prev, reminder_time: e.target.value }))}
+                    className="w-full p-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-[#0056D2] bg-white text-sm"
+                  />
+                </div>
               )}
             </div>
 

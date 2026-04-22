@@ -165,7 +165,7 @@ export function GroomingItemSheet({
           frequency_days: freq,
           reminder_enabled: true,
           alert_days_before: parseInt(addForm.reminder_days) || 3,
-          reminder_time: addForm.reminder_time || '09:00',
+          scheduled_time: addForm.reminder_time || '09:00',
         }),
       });
 
@@ -216,7 +216,7 @@ export function GroomingItemSheet({
       barcode: '',
       frequency_days: String(rec.frequency_days ?? FREQ_DEFAULTS[rec.type]),
       reminder_days: String((rec as unknown as Record<string, unknown>).alert_days_before ?? 3),
-      reminder_time: String((rec as unknown as Record<string, unknown>).reminder_time ?? '09:00'),
+      reminder_time: String((rec as unknown as Record<string, unknown>).scheduled_time ?? '09:00'),
     });
     setMode('edit');
   }
@@ -250,7 +250,7 @@ export function GroomingItemSheet({
           frequency_days: editFreq,
           reminder_enabled: true,
           alert_days_before: parseInt(editForm.reminder_days) || 3,
-          reminder_time: editForm.reminder_time || '09:00',
+          scheduled_time: editForm.reminder_time || '09:00',
         }),
       });
 
@@ -295,13 +295,13 @@ export function GroomingItemSheet({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ModalPortal>
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-x-hidden overscroll-x-none touch-pan-y p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
 
       {/* Sheet */}
       <div
-        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-hidden animate-scaleIn"
+        className="relative w-full max-w-lg bg-white/95 backdrop-blur-xl rounded-[32px] shadow-premium border border-white/60 flex flex-col overflow-x-hidden overflow-y-hidden animate-scaleIn"
         style={{ maxHeight: '92dvh' }}
         onClick={e => e.stopPropagation()}
       >
@@ -345,7 +345,7 @@ export function GroomingItemSheet({
         </div>
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 overscroll-contain">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 overscroll-contain">
 
           {/* ── VIEW MODE ─────────────────────────────────────────────────── */}
           {mode === 'view' && (
@@ -725,7 +725,7 @@ export function GroomingItemSheet({
 
         {/* ── Toast ─────────────────────────────────────────────────────────── */}
         {toast && (
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-20 whitespace-nowrap pointer-events-none">
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] bg-gray-900 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-xl z-20 text-center break-words pointer-events-none">
             {toast}
           </div>
         )}

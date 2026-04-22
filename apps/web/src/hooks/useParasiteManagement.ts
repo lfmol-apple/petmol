@@ -54,6 +54,7 @@ const addParasiteControl = async (
         reminder_enabled: control.reminder_enabled ?? true,
         reminder_days: control.reminder_days ?? control.alert_days_before ?? 7,
         alert_days_before: control.alert_days_before ?? null,
+        reminder_time: control.reminder_time || null,
         notes: control.notes || null,
       }),
     });
@@ -167,6 +168,7 @@ const PARASITE_FORM_DEFAULTS: ParasiteFormData = {
   notes: '',
   collar_expiry_date: '',
   alert_days_before: 7, // Padrão: 7 dias de antecedência
+  reminder_time: '09:00',
   purchase_location: '',
   reminder_enabled: true, // Lembrete ativado por padrão
 };
@@ -245,6 +247,7 @@ export function useParasiteManagement({
         reminder_days: number;
         collar_expiry_date?: string | null;
         alert_days_before?: number;
+        reminder_time?: string | null;
         reminder_enabled?: boolean;
         notes?: string | null;
       }> = await res.json();
@@ -265,6 +268,7 @@ export function useParasiteManagement({
         reminder_days: p.reminder_days,
         collar_expiry_date: p.collar_expiry_date ? _d(p.collar_expiry_date) : '',
         alert_days_before: p.alert_days_before,
+        reminder_time: p.reminder_time || undefined,
         reminder_enabled: p.reminder_enabled,
         notes: p.notes || '',
       } as ParasiteControl));
@@ -368,6 +372,7 @@ export function useParasiteManagement({
       notes: control.notes || '',
       collar_expiry_date: control.collar_expiry_date || '',
       alert_days_before: control.alert_days_before || 7,
+      reminder_time: control.reminder_time || '09:00',
       purchase_location: control.purchase_location || '',
       reminder_enabled:
         control.reminder_enabled !== undefined ? control.reminder_enabled : true,

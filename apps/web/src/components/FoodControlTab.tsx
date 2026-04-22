@@ -637,7 +637,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   }, [commerceSnapshot?.status, onStateChange, primaryItem.brand, showForm]);
 
   return (
-    <div className="p-3 space-y-3 pb-6 sm:p-4 sm:pb-8">
+    <div className="overflow-x-hidden p-3 space-y-3 pb-6 sm:p-4 sm:pb-8">
 
       {/* ── VIEW MODE ─────────────────────────────────────────────────────── */}
       {!showForm && (

@@ -98,21 +98,26 @@ export function useHomeMedicationActions({
 
       const evEditId = editingEventId;
 
-      // Reminder extra_data (multi-time push notifications)
-      // Sempre incluir ao editar para preservar applied_dates, skipped_dates e dose_notes
-      if (eventFormData.reminder_enabled || (evEditId && eventFormData._preserved_extra)) {
-        const extraData: Record<string, unknown> = {};
-        // Restaurar campos preservados antes de sobrescrever com campos editáveis
-        if (evEditId && eventFormData._preserved_extra) {
-          Object.assign(extraData, eventFormData._preserved_extra);
-        }
-        if (eventFormData.reminder_time) extraData.reminder_time = eventFormData.reminder_time;
+      // extra_data/reminder handling
+      const preservedExtra =
+        evEditId && eventFormData._preserved_extra ? { ...eventFormData._preserved_extra } : {};
+      if (eventFormData.reminder_enabled) {
+        const extraData: Record<string, unknown> = { ...preservedExtra };
+        const normalizedTimes = (eventFormData.reminder_times || []).filter(Boolean);
         if (eventFormData.frequency) extraData.frequency = eventFormData.frequency;
-        if (eventFormData.treatment_days) extraData.treatment_days = parseInt(eventFormData.treatment_days);
-        if (eventFormData.reminder_times && eventFormData.reminder_times.length > 0) {
-          extraData.reminder_times = eventFormData.reminder_times;
+        if (eventFormData.treatment_days) extraData.treatment_days = parseInt(eventFormData.treatment_days, 10);
+        if (normalizedTimes.length > 0) {
+          extraData.reminder_times = normalizedTimes;
+          extraData.reminder_time = normalizedTimes[0];
+        } else if (eventFormData.reminder_time) {
+          extraData.reminder_times = [eventFormData.reminder_time];
+          extraData.reminder_time = eventFormData.reminder_time;
         }
         if (Object.keys(extraData).length > 0) payload.extra_data = JSON.stringify(extraData);
+      } else if (evEditId) {
+        // Ao desligar lembrete em edição, limpamos agendamento para não manter estado antigo no backend.
+        payload.next_due_date = null;
+        payload.extra_data = Object.keys(preservedExtra).length > 0 ? JSON.stringify(preservedExtra) : null;
       }
 
       // Reminder date takes priority over next_due_date

@@ -147,6 +147,8 @@ export function useVaccineManagement({
         country_code?: string | null;
         next_due_source?: string | null;
         record_type?: 'confirmed_application' | 'estimated_control_start' | null;
+        alert_days_before?: number | null;
+        reminder_time?: string | null;
       }> = await res.json();
       const toDateStr = (raw: string | null | undefined): string => {
         if (!raw) return '';
@@ -167,6 +169,8 @@ export function useVaccineManagement({
           country_code: v.country_code || undefined,
           next_due_source: v.next_due_source || undefined,
           record_type: v.record_type || 'confirmed_application',
+          alert_days_before: v.alert_days_before ?? 3,
+          reminder_time: v.reminder_time || '09:00',
         }))
         .sort(
           (a, b) =>
