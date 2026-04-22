@@ -666,13 +666,15 @@ def send_care_pushes() -> None:
     ) -> dict:
         days_to_due = (due_date - today).days
         if days_to_due > 1:
-            body = f"{label}: faltam {days_to_due} dias. Lembrete das {reminder_time}."
+            body = f"Faltam {days_to_due} dias. Toque para ver."
         elif days_to_due == 1:
-            body = f"{label}: vence amanhã. Lembrete das {reminder_time}."
+            body = "Vence amanhã. Toque para ver."
         elif days_to_due == 0:
-            body = f"{label}: vence hoje ({reminder_time})."
+            body = "Vence hoje. Toque para registrar."
+        elif days_to_due == -1:
+            body = "Venceu ontem. Toque para atualizar."
         else:
-            body = f"{label}: está em atraso. Lembrete diário às {reminder_time}."
+            body = f"Em atraso há {abs(days_to_due)} dias. Toque para atualizar."
 
         tag = f"petmol-care-{domain}-{record_id}-{today_str}-{reminder_time.replace(':', '')}"
         return {
@@ -680,7 +682,6 @@ def send_care_pushes() -> None:
             "body": body,
             "icon": "/icons/icon-192x192.png",
             "badge": "/icons/badge-mono.png",
-            "image": "/brand/notification-banner.png",
             "tag": tag,
             "data": {"url": deep_link},
             "requireInteraction": True,
