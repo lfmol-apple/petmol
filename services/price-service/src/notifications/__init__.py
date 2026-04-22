@@ -7,7 +7,7 @@ from typing import Optional, Tuple, List
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from pywebpush import webpush, WebPushException
 
 from ..db import SessionLocal
@@ -33,6 +33,7 @@ def _upsert_pend(
     message: str,
     deep_link: str,
     priority: int = 50,
+    expires_at=None,
 ) -> None:
     """Best-effort pendency upsert — failures are logged but never crash the scheduler."""
     if type_ == "vaccine":
@@ -49,6 +50,7 @@ def _upsert_pend(
             message=message,
             deep_link=deep_link,
             priority=priority,
+            expires_at=expires_at,
         )
     except Exception as e:
         logger.error(f"_upsert_pend error: {e}")
@@ -682,9 +684,12 @@ def send_care_pushes() -> None:
                     if not prev or control.date_applied > prev.date_applied:
                         latest_parasites[key] = control
                 for key, control in latest_parasites.items():
-                    if not control.next_due_date:
+                    due_date = control.next_due_date or (
+                        control.collar_expiry_date if (control.type or "").lower() == "collar" else None
+                    )
+                    if not due_date:
                         continue
-                    due = _safe_local_date(control.next_due_date, brt)
+                    due = _safe_local_date(due_date, brt)
                     if not due or due >= today:
                         continue
                     label = parasite_labels.get(key) or control.product_name or "Antiparasitário"
@@ -765,6 +770,7 @@ def send_care_pushes() -> None:
                     message=payload["body"],
                     deep_link=deep_link,
                     priority=75,
+                    expires_at=datetime.combine(today, time(23, 59, 59)).replace(tzinfo=brt),
                 )
                 ok = _send_push(sub, payload)
                 if not ok:
@@ -894,9 +900,12 @@ def send_care_urgent_pushes() -> None:
                     if not prev or control.date_applied > prev.date_applied:
                         latest_parasites[key] = control
                 for key, control in latest_parasites.items():
-                    if not control.next_due_date:
+                    due_date = control.next_due_date or (
+                        control.collar_expiry_date if (control.type or "").lower() == "collar" else None
+                    )
+                    if not due_date:
                         continue
-                    due = _safe_local_date(control.next_due_date, brt)
+                    due = _safe_local_date(due_date, brt)
                     if not due:
                         continue
                     days_left = (due - today).days
@@ -990,6 +999,7 @@ def send_care_urgent_pushes() -> None:
                     message=payload["body"],
                     deep_link=deep_link,
                     priority=60,
+                    expires_at=datetime.combine(today, time(23, 59, 59)).replace(tzinfo=brt),
                 )
                 ok = _send_push(sub, payload)
                 if not ok:
