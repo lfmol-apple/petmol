@@ -610,6 +610,14 @@ def send_care_pushes() -> None:
         uid for uid, value in subscriptions.items()
         if _is_subscription_entry(value)
     ]
+
+    logger.info(
+        "care_push_tick now=%s subscriptions=%d valid_users=%d",
+        now.isoformat(timespec="minutes"),
+        len(subscriptions),
+        len(subscription_user_ids),
+    )
+
     if not subscription_user_ids:
         return
 
@@ -709,11 +717,18 @@ def send_care_pushes() -> None:
                 for record in latest_vaccines.values():
                     due = _safe_local_date(record.next_dose_date, brt)
                     if not due:
+                        logger.info("care_skip pet=%s domain=vaccine id=%s reason=no_due_date", pet.id, record.id)
                         continue
                     alert_days = int(getattr(record, "alert_days_before", None) or 3)
                     reminder_time = _normalize_time(getattr(record, "reminder_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
-                    if today < start_date or not _matches_reminder_time(now, reminder_time, reminder_time):
+                    date_ok = today >= start_date
+                    time_ok = _matches_reminder_time(now, reminder_time, reminder_time)
+                    logger.info(
+                        "care_eval pet=%s domain=vaccine id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
+                        pet.id, record.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
+                    )
+                    if not date_ok or not time_ok:
                         continue
                     scheduled_items.append(
                         _build_care_payload(
@@ -745,11 +760,18 @@ def send_care_pushes() -> None:
                     )
                     due = _safe_local_date(due_date, brt)
                     if not due:
+                        logger.info("care_skip pet=%s domain=%s id=%s reason=no_due_date", pet.id, key, control.id)
                         continue
                     alert_days = int(getattr(control, "alert_days_before", None) or getattr(control, "reminder_days", None) or 3)
                     reminder_time = _normalize_time(getattr(control, "reminder_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
-                    if today < start_date or not _matches_reminder_time(now, reminder_time, reminder_time):
+                    date_ok = today >= start_date
+                    time_ok = _matches_reminder_time(now, reminder_time, reminder_time)
+                    logger.info(
+                        "care_eval pet=%s domain=%s id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
+                        pet.id, key, control.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
+                    )
+                    if not date_ok or not time_ok:
                         continue
                     label = parasite_labels.get(key) or control.product_name or "Antiparasitário"
                     scheduled_items.append(
@@ -779,11 +801,18 @@ def send_care_pushes() -> None:
                 for key, record in latest_groomings.items():
                     due = _safe_local_date(record.next_recommended_date, brt)
                     if not due:
+                        logger.info("care_skip pet=%s domain=grooming-%s id=%s reason=no_due_date", pet.id, key, record.id)
                         continue
                     alert_days = int(getattr(record, "alert_days_before", None) or getattr(record, "reminder_days_before", None) or 3)
                     reminder_time = _normalize_time(getattr(record, "scheduled_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
-                    if today < start_date or not _matches_reminder_time(now, reminder_time, reminder_time):
+                    date_ok = today >= start_date
+                    time_ok = _matches_reminder_time(now, reminder_time, reminder_time)
+                    logger.info(
+                        "care_eval pet=%s domain=grooming-%s id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
+                        pet.id, key, record.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
+                    )
+                    if not date_ok or not time_ok:
                         continue
                     label = grooming_labels.get(key, "Higiene")
                     scheduled_items.append(
@@ -799,8 +828,10 @@ def send_care_pushes() -> None:
                         )
                     )
 
+                logger.info("care_push_tick pet=%s scheduled=%d", pet.id, len(scheduled_items))
                 for payload in scheduled_items:
                     if _pendency_exists(db, payload["tag"]):
+                        logger.info("care_dedup_skip tag=%s", payload["tag"])
                         continue
 
                     _upsert_pend(
