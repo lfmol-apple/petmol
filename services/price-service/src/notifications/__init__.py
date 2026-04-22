@@ -287,6 +287,22 @@ def _matches_reminder_time(now: datetime, reminder_time: Optional[str], default_
     return bool(hm and hm[0] == now.hour and hm[1] == now.minute)
 
 
+def _care_time_reached(now: datetime, reminder_time: str, brt) -> bool:
+    """Return True when the current time is at or past the configured reminder time.
+
+    Unlike _matches_reminder_time (exact-minute match), this fires on the first
+    scheduler tick at or after the configured HH:MM. The per-day pendency dedup
+    (tag includes today's date) ensures each item fires only once per day even if
+    the job runs many times after the window opens.
+    """
+    hm = _parse_hhmm(reminder_time)
+    if not hm:
+        return False
+    today = now.date()
+    configured_dt = datetime(today.year, today.month, today.day, hm[0], hm[1], tzinfo=brt)
+    return now >= configured_dt
+
+
 def _safe_local_date(value, tzinfo) -> Optional[object]:
     if value is None:
         return None
@@ -723,7 +739,7 @@ def send_care_pushes() -> None:
                     reminder_time = _normalize_time(getattr(record, "reminder_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
                     date_ok = today >= start_date
-                    time_ok = _matches_reminder_time(now, reminder_time, reminder_time)
+                    time_ok = _care_time_reached(now, reminder_time, brt)
                     logger.info(
                         "care_eval pet=%s domain=vaccine id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
                         pet.id, record.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
@@ -766,7 +782,7 @@ def send_care_pushes() -> None:
                     reminder_time = _normalize_time(getattr(control, "reminder_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
                     date_ok = today >= start_date
-                    time_ok = _matches_reminder_time(now, reminder_time, reminder_time)
+                    time_ok = _care_time_reached(now, reminder_time, brt)
                     logger.info(
                         "care_eval pet=%s domain=%s id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
                         pet.id, key, control.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
@@ -807,7 +823,7 @@ def send_care_pushes() -> None:
                     reminder_time = _normalize_time(getattr(record, "scheduled_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
                     date_ok = today >= start_date
-                    time_ok = _matches_reminder_time(now, reminder_time, reminder_time)
+                    time_ok = _care_time_reached(now, reminder_time, brt)
                     logger.info(
                         "care_eval pet=%s domain=grooming-%s id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
                         pet.id, key, record.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
