@@ -254,6 +254,47 @@ def _build_feeding_plan_data(plan: FeedingPlan, items: List[Dict[str, Any]]) -> 
     )
 
 
+def _calculate_feeding_schedule_dates(
+    *,
+    package_size_kg: Optional[float],
+    daily_amount_g: Optional[float],
+    last_refill_date: Optional[date],
+    safety_buffer_days: int,
+    enabled: bool,
+    no_consumption_control: bool,
+    next_purchase_date: Optional[date],
+    manual_reminder_days_before: Optional[int],
+) -> tuple[Optional[date], Optional[date]]:
+    """Resolve estimated end and reminder dates for both tracking modes.
+
+    - Weight mode (no_consumption_control=False): uses stock calculation service.
+    - Duration/manual mode (no_consumption_control=True): uses next_purchase_date and
+      manual_reminder_days_before.
+    """
+    if not enabled:
+        return None, None
+
+    if no_consumption_control:
+        if not next_purchase_date:
+            return None, None
+        manual_days = manual_reminder_days_before if manual_reminder_days_before is not None else 3
+        manual_days = max(0, int(manual_days))
+        next_reminder = next_purchase_date - timedelta(days=manual_days)
+        if last_refill_date and next_reminder < last_refill_date:
+            next_reminder = last_refill_date
+        return next_purchase_date, next_reminder
+
+    estimated_end, next_reminder, _ = calculate_food_stock_estimates(
+        package_size_kg=package_size_kg,
+        daily_amount_g=daily_amount_g,
+        last_refill_date=last_refill_date,
+        safety_buffer_days=safety_buffer_days,
+        enabled=enabled,
+        no_consumption_control=no_consumption_control,
+    )
+    return estimated_end, next_reminder
+
+
 def _ensure_vaccine_reminders(
     db: Session,
     *,
@@ -675,16 +716,6 @@ async def create_or_update_feeding_plan(
     # Parse next_purchase_date if provided (manual mode)
     next_purchase_date_obj = _parse_feeding_date(request.next_purchase_date, "next_purchase_date") if request.next_purchase_date else None
     
-    # Calculate estimates if possible
-    estimated_end, next_reminder, _ = calculate_food_stock_estimates(
-        package_size_kg=primary_item.get("package_size_kg"),
-        daily_amount_g=primary_item.get("daily_amount_g"),
-        last_refill_date=last_refill_date_obj,
-        safety_buffer_days=request.safety_buffer_days,
-        enabled=request.enabled,
-        no_consumption_control=request.no_consumption_control,
-    )
-    
     # Check if plan already exists
     existing_plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
     
@@ -702,10 +733,20 @@ async def create_or_update_feeding_plan(
         existing_plan.notes = request.notes
         existing_plan.enabled = request.enabled
         existing_plan.no_consumption_control = request.no_consumption_control
-        existing_plan.estimated_end_date = estimated_end
-        existing_plan.next_reminder_date = next_reminder
         existing_plan.next_purchase_date = next_purchase_date_obj
         existing_plan.manual_reminder_days_before = request.manual_reminder_days_before
+        estimated_end, next_reminder = _calculate_feeding_schedule_dates(
+            package_size_kg=existing_plan.package_size_kg,
+            daily_amount_g=existing_plan.daily_amount_g,
+            last_refill_date=existing_plan.last_refill_date,
+            safety_buffer_days=existing_plan.safety_buffer_days,
+            enabled=existing_plan.enabled,
+            no_consumption_control=existing_plan.no_consumption_control,
+            next_purchase_date=existing_plan.next_purchase_date,
+            manual_reminder_days_before=existing_plan.manual_reminder_days_before,
+        )
+        existing_plan.estimated_end_date = estimated_end
+        existing_plan.next_reminder_date = next_reminder
         existing_plan.items_json = _serialize_feeding_items(items_payload)
         
         plan = existing_plan
@@ -726,12 +767,22 @@ async def create_or_update_feeding_plan(
             notes=request.notes,
             enabled=request.enabled,
             no_consumption_control=request.no_consumption_control,
-            estimated_end_date=estimated_end,
-            next_reminder_date=next_reminder,
             next_purchase_date=next_purchase_date_obj,
             manual_reminder_days_before=request.manual_reminder_days_before,
             items_json=_serialize_feeding_items(items_payload),
         )
+        estimated_end, next_reminder = _calculate_feeding_schedule_dates(
+            package_size_kg=plan.package_size_kg,
+            daily_amount_g=plan.daily_amount_g,
+            last_refill_date=plan.last_refill_date,
+            safety_buffer_days=plan.safety_buffer_days,
+            enabled=plan.enabled,
+            no_consumption_control=plan.no_consumption_control,
+            next_purchase_date=plan.next_purchase_date,
+            manual_reminder_days_before=plan.manual_reminder_days_before,
+        )
+        plan.estimated_end_date = estimated_end
+        plan.next_reminder_date = next_reminder
         db.add(plan)
     
     db.commit()
@@ -742,7 +793,7 @@ async def create_or_update_feeding_plan(
     
     # Build estimate (only if enabled and not manual mode)
     estimate = None
-    if plan.enabled and not plan.no_consumption_control and estimated_end:
+    if plan.enabled and estimated_end:
         days_left = calculate_days_until_out(estimated_end, date.today())
         estimate = FeedingEstimate(
             estimated_end_date=estimated_end.isoformat(),
@@ -784,17 +835,19 @@ async def get_feeding_plan(
     
     # Recalculate estimate with fresh data
     today = date.today()
-    estimated_end, next_reminder, _ = calculate_food_stock_estimates(
+    estimated_end, next_reminder = _calculate_feeding_schedule_dates(
         package_size_kg=plan.package_size_kg,
         daily_amount_g=plan.daily_amount_g,
         last_refill_date=plan.last_refill_date,
         safety_buffer_days=plan.safety_buffer_days,
         enabled=plan.enabled,
         no_consumption_control=plan.no_consumption_control,
+        next_purchase_date=plan.next_purchase_date,
+        manual_reminder_days_before=plan.manual_reminder_days_before,
     )
     
     estimate = None
-    if plan.enabled and not plan.no_consumption_control and estimated_end:
+    if plan.enabled and estimated_end:
         days_left = calculate_days_until_out(estimated_end, today)
         estimate = FeedingEstimate(
             estimated_end_date=estimated_end.isoformat(),
@@ -874,15 +927,31 @@ async def restock_feeding_plan(
     else:
         refill_date = date.today()
 
+    old_last_refill = plan.last_refill_date
+    old_next_purchase = plan.next_purchase_date
     plan.last_refill_date = refill_date
 
-    estimated_end, next_reminder, _ = calculate_food_stock_estimates(
+    if plan.no_consumption_control:
+        cycle_days: Optional[int] = None
+        if old_last_refill and old_next_purchase and old_next_purchase > old_last_refill:
+            cycle_days = (old_next_purchase - old_last_refill).days
+        if cycle_days and cycle_days > 0:
+            plan.next_purchase_date = refill_date + timedelta(days=cycle_days)
+        elif plan.next_purchase_date and plan.next_purchase_date >= refill_date:
+            # Keep current configured purchase date if still valid.
+            pass
+        else:
+            plan.next_purchase_date = refill_date
+
+    estimated_end, next_reminder = _calculate_feeding_schedule_dates(
         package_size_kg=plan.package_size_kg,
         daily_amount_g=plan.daily_amount_g,
-        last_refill_date=refill_date,
+        last_refill_date=plan.last_refill_date,
         safety_buffer_days=plan.safety_buffer_days,
         enabled=plan.enabled,
         no_consumption_control=plan.no_consumption_control,
+        next_purchase_date=plan.next_purchase_date,
+        manual_reminder_days_before=plan.manual_reminder_days_before,
     )
 
     plan.estimated_end_date = estimated_end
