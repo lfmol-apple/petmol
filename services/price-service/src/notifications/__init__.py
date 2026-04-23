@@ -850,6 +850,10 @@ def send_care_pushes() -> None:
                     if _pendency_exists(db, payload["tag"]):
                         logger.info("care_dedup_skip tag=%s", payload["tag"])
                         continue
+                    ok = _send_push(sub, payload)
+                    if not ok:
+                        subscriptions.pop(str(pet.user_id), None)
+                        break
 
                     _upsert_pend(
                         user_id=pet.user_id,
@@ -862,10 +866,6 @@ def send_care_pushes() -> None:
                         priority=payload["_priority"],
                         expires_at=datetime.combine(today, time(23, 59, 59)).replace(tzinfo=brt),
                     )
-                    ok = _send_push(sub, payload)
-                    if not ok:
-                        subscriptions.pop(str(pet.user_id), None)
-                        break
 
                     logger.info("care_push_sent tag=%s pet_id=%s", payload["tag"], pet.id)
 
@@ -882,300 +882,62 @@ def send_care_urgent_pushes() -> None:
 
 
 def send_monthly_docs_reminder() -> None:
-    """Layer 4 (monthly review): one light monthly reminder.
+    """Disabled in USER-ONLY mode.
 
-    Fires on user-configured day/hour/minute (fallback: day 12, 20:00 BRT)
-    and only when there is no active urgent/critical block.
+    Monthly generic review is not part of the explicit user-configured
+    control reminders pipeline for this phase.
     """
-    from datetime import timezone as _tz
-
-    brt = _tz(timedelta(hours=-3))
-    now = datetime.now(brt)
-
-    month_key = now.strftime("%Y-%m")
-    subscriptions = _load_subscriptions()
-    if not subscriptions:
-        return
-
-    try:
-        db = SessionLocal()
-        try:
-            from ..user_auth.models import User
-            str_ids = list(subscriptions.keys())
-            if not str_ids:
-                return
-            users = db.query(User).filter(User.id.in_(str_ids)).all()
-            expired_ids = []
-            for user in users:
-                day_pref = getattr(user, "monthly_checkin_day", None)
-                hour_pref = getattr(user, "monthly_checkin_hour", None)
-                minute_pref = getattr(user, "monthly_checkin_minute", None)
-
-                try:
-                    target_day = int(day_pref) if day_pref is not None else 12
-                except Exception:
-                    target_day = 12
-                try:
-                    target_hour = int(hour_pref) if hour_pref is not None else 20
-                except Exception:
-                    target_hour = 20
-                try:
-                    target_minute = int(minute_pref) if minute_pref is not None else 0
-                except Exception:
-                    target_minute = 0
-
-                if target_hour < 0 or target_hour > 23:
-                    target_hour = 20
-                if target_minute < 0 or target_minute > 59:
-                    target_minute = 0
-
-                if target_day == 0:
-                    import calendar
-                    target_day = calendar.monthrange(now.year, now.month)[1]
-                if target_day < 1 or target_day > 31:
-                    target_day = 12
-
-                if now.day != target_day or now.hour != target_hour or now.minute != target_minute:
-                    continue
-
-                sub = subscriptions.get(str(user.id))
-                if not sub:
-                    continue
-                # Priority order: monthly review only if no urgent/critical is active.
-                if _has_active_blocker(db, user_id=user.id, min_priority=60):
-                    continue
-
-                pend_id = f"petmol-monthly-review-{user.id}-{month_key}"
-                # Upsert pendency first (survives even if push fails / not subscribed)
-                _upsert_pend(
-                    user_id=user.id,
-                    pet_id=None,
-                    pend_id=pend_id,
-                    type_="monthly_review",
-                    title="🐾 Revisão mensal do pet",
-                    message="Um check-in rápido já ajuda bastante. Vale revisar os cuidados do mês.",
-                    deep_link="/home",
-                    priority=30,
-                )
-                payload = {
-                    "title": "🐾 Revisão mensal do pet",
-                    "body": "Um lembrete leve para revisar como seu pet está neste mês.",
-                    "icon": "/icons/icon-192x192.png",
-                    "badge": "/icons/badge-mono.png",
-                    "image": "/brand/notification-banner.png",
-                    "tag": pend_id,
-                    "data": {"url": "/home"},
-                    "requireInteraction": False,
-                    "autoCloseMs": 6000,
-                }
-                ok = _send_push(sub, payload)
-                if not ok:
-                    expired_ids.append(str(user.id))
-                else:
-                    logger.info(f"Push revisao mensal enviado -> user {user.id}")
-            if expired_ids:
-                for uid in expired_ids:
-                    subscriptions.pop(uid, None)
-                _save_subscriptions(subscriptions)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"send_monthly_docs_reminder erro: {e}")
+    logger.info("send_monthly_docs_reminder skipped: disabled_in_user_only_mode")
+    return
 
 
 def send_no_control_pushes() -> None:
-    """Layer 3 (progressive): suggest starting controls for inactive pets.
+    """Disabled in USER-ONLY mode.
 
-    Rules:
-    - Monday at 20:00 BRT.
-    - Never fires when urgent/critical is active for that pet.
-    - Keeps at most one progressive active per pet.
-    - Cooldown 72h between activations (stored in subscriptions metadata).
-    - Dismissed progressive pendencies are not recreated automatically.
+    Progressive no-control notifications are inference-based and intentionally
+    disabled in this phase.
     """
-    from datetime import timezone as _tz, timedelta as _td
-
-    brt = _tz(_td(hours=-3))
-    now = datetime.now(brt)
-
-    # Only fire on Monday (weekday == 0) at 20:00 BRT
-    if now.weekday() != 0 or now.hour != 20 or now.minute != 0:
-        return
-
-    week_key = now.strftime("%Y-W%W")
-    cutoff = now.date() - _td(days=90)
-
-    subscriptions = _load_subscriptions()
-    if not subscriptions:
-        return
-
-    try:
-        db = SessionLocal()
-        try:
-            from ..pets.models import Pet
-            from ..pets.vaccine_models import VaccineRecord
-            from ..pets.parasite_models import ParasiteControlRecord
-            from ..pets.grooming_models import GroomingRecord
-            from ..user_auth.models import User
-
-            str_ids = list(subscriptions.keys())
-            users = db.query(User).filter(User.id.in_(str_ids)).all()
-            expired_ids = []
-
-            for user in users:
-                sub = subscriptions.get(str(user.id))
-                if not sub:
-                    continue
-
-                pets = db.query(Pet).filter(Pet.user_id == user.id).all()
-                if not pets:
-                    continue
-
-                candidate_pets: list[Pet] = []
-                for pet in pets:
-                    # Any vaccine record in last 90 days?
-                    has_vaccine = db.query(VaccineRecord).filter(
-                        VaccineRecord.pet_id == pet.id,
-                        VaccineRecord.deleted == False,
-                        VaccineRecord.applied_date >= cutoff,
-                    ).first()
-                    if has_vaccine:
-                        continue
-
-                    # Any parasite record in last 90 days?
-                    has_parasite = db.query(ParasiteControlRecord).filter(
-                        ParasiteControlRecord.pet_id == pet.id,
-                        ParasiteControlRecord.deleted == False,
-                        ParasiteControlRecord.date_applied >= cutoff,
-                    ).first()
-                    if has_parasite:
-                        continue
-
-                    # Any grooming record in last 90 days?
-                    has_grooming = db.query(GroomingRecord).filter(
-                        GroomingRecord.pet_id == pet.id,
-                        GroomingRecord.deleted == False,
-                        GroomingRecord.date >= cutoff,
-                    ).first()
-                    if has_grooming:
-                        continue
-
-                    candidate_pets.append(pet)
-
-                if not candidate_pets:
-                    continue
-
-                # One progressive suggestion per user tick to reduce noise.
-                for pet in candidate_pets:
-                    if _has_active_blocker(db, user_id=user.id, pet_id=pet.id, min_priority=60):
-                        continue
-                    if _has_active_type(db, user_id=user.id, pet_id=pet.id, type_prefix="no_control"):
-                        continue
-                    if _has_dismissed_prefix(
-                        db,
-                        user_id=user.id,
-                        pet_id=pet.id,
-                        id_prefix=f"petmol-no-control-{pet.id}-",
-                    ):
-                        continue
-
-                    cooldown_key = f"_progressive_last_{pet.id}"
-                    last_ts = subscriptions.get(cooldown_key)
-                    if last_ts:
-                        try:
-                            last_dt = datetime.fromisoformat(str(last_ts))
-                            if last_dt.tzinfo is None:
-                                last_dt = last_dt.replace(tzinfo=brt)
-                            if (now - last_dt).total_seconds() < (72 * 3600):
-                                continue
-                        except Exception:
-                            pass
-
-                    title = f"🐾 {pet.name} — vale iniciar os controles"
-                    body = "Sem registros recentes de vacina, antipulgas, vermífugo ou higiene. Quer começar pelo registro rápido?"
-                    pend_id = f"petmol-no-control-{pet.id}-{week_key}"
-
-                    _upsert_pend(
-                        user_id=user.id,
-                        pet_id=pet.id,
-                        pend_id=pend_id,
-                        type_="no_control",
-                        title=title,
-                        message=body,
-                        deep_link=f"/home?modal=vaccines&petId={pet.id}",
-                        priority=40,
-                    )
-
-                    payload = {
-                        "title": title,
-                        "body": body,
-                        "icon": "/icons/icon-192x192.png",
-                        "badge": "/icons/badge-mono.png",
-                        "image": "/brand/notification-banner.png",
-                        "tag": pend_id,
-                        "data": {"url": f"/home?modal=vaccines&petId={pet.id}"},
-                        "requireInteraction": False,
-                        "autoCloseMs": 6000,
-                    }
-                    ok = _send_push(sub, payload)
-                    if not ok:
-                        expired_ids.append(str(user.id))
-                    else:
-                        subscriptions[cooldown_key] = now.isoformat()
-                        logger.info(f"Push progressivo sem-controle enviado -> user {user.id} pet={pet.id}")
-                    break
-
-            if expired_ids:
-                for uid in expired_ids:
-                    subscriptions.pop(uid, None)
-            _save_subscriptions(subscriptions)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"send_no_control_pushes erro: {e}")
+    logger.info("send_no_control_pushes skipped: disabled_in_user_only_mode")
+    return
 
 
-def _food_push_title(pet_name: str, days_left: int) -> str:
-    """🐾-branded title. Three tiers: urgent (≤3d), standard (>3d), zero/overdue."""
-    if days_left <= 0:
-        return f"🐾 A ração de {pet_name} acabou hoje"
-    if days_left <= 3:
-        return f"🐾 {pet_name} vai ficar sem ração em breve"
-    return f"🐾 A ração de {pet_name} acaba em {days_left} {'dia' if days_left == 1 else 'dias'}"
+def _food_push_title() -> str:
+    return "A ração está acabando"
 
 
-def _food_push_body(brand: str, days_left: int) -> str:
-    if days_left <= 0:
-        return f"{brand} — hora de comprar. Vamos?"
-    if days_left <= 3:
-        return f"Restam ~{days_left} {'dia' if days_left == 1 else 'dias'} de {brand}. Resolver agora?"
-    return f"{brand} — quer garantir a próxima embalagem?"
+def _food_push_body(days_left: int) -> str:
+    visible_days_left = max(0, int(days_left))
+    return f"Faltam {visible_days_left} dias. Hora de comprar."
 
 
 def send_food_reminder_pushes() -> None:
-    """Daily job window starting at 11:00 BRT.
+    """Simple and deterministic food push scheduler.
 
-    Simplified and isolated food push rule:
-    - Plan exists and enabled (independent from other domains)
-    - Compute days_left from estimated_end_date or next_purchase_date
-    - Eligible when days_left <= 5
-    - Critical when days_left <= 0
-    - Dedup only same day per pet (last_food_push_date)
+    Rules:
+    - active plan required
+    - use estimated_end_date or next_purchase_date
+    - eligible when days_left <= 5
+    - one push per day per plan
+    - only after 11:00 BRT
     """
     from datetime import timezone as _tz, timedelta as _td
 
     brt = _tz(_td(hours=-3))
     now = datetime.now(brt)
+
+    logger.info("[food_push] job_start now=%s", now.isoformat(timespec="minutes"))
 
     # Open a daily window from 11:00 BRT onwards.
     # This avoids missing the day when the process restarts after 11:00.
     if now.hour < 11:
+        logger.info("[food_push] skip reason=before_window now_hour=%d", now.hour)
         return
 
     today = now.date()
 
     subscriptions = _load_subscriptions()
     if not subscriptions:
+        logger.info("[food_push] skip reason=no_subscriptions_loaded")
         return
 
     try:
@@ -1188,21 +950,15 @@ def send_food_reminder_pushes() -> None:
                 FeedingPlan.enabled.is_(True),
                 FeedingPlan.deleted_at.is_(None),
             ).all()
-            logger.info(
-                "[food_push] tick=%s plans_candidates=%d",
-                now.isoformat(timespec="minutes"),
-                len(plans),
-            )
+            logger.info("[food_push] plans_count=%d", len(plans))
 
             expired_ids: list[str] = []
 
             for plan in plans:
                 logger.info(
-                    "[food_push] evaluate plan_id=%s pet_id=%s mode=%s next_reminder_date=%s estimated_end_date=%s next_purchase_date=%s last_food_push_date=%s",
+                    "[food_push] evaluate plan_id=%s pet_id=%s estimated_end_date=%s next_purchase_date=%s last_food_push_date=%s",
                     plan.id,
                     plan.pet_id,
-                    "manual" if plan.no_consumption_control else "weight",
-                    plan.next_reminder_date.isoformat() if plan.next_reminder_date else None,
                     plan.estimated_end_date.isoformat() if plan.estimated_end_date else None,
                     plan.next_purchase_date.isoformat() if plan.next_purchase_date else None,
                     plan.last_food_push_date.isoformat() if plan.last_food_push_date else None,
@@ -1256,30 +1012,19 @@ def send_food_reminder_pushes() -> None:
                 # Persistent dedup: skip if already pushed today
                 if plan.last_food_push_date == today:
                     logger.info(
-                        "[food_push] skip plan_id=%s pet_id=%s reason=dedup_today",
+                        "[food_push] skip plan_id=%s pet_id=%s reason=dedup_daily_per_plan",
                         plan.id,
                         pet.id,
                     )
                     continue
 
-                priority = 80 if days_left <= 0 else 60
+                priority = 60
                 brand = plan.food_brand or "Ração"
                 pend_id = f"petmol-food-{plan.pet_id}-{today.isoformat()}"
 
-                title = _food_push_title(pet.name, days_left)
-                body = _food_push_body(brand, days_left)
+                title = _food_push_title()
+                body = _food_push_body(days_left)
                 deep_link = f"/home?modal=food&petId={pet.id}&action=buy"
-
-                _upsert_pend(
-                    user_id=pet.user_id,
-                    pet_id=pet.id,
-                    pend_id=pend_id,
-                    type_="food",
-                    title=title,
-                    message=body,
-                    deep_link=deep_link,
-                    priority=priority,
-                )
 
                 payload = {
                     "title": title,
@@ -1293,28 +1038,45 @@ def send_food_reminder_pushes() -> None:
                     "autoCloseMs": 0,
                 }
                 logger.info(
-                    "[food_push] dispatch plan_id=%s pet_id=%s days_left=%d priority=%d deep_link=%s",
+                    "[food_push] attempt_send plan_id=%s pet_id=%s days_left=%d brand=%s priority=%d deep_link=%s",
                     plan.id,
                     pet.id,
                     days_left,
+                    brand,
                     priority,
                     deep_link,
                 )
                 ok = _send_push(sub, payload)
                 if not ok:
                     logger.info(
-                        "[food_push] result=expired_subscription plan_id=%s pet_id=%s user_id=%s",
+                        "[food_push] send_failed plan_id=%s pet_id=%s user_id=%s reason=expired_subscription",
                         plan.id,
                         pet.id,
                         pet.user_id,
                     )
                     expired_ids.append(str(pet.user_id))
                 else:
+                    _upsert_pend(
+                        user_id=pet.user_id,
+                        pet_id=pet.id,
+                        pend_id=pend_id,
+                        type_="food",
+                        title=title,
+                        message=body,
+                        deep_link=deep_link,
+                        priority=priority,
+                    )
                     # Persist dedup date so restart cannot double-send today
                     plan.last_food_push_date = today
                     db.commit()
                     logger.info(
-                        "[food_push] result=sent plan_id=%s pet_id=%s user_id=%s days_left=%d tag=%s",
+                        "[food_push] update_last_food_push_date plan_id=%s pet_id=%s value=%s",
+                        plan.id,
+                        pet.id,
+                        today.isoformat(),
+                    )
+                    logger.info(
+                        "[food_push] send_success plan_id=%s pet_id=%s user_id=%s days_left=%d tag=%s",
                         plan.id,
                         pet.id,
                         pet.user_id,
@@ -1475,9 +1237,9 @@ async def send_notification(
 
 @router.post("/send-on-open")
 async def send_on_open(current_user: User = Depends(get_current_user)):
-    """Deprecated: overdue controls are now dispatched only by the 20:00 daily job."""
+    """Disabled in USER-ONLY mode."""
     return {
         "sent": 0,
-        "reason": "disabled_use_daily_20h_job",
+        "reason": "disabled_in_user_only_mode",
         "user_id": str(current_user.id),
     }

@@ -26,9 +26,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ZIP_NAME="PETMOL.zip"
 ZIP_PATH="/tmp/$ZIP_NAME"
+BUILD_ID="$(git rev-parse --short HEAD)"
 
 log "============================================"
 log "PETMOL Publish: $PROJECT_DIR → $VPS_USER@$VPS_IP"
+log "Build ID: $BUILD_ID"
 log "============================================"
 
 # ============================================
@@ -84,7 +86,7 @@ scp "$ZIP_PATH" "$VPS_USER@$VPS_IP:$REMOTE_DIR/"
 # Step 3: Run apply script on VPS
 # ============================================
 log "Applying on VPS..."
-ssh "$VPS_USER@$VPS_IP" "bash -s" < "$SCRIPT_DIR/apply_on_vps.sh"
+ssh "$VPS_USER@$VPS_IP" "BUILD_ID=$BUILD_ID PETMOL_DOMAIN=$DOMAIN bash -s" < "$SCRIPT_DIR/apply_on_vps.sh"
 
 # ============================================
 # Step 4: Sync uploads (fotos + documentos)

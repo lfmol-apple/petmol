@@ -516,7 +516,7 @@ export default function ProfilePage() {
                         disabled={!editMode}
                         maxLength={9}
                         placeholder="00000-000"
-                        className={inpCls + ' flex-1'}
+                              className={`${inpClsObj(false)} flex-1`}
                       />
                       {cepLoading && <div className="w-5 h-5 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />}
                     </div>

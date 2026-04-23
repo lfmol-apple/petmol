@@ -15,6 +15,8 @@ import { EventNudge } from '@/components/EventNudge';
 import { TravelDetectionNotification } from '@/components/TravelDetectionNotification';
 import { OfflineIndicator, ConnectivityStatus } from '@/components/OfflineIndicator';
 import { PushAutoRefresh } from '@/components/PushAutoRefresh';
+import { BuildStamp } from '@/components/BuildStamp';
+import { getBuildInfo } from '@/lib/buildInfo';
 import { 
   isEventNudgeEnabled
 } from '@/lib/featureFlags';
@@ -23,6 +25,7 @@ import Script from 'next/script';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 const fredoka = Fredoka({ subsets: ['latin'], variable: '--font-fredoka' });
+const buildInfo = getBuildInfo();
 
 // Site URL from environment (no hardcoded domain)
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
@@ -75,10 +78,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <head>
-        <link rel="manifest" href="/manifest.json" />
-      </head>
-      <body className={`${inter.className} ${outfit.variable} ${fredoka.variable} antialiased bg-slate-50 theme-prime`}>
+      <body
+        className={`${inter.className} ${outfit.variable} ${fredoka.variable} antialiased bg-slate-50 theme-prime`}
+        data-build-id={buildInfo.id}
+      >
         <I18nProvider>
           <AuthProvider>
             <LocationProvider>
@@ -92,6 +95,7 @@ export default function RootLayout({
             {/* <SmartSuggestionsWidget /> */}
             {isEventNudgeEnabled() && <EventNudge />}
             <AppShell>{children}</AppShell>
+            <BuildStamp />
             </LocationProvider>
           </AuthProvider>
         </I18nProvider>
