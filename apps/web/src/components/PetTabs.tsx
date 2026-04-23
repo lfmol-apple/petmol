@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence, PanInfo, type Variants } from 'framer-motion';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence, PanInfo, useReducedMotion, type Variants } from 'framer-motion';
 
 interface Pet {
   id: number | string;
@@ -21,6 +21,24 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
   const [direction, setDirection] = useState(0);
   const currentIndex = pets.findIndex((p) => p.id === selectedPetId);
   const [prevIndex, setPrevIndex] = useState(currentIndex);
+  const prefersReducedMotion = useReducedMotion();
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const media = window.matchMedia('(max-width: 768px), (pointer: coarse)');
+    const update = () => setIsMobileViewport(media.matches);
+    update();
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }
+
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   // Detecta a direção da mudança de pet
   useEffect(() => {
@@ -57,36 +75,55 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     }
   };
 
+  const mobileSafeTransition = prefersReducedMotion || isMobileViewport;
   const springTransition = { type: 'spring' as const, stiffness: 450, damping: 45 };
 
-  const variants: Variants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? '100%' : dir < 0 ? '-100%' : 0,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-      transition: {
-        x: springTransition,
-        opacity: { duration: 0.25 },
-      }
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? '-100%' : dir < 0 ? '100%' : 0,
-      opacity: 0,
-      transition: {
-        x: springTransition,
-        opacity: { duration: 0.25 },
-      }
-    }),
-  };
+  const variants = useMemo<Variants>(() => {
+    if (mobileSafeTransition) {
+      return {
+        enter: { x: 0, opacity: 0 },
+        center: {
+          x: 0,
+          opacity: 1,
+          transition: { opacity: { duration: 0.18 } },
+        },
+        exit: {
+          x: 0,
+          opacity: 0,
+          transition: { opacity: { duration: 0.12 } },
+        },
+      };
+    }
+
+    return {
+      enter: (dir: number) => ({
+        x: dir > 0 ? '100%' : dir < 0 ? '-100%' : 0,
+        opacity: 0,
+      }),
+      center: {
+        x: 0,
+        opacity: 1,
+        transition: {
+          x: springTransition,
+          opacity: { duration: 0.25 },
+        },
+      },
+      exit: (dir: number) => ({
+        x: dir > 0 ? '-100%' : dir < 0 ? '100%' : 0,
+        opacity: 0,
+        transition: {
+          x: springTransition,
+          opacity: { duration: 0.25 },
+        },
+      }),
+    };
+  }, [mobileSafeTransition]);
 
   return (
     <div className="w-full relative overflow-x-hidden">
       {/* O Grid garante que ambos os componentes (antigo e novo) ocupem o mesmo espaço sem salto de altura */}
       <div className="grid grid-cols-1 grid-rows-1 items-start">
-        <AnimatePresence initial={false} custom={direction}>
+        <AnimatePresence initial={false} custom={direction} mode={mobileSafeTransition ? 'wait' : 'sync'}>
           <motion.div
             key={selectedPetId}
             custom={direction}
