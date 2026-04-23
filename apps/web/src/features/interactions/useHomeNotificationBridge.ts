@@ -11,6 +11,7 @@
 import { useEffect, useRef } from 'react';
 import type { CanonicalPetEvent } from '@/features/events/types';
 import type { MasterInteractionRules } from '@/features/interactions/types';
+import { dispatchNotifications } from '@/features/notifications/notificationDispatcher';
 
 /**
  * Hook que processa eventos e despacha notificações via policies ativas.
@@ -28,10 +29,18 @@ export function useHomeNotificationBridge(
   const lastEventIdsRef = useRef<string>('');
 
   useEffect(() => {
-    void events;
-    void rules;
-    void enabled;
-    lastEventIdsRef.current = '';
-    return;
+    if (!enabled) return;
+    if (!events.length) return;
+
+    const eventIds = events.map((e) => e.id).sort().join(',');
+    if (eventIds === lastEventIdsRef.current) return; // sem novos eventos
+    lastEventIdsRef.current = eventIds;
+
+    // Despacha em microtask para não bloquear o render
+    const id = window.requestAnimationFrame(() => {
+      dispatchNotifications(events, rules);
+    });
+
+    return () => window.cancelAnimationFrame(id);
   }, [events, rules, enabled]);
 }

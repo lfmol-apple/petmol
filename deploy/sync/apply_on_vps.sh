@@ -10,7 +10,6 @@ REMOTE_DIR="/opt/petmol"
 APP_DIR="$REMOTE_DIR/app"
 ZIP_PATH="$REMOTE_DIR/PETMOL.zip"
 TEMP_DIR="$REMOTE_DIR/PETMOL_new"
-BUILD_ID="${BUILD_ID:-unknown}"
 
 # Colors
 GREEN='\033[0;32m'
@@ -113,11 +112,6 @@ else
     log "Fresh install - will start all services"
 fi
 
-if [ -n "$BUILD_ID" ]; then
-    RESTART_WEB=true
-    log "Forcing frontend rebuild for deploy build_id=$BUILD_ID"
-fi
-
 # ============================================
 # Step 2.5: Preserve legacy push subscriptions before rsync delete
 # ============================================
@@ -201,7 +195,7 @@ if [ "$RESTART_WEB" = true ]; then
     npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps
 
     log "Building Next.js..."
-    NEXT_PUBLIC_BUILD_ID="$BUILD_ID" npm run web:build
+    npm run web:build
 fi
 
 # ── ALWAYS copy static assets to standalone (critical for CSS/fonts) ────────
@@ -215,21 +209,14 @@ rm -rf "$STANDALONE/.next/static" "$STANDALONE/public"
 cp -r "$APP_DIR/apps/web/public"       "$STANDALONE/" 2>/dev/null || true
 cp -r "$APP_DIR/apps/web/.next/static" "$STANDALONE/.next/" 2>/dev/null || true
 
-# Inject deploy build id into sw.js so every deploy changes the file byte-for-byte.
+# Inject build timestamp into sw.js so every deploy changes the file byte-for-byte.
 # The browser compares sw.js byte-by-byte; without this, it sees the same file and
 # never activates the new service worker — mobile and desktop stay on the old build.
+BUILD_TS=$(date -u +"%Y%m%d%H%M%S")
 SW_PATH="$STANDALONE/public/sw.js"
 if [ -f "$SW_PATH" ]; then
-    python3 - <<PY
-from pathlib import Path
-
-sw_path = Path(r"$SW_PATH")
-build_id = "$BUILD_ID"
-content = sw_path.read_text()
-content = content.replace("__BUILD_ID__", build_id)
-sw_path.write_text(content)
-PY
-    log "sw.js build stamp injected: $BUILD_ID"
+    sed -i "s/v[0-9]\{4\}\.[0-9]\{2\}\.[0-9]\{2\}[a-zA-Z0-9._-]*/v${BUILD_TS}/" "$SW_PATH"
+    log "sw.js build stamp injected: v${BUILD_TS}"
 fi
 # ──────────────────────────────────────────────────────────────────────────
 

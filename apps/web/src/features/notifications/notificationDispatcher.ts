@@ -14,6 +14,9 @@
 
 import type { CanonicalPetEvent } from '@/features/events/types';
 import type { CareInteractionPolicy, MasterInteractionRules } from '@/features/interactions/types';
+import { loadMasterInteractionRules } from '@/features/interactions/preferences';
+import { resolveCarePolicyKeyFromEvent, getCarePolicyForEvent } from '@/features/interactions/interactionEngine';
+import { localTodayISO } from '@/lib/localDate';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -116,10 +119,55 @@ export function dispatchNotification(
   policy?: CareInteractionPolicy | null,
   rules?: MasterInteractionRules,
 ): NotificationPayload | null {
-  void event;
-  void policy;
-  void rules;
-  return null;
+  const masterRules = rules ?? loadMasterInteractionRules();
+
+  // Resolver policy se não fornecida
+  const resolvedPolicy = policy ?? getCarePolicyForEvent(event, masterRules);
+  if (!resolvedPolicy) return null;
+
+  // 1. Policy ativa?
+  if (!resolvedPolicy.enabled) return null;
+  if (!masterRules.enabled) return null;
+
+  // 2. Timing — verificar antecedência
+  if (event.status === 'upcoming') {
+    const advance = resolvedPolicy.advance_days ?? masterRules.advance_days ?? 7;
+    if (event.diff > advance) return null;
+  }
+
+  // 3. Decidir canais — push é exclusivo do backend
+  const channels: NotificationPayload['channels'] = [];
+
+  const homeActive = masterRules.channels.homePanel.enabled && resolvedPolicy.showOnHome !== false;
+  const centralActive = masterRules.channels.internalCenter.enabled && resolvedPolicy.showInCenter !== false;
+
+  if (homeActive) channels.push('home');
+  if (centralActive) channels.push('central');
+
+  // Se nenhum canal ativo, não despachar
+  if (channels.length === 0) return null;
+
+  // 5. Montar payload
+  const destination = resolveDestination(resolvedPolicy);
+  const destinationSecondary = resolveSecondaryDestination(resolvedPolicy);
+
+  const payload: NotificationPayload = {
+    id: `notif:${event.id}:${localTodayISO()}`,
+    type: resolveCarePolicyKeyFromEvent(event),
+    petId: event.pet_id,
+    petName: event.pet_name,
+    title: buildTitle(event, resolvedPolicy),
+    message: buildMessage(event, resolvedPolicy),
+    ctaPrimary: resolvedPolicy.primaryCtaLabel ?? resolvedPolicy.primary.label ?? 'Ver detalhes',
+    ctaSecondary: resolvedPolicy.secondaryCtaLabel ?? resolvedPolicy.secondary?.label,
+    destination,
+    destinationSecondary,
+    timestamp: new Date().toISOString(),
+    priority: buildPriority(resolvedPolicy),
+    channels,
+  };
+
+  return payload;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +182,13 @@ export function dispatchNotifications(
   events: CanonicalPetEvent[],
   rules?: MasterInteractionRules,
 ): NotificationPayload[] {
-  void events;
-  void rules;
-  return [];
+  const masterRules = rules ?? loadMasterInteractionRules();
+  const results: NotificationPayload[] = [];
+
+  for (const event of events) {
+    const payload = dispatchNotification(event, null, masterRules);
+    if (payload) results.push(payload);
+  }
+
+  return results;
 }

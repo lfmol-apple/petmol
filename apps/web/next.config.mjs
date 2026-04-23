@@ -41,14 +41,6 @@ const nextConfig = {
   // Headers para proxy e cache
   async headers() {
     return [
-      {
-        source: '/sw.js',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Pragma', value: 'no-cache' },
-          { key: 'Expires', value: '0' },
-        ],
-      },
       // Evita que mobile/browsers cacheiem o HTML das páginas
       {
         source: '/((?!_next/static|_next/image|icons|images|favicon).*)',
@@ -56,18 +48,6 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
           { key: 'Pragma', value: 'no-cache' },
           { key: 'Expires', value: '0' },
-        ],
-      },
-      {
-        source: '/manifest.json',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-        ],
-      },
-      {
-        source: '/manifest.webmanifest',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
         ],
       },
       // CORS para proxy do backend local

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:clean": "rm -rf .next && next dev",
-    "build": "NEXT_PUBLIC_BUILD_ID=${NEXT_PUBLIC_BUILD_ID:-dev-local} next build",
+    "build": "next build",
     "build:clean": "rm -rf .next && npm run build",
     "start": "next start",
     "lint": "next lint"
