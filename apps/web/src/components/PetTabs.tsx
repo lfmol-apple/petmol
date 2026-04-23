@@ -83,7 +83,15 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
             exit="exit"
             onPanEnd={handlePanEnd}
             className="w-full touch-pan-y"
-            style={{ gridColumn: 1, gridRow: 1 }}
+            style={{ 
+              gridColumn: 1, 
+              gridRow: 1,
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'translate3d(0,0,0)',
+              WebkitTransform: 'translate3d(0,0,0)',
+              willChange: 'transform, opacity'
+            }}
           >
             {children}
           </motion.div>
