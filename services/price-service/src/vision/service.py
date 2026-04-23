@@ -24,6 +24,10 @@ class VisionService:
         "gemini-2.0-flash",
         "gemini-2.0-flash-001",
     )
+    PRODUCT_PHOTO_GENERATION_CONFIG = {
+        "temperature": 0,
+        "response_mime_type": "application/json",
+    }
     
     def __init__(self, api_key: str):
         """
@@ -46,7 +50,12 @@ class VisionService:
                 unique_names.append(normalized)
         return unique_names
 
-    async def _generate_content_with_model_fallback(self, prompt: str, image_part: Dict[str, Any]):
+    async def _generate_content_with_model_fallback(
+        self,
+        prompt: str,
+        image_part: Dict[str, Any],
+        generation_config: Optional[Dict[str, Any]] = None,
+    ):
         last_error: Optional[Exception] = None
         for model_name in self._candidate_model_names():
             try:
@@ -56,6 +65,7 @@ class VisionService:
                 self.model = genai.GenerativeModel(model_name)
                 return await self.model.generate_content_async(
                     [prompt, image_part],
+                    generation_config=generation_config,
                     request_options={"timeout": 20},
                 )
             except Exception as exc:
@@ -332,7 +342,11 @@ Se a imagem for realmente ilegível:
                 "data": image_bytes,
             }
 
-            response = await self._generate_content_with_model_fallback(prompt, image_part)
+            response = await self._generate_content_with_model_fallback(
+                prompt,
+                image_part,
+                generation_config=self.PRODUCT_PHOTO_GENERATION_CONFIG,
+            )
             response_text = self._strip_json_fences(response.text)
             result = json.loads(response_text)
 
