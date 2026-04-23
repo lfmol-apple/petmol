@@ -234,6 +234,19 @@ def _get_active_feeding_plan(db: Session, pet_id: str) -> Optional[FeedingPlan]:
     return plans[0] if plans else None
 
 
+def _get_any_feeding_plan(db: Session, pet_id: str) -> Optional[FeedingPlan]:
+    return (
+        db.query(FeedingPlan)
+        .filter(FeedingPlan.pet_id == pet_id)
+        .order_by(
+            FeedingPlan.updated_at.desc(),
+            FeedingPlan.created_at.desc(),
+            FeedingPlan.id.desc(),
+        )
+        .first()
+    )
+
+
 def _soft_delete_duplicate_feeding_plans(
     plans: List[FeedingPlan],
     *,
@@ -722,10 +735,11 @@ async def create_or_update_feeding_plan(
     
     # Check if plan already exists
     active_plans = _list_active_feeding_plans(db, pet_id)
-    existing_plan = active_plans[0] if active_plans else None
+    existing_plan = active_plans[0] if active_plans else _get_any_feeding_plan(db, pet_id)
     
     if existing_plan:
         # Update existing plan
+        existing_plan.deleted_at = None
         existing_plan.species = request.species
         existing_plan.country_code = request.country_code
         existing_plan.food_brand = primary_item.get("food_brand")
