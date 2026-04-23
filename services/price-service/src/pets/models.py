@@ -9,13 +9,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..db import Base
 
 
-def _pet_documents_order_by():
-    # Resolve lazily to avoid mapper initialization failures when PetDocument
-    # is not imported yet in a given execution path (e.g. scheduler workers).
-    from .document_models import PetDocument
-    return PetDocument.created_at.desc()
-
-
 class Pet(Base):
     __tablename__ = "pets"
 
@@ -42,9 +35,4 @@ class Pet(Base):
     parasite_control_records: Mapped[list["ParasiteControlRecord"]] = relationship("ParasiteControlRecord", back_populates="pet", cascade="all, delete-orphan")
     grooming_records: Mapped[list["GroomingRecord"]] = relationship("GroomingRecord", back_populates="pet", cascade="all, delete-orphan")
     feeding_plan: Mapped[Optional["FeedingPlan"]] = relationship("FeedingPlan", back_populates="pet", cascade="all, delete-orphan", uselist=False)
-    documents: Mapped[list["PetDocument"]] = relationship(
-        "PetDocument",
-        back_populates="pet",
-        cascade="all, delete-orphan",
-        order_by=_pet_documents_order_by,
-    )
+    documents: Mapped[list["PetDocument"]] = relationship("PetDocument", back_populates="pet", cascade="all, delete-orphan", order_by="PetDocument.created_at.desc()")
