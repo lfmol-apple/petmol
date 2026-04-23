@@ -227,9 +227,10 @@ export function useParasiteManagement({
     if (!pet) return;
     try {
       const savedToken = getToken();
-      if (!savedToken) return;
       const res = await fetch(`${API_BASE_URL}/pets/${pet.pet_id}/parasites`, {
-        headers: { Authorization: `Bearer ${savedToken}` },
+        headers: savedToken ? { Authorization: `Bearer ${savedToken}` } : undefined,
+        credentials: 'include',
+        cache: 'no-store',
       });
       if (!res.ok) return;
       const data: Array<{

@@ -127,10 +127,11 @@ export function useVaccineManagement({
     const pet = pets.find((p) => p.pet_id === selectedPetId) || pets[0];
     if (!pet) return;
     const savedToken = getToken();
-    if (!savedToken) return;
     try {
       const res = await fetch(`${API_BASE_URL}/pets/${pet.pet_id}/vaccines`, {
-        headers: { Authorization: `Bearer ${savedToken}` },
+        headers: savedToken ? { Authorization: `Bearer ${savedToken}` } : undefined,
+        credentials: 'include',
+        cache: 'no-store',
       });
       if (!res.ok) return;
       const data: Array<{

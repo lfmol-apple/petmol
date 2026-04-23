@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { API_BASE_URL } from '@/lib/api';
+import { getToken } from '@/lib/auth-token';
 import { requestUserConfirmation, showBlockingNotice } from '@/features/interactions/userPromptChannel';
 import { parsePetEventExtraData, type PetEventRecord } from '@/lib/petEvents';
 
@@ -97,16 +98,20 @@ export function usePetEventManagement({
   const [attachDocFiles, setAttachDocFiles] = useState<File[]>([]);
 
   const fetchPetEvents = useCallback(async (petId: string) => {
-    const token = localStorage.getItem('petmol_token');
-    if (!token || !petId) return;
+    const token = getToken();
+    if (!petId) return;
     setEventsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/events?pet_id=${petId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
+        cache: 'no-store',
       });
       if (response.ok) {
         const data: PetEventRecord[] = await response.json();
         setPetEvents(Array.isArray(data) ? data : []);
+      } else if (response.status === 401 || response.status === 403) {
+        setPetEvents([]);
       }
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
@@ -122,11 +127,12 @@ export function usePetEventManagement({
       confirmLabel: 'Excluir registro',
     });
     if (!accepted) return;
-    const token = localStorage.getItem('petmol_token');
+    const token = getToken();
     try {
       await fetch(`${API_BASE_URL}/events/${eventId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
       });
       if (selectedPetId) {
         await fetchPetEvents(selectedPetId);
