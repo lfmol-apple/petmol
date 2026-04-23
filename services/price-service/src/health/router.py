@@ -212,6 +212,41 @@ def _serialize_feeding_items(items: List[Dict[str, Any]]) -> str:
     return json.dumps(items, ensure_ascii=False)
 
 
+def _list_active_feeding_plans(db: Session, pet_id: str) -> List[FeedingPlan]:
+    """Return active feeding plans ordered by freshest first."""
+    return (
+        db.query(FeedingPlan)
+        .filter(
+            FeedingPlan.pet_id == pet_id,
+            FeedingPlan.deleted_at.is_(None),
+        )
+        .order_by(
+            FeedingPlan.updated_at.desc(),
+            FeedingPlan.created_at.desc(),
+            FeedingPlan.id.desc(),
+        )
+        .all()
+    )
+
+
+def _get_active_feeding_plan(db: Session, pet_id: str) -> Optional[FeedingPlan]:
+    plans = _list_active_feeding_plans(db, pet_id)
+    return plans[0] if plans else None
+
+
+def _soft_delete_duplicate_feeding_plans(
+    plans: List[FeedingPlan],
+    *,
+    keep_id: str,
+) -> None:
+    now = datetime.utcnow()
+    for plan in plans:
+        if plan.id == keep_id:
+            continue
+        plan.deleted_at = now
+        plan.updated_at = now
+
+
 def _build_feeding_item_data(items: List[Dict[str, Any]]) -> List[FeedingPlanItemData]:
     return [
         FeedingPlanItemData(
@@ -607,7 +642,7 @@ async def get_health_snapshot(
     
     # Get feeding plan if exists
     feeding_snapshot = None
-    feeding_plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id).first()
+    feeding_plan = _get_active_feeding_plan(db, pet_id)
     
     if feeding_plan:
         feeding_items = _parse_feeding_items_from_plan(feeding_plan)
@@ -686,7 +721,8 @@ async def create_or_update_feeding_plan(
     )
     
     # Check if plan already exists
-    existing_plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
+    active_plans = _list_active_feeding_plans(db, pet_id)
+    existing_plan = active_plans[0] if active_plans else None
     
     if existing_plan:
         # Update existing plan
@@ -734,6 +770,9 @@ async def create_or_update_feeding_plan(
         )
         db.add(plan)
     
+    if active_plans and len(active_plans) > 1:
+        _soft_delete_duplicate_feeding_plans(active_plans[1:], keep_id=plan.id)
+
     db.commit()
     db.refresh(plan)
     
@@ -771,7 +810,7 @@ async def get_feeding_plan(
     pet = _check_pet_ownership(pet_id, current_user, db)
     
     # Get plan
-    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
+    plan = _get_active_feeding_plan(db, pet_id)
     
     if not plan:
         raise HTTPException(
@@ -820,7 +859,7 @@ async def delete_feeding_plan(
 ):
     """Soft delete feeding plan for quick correction."""
     _check_pet_ownership(pet_id, current_user, db)
-    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
+    plan = _get_active_feeding_plan(db, pet_id)
     if not plan:
       raise HTTPException(
           status_code=status.HTTP_404_NOT_FOUND,
@@ -852,10 +891,7 @@ async def restock_feeding_plan(
     Atualiza last_refill_date e recalcula estimated_end_date / next_reminder_date.
     """
     _check_pet_ownership(pet_id, current_user, db)
-    plan = db.query(FeedingPlan).filter(
-        FeedingPlan.pet_id == pet_id,
-        FeedingPlan.deleted_at.is_(None),
-    ).first()
+    plan = _get_active_feeding_plan(db, pet_id)
 
     if not plan:
         raise HTTPException(
@@ -912,10 +948,7 @@ async def snooze_feeding_plan(
     Retorna a nova next_reminder_date para o frontend atualizar o estado.
     """
     _check_pet_ownership(pet_id, current_user, db)
-    plan = db.query(FeedingPlan).filter(
-        FeedingPlan.pet_id == pet_id,
-        FeedingPlan.deleted_at.is_(None),
-    ).first()
+    plan = _get_active_feeding_plan(db, pet_id)
 
     if not plan:
         raise HTTPException(
@@ -956,7 +989,7 @@ async def get_feeding_estimate(
     pet = _check_pet_ownership(pet_id, current_user, db)
     
     # Get plan
-    plan = db.query(FeedingPlan).filter(FeedingPlan.pet_id == pet_id, FeedingPlan.deleted_at.is_(None)).first()
+    plan = _get_active_feeding_plan(db, pet_id)
     
     if not plan:
         raise HTTPException(
