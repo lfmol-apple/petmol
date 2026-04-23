@@ -1156,7 +1156,7 @@ def send_food_reminder_pushes() -> None:
     """Daily job at 11:00 BRT.
 
     For each feeding plan where next_reminder_date <= today:
-      - enabled=true, deleted_at IS NULL
+      - enabled=true, no_consumption_control=false, deleted_at IS NULL
     Creates pendency and sends push.
     - days_left <= 0 => critical priority (80)
     - days_left > 0  => urgent priority (60), skipped when critical is active
@@ -1187,59 +1187,30 @@ def send_food_reminder_pushes() -> None:
             plans = db.query(FeedingPlan).filter(
                 FeedingPlan.next_reminder_date <= today,
                 FeedingPlan.enabled.is_(True),
+                FeedingPlan.no_consumption_control.is_(False),
                 FeedingPlan.deleted_at.is_(None),
             ).all()
-            logger.info(
-                "[food_push] tick=%s plans_candidates=%d",
-                now.isoformat(timespec="minutes"),
-                len(plans),
-            )
 
             expired_ids: list[str] = []
 
             for plan in plans:
-                logger.info(
-                    "[food_push] evaluate plan_id=%s pet_id=%s mode=%s next_reminder_date=%s estimated_end_date=%s next_purchase_date=%s last_food_push_date=%s",
-                    plan.id,
-                    plan.pet_id,
-                    "manual" if plan.no_consumption_control else "weight",
-                    plan.next_reminder_date.isoformat() if plan.next_reminder_date else None,
-                    plan.estimated_end_date.isoformat() if plan.estimated_end_date else None,
-                    plan.next_purchase_date.isoformat() if plan.next_purchase_date else None,
-                    plan.last_food_push_date.isoformat() if plan.last_food_push_date else None,
-                )
                 # Persistent dedup: skip if already pushed today
                 if plan.last_food_push_date == today:
-                    logger.info(
-                        "[food_push] skip plan_id=%s reason=dedup_today",
-                        plan.id,
-                    )
                     continue
 
                 pet = db.query(Pet).filter(Pet.id == plan.pet_id).first()
                 if not pet:
-                    logger.info(
-                        "[food_push] skip plan_id=%s reason=pet_not_found",
-                        plan.id,
-                    )
                     continue
 
                 sub = subscriptions.get(str(pet.user_id))
                 if not sub:
-                    logger.info(
-                        "[food_push] skip plan_id=%s pet_id=%s reason=no_subscription user_id=%s",
-                        plan.id,
-                        pet.id,
-                        pet.user_id,
-                    )
                     continue
 
-                reference_end_date = plan.estimated_end_date or plan.next_purchase_date
-                if reference_end_date:
-                    days_left = (reference_end_date - today).days
-                else:
-                    # Fallback defensivo: sem data de término/compra configurada, trata como urgente hoje.
-                    days_left = 0
+                days_left = (
+                    (plan.estimated_end_date - today).days
+                    if plan.estimated_end_date
+                    else 0
+                )
                 priority = 80 if days_left <= 0 else 60
                 if priority < 75 and _has_active_blocker(
                     db,
@@ -1247,12 +1218,6 @@ def send_food_reminder_pushes() -> None:
                     pet_id=pet.id,
                     min_priority=75,
                 ):
-                    logger.info(
-                        "[food_push] skip plan_id=%s pet_id=%s reason=critical_blocker_active days_left=%d",
-                        plan.id,
-                        pet.id,
-                        days_left,
-                    )
                     continue
                 brand = plan.food_brand or "Ração"
                 pend_id = (
@@ -1286,35 +1251,14 @@ def send_food_reminder_pushes() -> None:
                     "requireInteraction": True,
                     "autoCloseMs": 0,
                 }
-                logger.info(
-                    "[food_push] dispatch plan_id=%s pet_id=%s days_left=%d priority=%d deep_link=%s",
-                    plan.id,
-                    pet.id,
-                    days_left,
-                    priority,
-                    deep_link,
-                )
                 ok = _send_push(sub, payload)
                 if not ok:
-                    logger.info(
-                        "[food_push] result=expired_subscription plan_id=%s pet_id=%s user_id=%s",
-                        plan.id,
-                        pet.id,
-                        pet.user_id,
-                    )
                     expired_ids.append(str(pet.user_id))
                 else:
                     # Persist dedup date so restart cannot double-send today
                     plan.last_food_push_date = today
                     db.commit()
-                    logger.info(
-                        "[food_push] result=sent plan_id=%s pet_id=%s user_id=%s days_left=%d tag=%s",
-                        plan.id,
-                        pet.id,
-                        pet.user_id,
-                        days_left,
-                        pend_id,
-                    )
+                    logger.info(f"Push ração enviado -> pet {pet.id} user {pet.user_id} days_left={days_left}")
 
             if expired_ids:
                 for uid in expired_ids:
