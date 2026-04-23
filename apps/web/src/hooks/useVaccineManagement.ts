@@ -7,7 +7,7 @@ import {
   showBlockingNotice,
 } from '@/features/interactions/userPromptChannel';
 import { trackV1Metric } from '@/lib/v1Metrics';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BACKEND_BASE, API_BASE_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 import { updateVaccine, deleteVaccine, clearAllVaccines } from '@/services/vaccineService';
 import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
@@ -271,7 +271,7 @@ export function useVaccineManagement({
         vaccinePayload.reminder_time = vaccineFormData.reminder_time ?? '09:00';
 
         const res = await fetch(
-          `${API_BASE_URL}/api/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`,
+          `${API_BACKEND_BASE}/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`,
           {
             method: 'POST',
             headers: {
@@ -579,7 +579,7 @@ export function useVaccineManagement({
 
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`,
+        `${API_BACKEND_BASE}/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`,
         {
           method: 'POST',
           headers: {
@@ -825,7 +825,7 @@ export function useVaccineManagement({
       }));
 
       const res = await fetch(
-        `${API_BASE_URL}/api/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`,
+        `${API_BACKEND_BASE}/health/pets/${currentPet.pet_id}/vaccines/bulk-confirm`,
         {
           method: 'POST',
           headers: {

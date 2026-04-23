@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BACKEND_BASE } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 import type { FeedingPlanEntry, FeedingPlanItemEntry } from '@/lib/types/homeForms';
 
@@ -95,7 +95,7 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
     };
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
+      const res = await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         credentials: 'include',
         cache: 'no-store',

@@ -5,7 +5,7 @@ import { FoodControlTab, type FoodControlTabState } from '@/components/FoodContr
 import type { PetHealthProfile } from '@/lib/petHealth';
 import { ModalPortal } from '@/components/ModalPortal';
 import { trackPartnerClicked } from '@/lib/v1Metrics';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BACKEND_BASE } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 import {
   HOME_SHOPPING_PARTNERS,
@@ -62,7 +62,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
       const d = new Date();
       const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const res = await fetch(
-        `${API_BASE_URL}/api/health/pets/${pet.pet_id}/feeding/plan/restock`,
+        `${API_BACKEND_BASE}/health/pets/${pet.pet_id}/feeding/plan/restock`,
         {
           method: 'POST',
           headers: {
@@ -99,7 +99,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode }: FoodItemSh
     try {
       const token = getToken();
       const res = await fetch(
-        `${API_BASE_URL}/api/health/pets/${pet.pet_id}/feeding/plan/snooze`,
+        `${API_BACKEND_BASE}/health/pets/${pet.pet_id}/feeding/plan/snooze`,
         {
           method: 'PATCH',
           headers: {

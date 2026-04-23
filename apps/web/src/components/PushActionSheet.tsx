@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BACKEND_BASE, API_BASE_URL } from '@/lib/api';
 import { getToken as getAuthToken } from '@/lib/auth-token';
 import { trackReminderActionCompleted, trackV1Metric } from '@/lib/v1Metrics';
 import { localTodayISO } from '@/lib/localDate';
@@ -364,7 +364,7 @@ function FoodActions({
       const token = getAuthToken();
       if (token) {
         setLoading(true);
-        await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan/restock`, {
+        await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/restock`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           credentials: 'include',

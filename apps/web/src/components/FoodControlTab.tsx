@@ -2,7 +2,7 @@
 
 import { getToken } from '@/lib/auth-token';
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BACKEND_BASE } from '@/lib/api';
 import { trackV1Metric } from '@/lib/v1Metrics';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
@@ -337,7 +337,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     const load = async () => {
       try {
         const token = getToken();
-        const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
+        const res = await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           credentials: 'include',
         });
@@ -476,7 +476,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
+      const res = await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -579,7 +579,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     setDeleteFeedback(null);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
+      const res = await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan`, {
         method: 'DELETE',
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         credentials: 'include',
