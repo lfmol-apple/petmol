@@ -41,7 +41,7 @@ function shouldShowAlert(tone?: ControlTone, fallbackAlert?: boolean) {
 function AlertBadge({ tone = 'critical' }: { tone?: ControlTone }) {
   if (tone === 'warning') {
     return (
-      <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-6 h-6 animate-pulse">
+      <span className="absolute right-2 bottom-2 z-10 flex items-center justify-center w-6 h-6 animate-pulse">
         <span
           className="absolute inset-0 bg-amber-400 shadow-md ring-2 ring-white"
           style={{ clipPath: 'polygon(50% 0%, 100% 92%, 0% 92%)' }}
@@ -52,7 +52,7 @@ function AlertBadge({ tone = 'critical' }: { tone?: ControlTone }) {
   }
 
   return (
-    <span className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 shadow-md ring-2 ring-white animate-pulse">
+    <span className="absolute right-2 bottom-2 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-red-500 shadow-md ring-2 ring-white animate-pulse">
       <span className="text-white font-black leading-none" style={{ fontSize: '10px' }}>!</span>
     </span>
   );
