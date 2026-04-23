@@ -208,16 +208,6 @@ mkdir -p "$STANDALONE/.next"
 rm -rf "$STANDALONE/.next/static" "$STANDALONE/public"
 cp -r "$APP_DIR/apps/web/public"       "$STANDALONE/" 2>/dev/null || true
 cp -r "$APP_DIR/apps/web/.next/static" "$STANDALONE/.next/" 2>/dev/null || true
-
-# Inject build timestamp into sw.js so every deploy changes the file byte-for-byte.
-# The browser compares sw.js byte-by-byte; without this, it sees the same file and
-# never activates the new service worker — mobile and desktop stay on the old build.
-BUILD_TS=$(date -u +"%Y%m%d%H%M%S")
-SW_PATH="$STANDALONE/public/sw.js"
-if [ -f "$SW_PATH" ]; then
-    sed -i "s/v[0-9]\{4\}\.[0-9]\{2\}\.[0-9]\{2\}[a-zA-Z0-9._-]*/v${BUILD_TS}/" "$SW_PATH"
-    log "sw.js build stamp injected: v${BUILD_TS}"
-fi
 # ──────────────────────────────────────────────────────────────────────────
 
 # Fix permissions again after install

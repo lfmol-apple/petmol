@@ -1,14 +1,20 @@
 /**
  * PETMOL Service Worker — Web Push
- * v2026.04.23.1
+ * v2026.04.09c
  *
- * Política de paridade desktop/mobile:
- * - Não manter cache de navegação HTML no SW.
- * - Atualização agressiva do SW (skipWaiting + claim + limpeza de caches antigos).
+ * Recebe eventos push, exibe notificação e ao clicar abre a URL do payload.
+ * Payload esperado (JSON):
+ * {
+ *   title:   string,
+ *   body:    string,
+ *   icon:    string,
+ *   badge:   string,
+ *   tag:     string,
+ *   data:    { url: string },
+ *   requireInteraction: boolean,
+ *   autoCloseMs: number,
+ * }
  */
-const SW_VERSION = '2026.04.23.1';
-const RUNTIME_CACHE_PREFIX = 'petmol-sw-';
-const RUNTIME_CACHE_NAME = `${RUNTIME_CACHE_PREFIX}${SW_VERSION}`;
 
 self.addEventListener('push', (event) => {
   if (!event.data) return;
@@ -114,23 +120,7 @@ function normalizeNotificationClickUrl(rawUrl) {
 }
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.startsWith(RUNTIME_CACHE_PREFIX) && key !== RUNTIME_CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    ).then(() => clients.claim()).then(() =>
-      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-        clientList.forEach((client) => {
-          try { client.navigate(client.url); } catch (_) {}
-        });
-      })
-    )
-  );
-});
+self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
@@ -139,6 +129,8 @@ self.addEventListener('fetch', (event) => {
     !url.pathname.startsWith('/_next/') &&
     (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html'))
   ) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
   }
 });
