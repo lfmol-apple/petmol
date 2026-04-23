@@ -1077,27 +1077,41 @@ export function ProductDetectionSheetGold({
 
     // PIPELINE PADRÃO PARA DEMAIS PRODUTOS - MANTER TUDO INTACTO
     console.log('[SCANNER LOG - OUTROS] Usando pipeline padrão para produto não-ração');
+    const identifiedFromPhoto2 = await identifyProductFromPhoto(file, undefined);
+    if (identifiedFromPhoto2.product) {
+      const photoProduct = identifiedFromPhoto2.product;
+      // Verificar se há correção prévia para o nome sugerido pela IA
+      const corrected = identifiedFromPhoto2.assistedConfirmation || (identifiedFromPhoto2.termConflicts?.length ?? 0) > 0
+        ? null
+        : findLocalCorrection(photoProduct.name, photoProduct.category);
+      const finalName = corrected ?? photoProduct.name;
+      const score = identifiedFromPhoto2.confidence?.score ?? 0.62;
+      const origin = identifiedFromPhoto2.origin ?? 'partial_name';
+      const resultType = identifiedFromPhoto2.resultType ?? 'partial';
+      decisionSourceRef.current = origin === 'parser'
+        ? 'parser'
+        : origin === 'fuzzy_match'
           ? 'fuzzy_match'
-        : origin === 'ia'
-          ? 'ai'
-          : 'partial_name';
+          : origin === 'ia'
+            ? 'ai'
+            : 'partial_name';
       aiSuggestedNameRef.current = photoProduct.name; // nome original da IA (antes de correção)
       aiConfidenceRef.current = score;
       decisionScoreRef.current = score;
       decisionResultTypeRef.current = resultType;
-      assistedConfirmationRef.current = Boolean(identifiedFromPhoto.assistedConfirmation);
-      probableNameRef.current = identifiedFromPhoto.probableName;
-      productNameRef.current = identifiedFromPhoto.productName;
-      visibleTextRef.current = identifiedFromPhoto.visibleText;
-      rawTextBlobsRef.current = identifiedFromPhoto.rawTextBlobs ?? [];
-      speciesRef.current = identifiedFromPhoto.species;
-      lifeStageRef.current = identifiedFromPhoto.lifeStage;
-      detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
-      detectedBrandRef.current = identifiedFromPhoto.detectedBrand ?? photoProduct.brand;
-      strongTermsRef.current = identifiedFromPhoto.strongTerms ?? [];
-      mediumTermsRef.current = identifiedFromPhoto.mediumTerms ?? [];
-      weakTermsRef.current = identifiedFromPhoto.weakTerms ?? [];
-      termConflictsRef.current = identifiedFromPhoto.termConflicts ?? [];
+      assistedConfirmationRef.current = Boolean(identifiedFromPhoto2.assistedConfirmation);
+      probableNameRef.current = identifiedFromPhoto2.probableName;
+      productNameRef.current = identifiedFromPhoto2.productName;
+      visibleTextRef.current = identifiedFromPhoto2.visibleText;
+      rawTextBlobsRef.current = identifiedFromPhoto2.rawTextBlobs ?? [];
+      speciesRef.current = identifiedFromPhoto2.species;
+      lifeStageRef.current = identifiedFromPhoto2.lifeStage;
+      detectedWeightRef.current = identifiedFromPhoto2.detectedWeight ?? photoProduct.weight;
+      detectedBrandRef.current = identifiedFromPhoto2.detectedBrand ?? photoProduct.brand;
+      strongTermsRef.current = identifiedFromPhoto2.strongTerms ?? [];
+      mediumTermsRef.current = identifiedFromPhoto2.mediumTerms ?? [];
+      weakTermsRef.current = identifiedFromPhoto2.weakTerms ?? [];
+      termConflictsRef.current = identifiedFromPhoto2.termConflicts ?? [];
       setScannerError(null);
       setFromHistory(false);
       const nextProduct = corrected ? { ...photoProduct, name: finalName } : photoProduct;
@@ -1110,7 +1124,7 @@ export function ProductDetectionSheetGold({
         brand: nextProduct.brand ?? null,
       });
 
-      if ((identifiedFromPhoto.confidence?.level === 'low' || resultType === 'fallback') && !identifiedFromPhoto.assistedConfirmation) {
+      if ((identifiedFromPhoto2.confidence?.level === 'low' || resultType === 'fallback') && !identifiedFromPhoto2.assistedConfirmation) {
         setQuery(finalName);
         setStep('manual');
       } else {
@@ -1119,7 +1133,7 @@ export function ProductDetectionSheetGold({
       return;
     }
 
-    setScannerError(identifiedFromPhoto.errorCode ?? 'photo_barcode_not_found');
+    setScannerError(identifiedFromPhoto2.errorCode ?? 'photo_barcode_not_found');
     setManualBarcode('');
     setConfirmed(null);
     setStep('not-found');
