@@ -84,24 +84,20 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
 
   return (
     <div className="w-full relative overflow-x-hidden">
-      {/* O Grid garante que ambos os componentes (antigo e novo) ocupem o mesmo espaço sem salto de altura */}
-      <div className="grid grid-cols-1 grid-rows-1 items-start">
-        <AnimatePresence initial={false} custom={direction}>
-          <motion.div
-            key={selectedPetId}
-            custom={direction}
-            variants={variants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            onPanEnd={handlePanEnd}
-            className="w-full touch-pan-y"
-            style={{ gridColumn: 1, gridRow: 1 }}
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      <AnimatePresence mode="wait" initial={false} custom={direction}>
+        <motion.div
+          key={selectedPetId}
+          custom={direction}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          onPanEnd={handlePanEnd}
+          className="w-full touch-pan-y"
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
