@@ -271,8 +271,8 @@ export default function ProfilePage() {
   } text-[15px] sm:text-sm`;
 
   // --- Lógica de Guided Sequential Filling ---
-  const isNameEmpty = !(tutorData?.name?.trim());
-  const isPhoneEmpty = !(tutorData?.phone?.replace(/\D/g,'')?.trim());
+  const isNameEmpty = !tutorData?.name?.trim();
+  const isPhoneEmpty = !tutorData?.phone?.replace(/\D/g,'').trim();
   
   const shouldHighlight = (field: 'name' | 'phone') => {
     if (!editMode) return false;
