@@ -34,11 +34,24 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
 
   // Usamos PanEnd em vez de DragEnd para evitar alteração física contínua no DOM durante o toque
   const handlePanEnd = (event: any, info: PanInfo) => {
-    const swipeThreshold = 50;
-    if (info.offset.x > swipeThreshold && currentIndex > 0) {
+    const target = event?.target as HTMLElement | null;
+    if (target?.closest('button, a, input, textarea, select, [role="button"], [data-no-swipe="true"]')) {
+      return;
+    }
+
+    const absX = Math.abs(info.offset.x);
+    const absY = Math.abs(info.offset.y);
+    const absVelocityX = Math.abs(info.velocity.x);
+
+    // Evita trocar pet durante scroll vertical no mobile.
+    const isHorizontalIntent = absX > absY * 1.15;
+    const hasDistanceOrVelocity = absX > 70 || absVelocityX > 650;
+    if (!isHorizontalIntent || !hasDistanceOrVelocity) return;
+
+    if (info.offset.x > 0 && currentIndex > 0) {
       setDirection(-1);
       onPetChange(pets[currentIndex - 1].id);
-    } else if (info.offset.x < -swipeThreshold && currentIndex < pets.length - 1) {
+    } else if (info.offset.x < 0 && currentIndex < pets.length - 1) {
       setDirection(1);
       onPetChange(pets[currentIndex + 1].id);
     }
@@ -83,15 +96,7 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
             exit="exit"
             onPanEnd={handlePanEnd}
             className="w-full touch-pan-y"
-            style={{ 
-              gridColumn: 1, 
-              gridRow: 1,
-              backfaceVisibility: 'hidden',
-              WebkitBackfaceVisibility: 'hidden',
-              transform: 'translate3d(0,0,0)',
-              WebkitTransform: 'translate3d(0,0,0)',
-              willChange: 'transform, opacity'
-            }}
+            style={{ gridColumn: 1, gridRow: 1 }}
           >
             {children}
           </motion.div>
@@ -100,4 +105,3 @@ export function PetTabs({ pets, selectedPetId, onPetChange, children }: PetTabsP
     </div>
   );
 }
-

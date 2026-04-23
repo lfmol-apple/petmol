@@ -150,28 +150,27 @@ export function HomePetHeader({
     currentPet.neutered !== undefined ? (currentPet.neutered ? t('pet.neutered.yes') : t('pet.neutered.no')) : null,
   ].filter(Boolean).join(' · ');
 
+  const currentPetPhotoUrl = getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps);
+
   return (
     <>    <div className="px-4 pt-4 space-y-3">
       {/* Container da Foto + Navegação Estilo Apple */}
-      <div 
-        className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 h-64 sm:h-72"
-        style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'translate3d(0,0,0)', WebkitTransform: 'translate3d(0,0,0)' }}
-      >
+      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 h-64 sm:h-72">
         
         {/* Emoji de Fundo para Pets sem Foto */}
         <div className="w-full h-full flex items-center justify-center opacity-40">
-          <span className="text-white text-6xl sm:text-7xl md:text-8xl transition-transform duration-500 group-hover:scale-110">
+          <span className="text-white text-6xl sm:text-7xl md:text-8xl transition-transform duration-500 sm:group-hover:scale-110">
             {currentPet.species === 'dog' ? '🐕' : currentPet.species === 'cat' ? '🐱' : '🐾'}
           </span>
         </div>
 
         {/* Foto Real do Pet (Se houver) */}
-        {getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps) && (
+        {currentPetPhotoUrl && (
           <img
-            src={getPhotoUrl(currentPet.photo, currentPet.pet_id, photoTimestamps)!}
+            src={currentPetPhotoUrl}
             alt={currentPet.pet_name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-            style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'translateZ(0)', WebkitTransform: 'translateZ(0)' }}
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 sm:group-hover:scale-105"
+            draggable={false}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
