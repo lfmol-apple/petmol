@@ -134,6 +134,21 @@ interface PhotoIdentifyOutcome {
   termConflicts?: string[];
 }
 
+interface StructuredFoodFields {
+  marca?: string;
+  linha?: string;
+  especie?: string;
+  fase?: string;
+  proteina?: string;
+  peso?: string;
+}
+
+interface FoodPhotoIdentifyOutcome extends PhotoIdentifyOutcome {
+  structuredFields: StructuredFoodFields;
+  extractedRawText: string;
+  decisionReason: string;
+}
+
 const MAX_PRODUCT_PHOTO_BYTES = 4 * 1024 * 1024; // usado apenas para compressão interna, não como bloqueio
 
 function hasUsefulProductPartial(payload: PhotoProductIdentifyResponse): boolean {
@@ -174,6 +189,71 @@ function shouldOpenAssistedConfirmation(payload: PhotoProductIdentifyResponse): 
     detectedWeight &&
     partialProductName,
   );
+}
+
+function normalizeFoodSpecies(value?: string): string | undefined {
+  const token = value?.trim().toLowerCase();
+  if (!token) return undefined;
+  if (['cao', 'cão', 'dog', 'canine'].includes(token)) return 'cão';
+  if (['gato', 'cat', 'feline'].includes(token)) return 'gato';
+  return token;
+}
+
+function normalizeFoodLifeStage(value?: string): string | undefined {
+  const token = value?.trim().toLowerCase();
+  if (!token) return undefined;
+  if (['filhote', 'puppy', 'kitten', 'junior'].includes(token)) return 'filhote';
+  if (['adulto', 'adult', 'adulta'].includes(token)) return 'adulto';
+  if (['senior', 'sênior', 'mature'].includes(token)) return 'sênior';
+  return token;
+}
+
+function detectFoodProtein(value?: string): string | undefined {
+  if (!value) return undefined;
+  const match = value.match(/\b(frango|salm[aã]o|carne|boi|cordeiro|peixe|peru|atum)\b/i);
+  return match?.[1]?.toLowerCase();
+}
+
+function buildFoodDecisionName(fields: StructuredFoodFields, fallbackName?: string): string | undefined {
+  const primary = [fields.marca, fields.linha].filter(Boolean).join(' ').trim();
+  const speciesStage = [fields.especie, fields.fase].filter(Boolean).join(' ').trim();
+  const finalName = [primary || fallbackName, speciesStage, fields.proteina, fields.peso]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return finalName || fallbackName;
+}
+
+async function normalizeFoodPackageImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const MAX_DIM = 1920;
+    const ratio = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * ratio));
+    const height = Math.max(1, Math.round(bitmap.height * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    // Ajuste leve para estabilizar OCR de embalagem sem pipeline pesado.
+    ctx.filter = 'contrast(1.08) brightness(1.02)';
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>(resolve => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.9);
+    });
+    if (!blob) return file;
+    return new File([blob], file.name, { type: 'image/jpeg' });
+  } catch {
+    return compressImageForAnalysis(file);
+  }
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -578,6 +658,215 @@ export function ProductDetectionSheetGold({
     }
   }, [hint, petId]);
 
+  const identifyFoodByPackageImage = useCallback(async (file: File): Promise<FoodPhotoIdentifyOutcome> => {
+    try {
+      const token = getToken();
+      let payload: PhotoProductIdentifyResponse | null = null;
+      let lastErrorCode: PhotoIdentifyOutcome['errorCode'] = 'photo_ai_error';
+
+      const normalizedFile = await normalizeFoodPackageImage(file);
+      const candidates = normalizedFile === file ? [file] : [file, normalizedFile];
+      for (const candidateFile of candidates) {
+        const image = await fileToBase64(candidateFile);
+        const res = await fetch(`${API_BASE_URL}/vision/identify-product-photo`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          credentials: 'include',
+          signal: AbortSignal.timeout(25000),
+          body: JSON.stringify({
+            image,
+            pet_id: petId,
+            hint: 'food',
+          }),
+        });
+
+        if (!res.ok) {
+          lastErrorCode = res.status === 504 ? 'photo_ai_timeout' : 'photo_ai_error';
+          continue;
+        }
+
+        const currentPayload = (await res.json()) as PhotoProductIdentifyResponse;
+        payload = currentPayload;
+        if (hasUsefulProductPartial(currentPayload)) break;
+      }
+
+      if (!payload) {
+        return {
+          product: null,
+          errorCode: lastErrorCode,
+          structuredFields: {},
+          extractedRawText: '',
+          decisionReason: lastErrorCode === 'photo_ai_timeout' ? 'timeout_vision_api' : 'vision_api_error',
+        };
+      }
+
+      const parsedFood = extractFoodFields({
+        brand: payload.brand,
+        productName: payload.product_name,
+        probableName: payload.probable_name,
+        species: payload.species,
+        lifeStage: payload.life_stage,
+        weight: getDetectedWeight(payload) ?? payload.weight,
+        weightValue: payload.weight_value,
+        weightUnit: payload.weight_unit,
+        line: payload.line,
+        variant: payload.variant ?? payload.size,
+        size: payload.size,
+        flavor: payload.flavor,
+        visibleText: payload.visible_text,
+        reason: payload.reason,
+        rawTextBlobs: payload.raw_text_blobs ?? [],
+      });
+
+      const structuredFields: StructuredFoodFields = {
+        marca: payload.brand?.trim() || parsedFood.brand,
+        linha: payload.line?.trim() || parsedFood.line || payload.product_name?.trim() || parsedFood.productName,
+        especie: normalizeFoodSpecies(payload.species?.trim() || parsedFood.species),
+        fase: normalizeFoodLifeStage(payload.life_stage?.trim() || parsedFood.lifeStage),
+        proteina: detectFoodProtein(
+          [
+            payload.flavor?.trim(),
+            payload.variant?.trim(),
+            payload.product_name?.trim(),
+            payload.visible_text?.trim(),
+            ...(payload.raw_text_blobs ?? []),
+          ].filter(Boolean).join(' '),
+        ),
+        peso: getDetectedWeight(payload) || parsedFood.weight,
+      };
+
+      const extractedRawText = [
+        ...(payload.raw_text_blobs ?? []).map(item => item?.trim()).filter(Boolean),
+        payload.visible_text?.trim(),
+      ].filter(Boolean).join('\n').trim();
+
+      const resolved = await resolvePhotoProductCandidate(payload, {
+        hint: 'food',
+        barcode: '',
+      });
+
+      const fallbackName = buildPartialFoodName({
+        brand: payload.brand,
+        productName: payload.product_name,
+        probableName: payload.probable_name,
+        species: payload.species,
+        lifeStage: payload.life_stage,
+        weight: getDetectedWeight(payload) ?? payload.weight,
+        weightValue: payload.weight_value,
+        weightUnit: payload.weight_unit,
+        line: payload.line,
+        variant: payload.variant ?? payload.size,
+        size: payload.size,
+        flavor: payload.flavor,
+        visibleText: payload.visible_text,
+        reason: payload.reason,
+        rawTextBlobs: payload.raw_text_blobs ?? [],
+      }) || payload.product_name?.trim() || payload.probable_name?.trim() || resolved?.product.name;
+
+      const resolvedName = resolved?.product.name?.trim();
+      const finalName = resolvedName || buildFoodDecisionName(structuredFields, fallbackName);
+      if (!finalName) {
+        return {
+          product: null,
+          errorCode: 'photo_ai_not_found',
+          origin: 'parser',
+          resultType: 'fallback',
+          confidence: { score: 0.15, level: 'low' },
+          probableName: payload.probable_name?.trim() || undefined,
+          visibleText: payload.visible_text?.trim() || undefined,
+          productName: payload.product_name?.trim() || undefined,
+          rawTextBlobs: payload.raw_text_blobs ?? [],
+          species: structuredFields.especie,
+          lifeStage: structuredFields.fase,
+          detectedWeight: structuredFields.peso,
+          detectedBrand: structuredFields.marca,
+          assistedConfirmation: false,
+          strongTerms: parsedFood.dominantTerms.strongTerms,
+          mediumTerms: parsedFood.dominantTerms.mediumTerms,
+          weakTerms: parsedFood.dominantTerms.weakTerms,
+          termConflicts: [],
+          structuredFields,
+          extractedRawText,
+          decisionReason: 'missing_required_food_fields',
+        };
+      }
+
+      const baseScore = 0.45;
+      const composedScore = Math.min(
+        0.93,
+        baseScore
+          + (structuredFields.marca ? 0.14 : 0)
+          + (structuredFields.linha ? 0.11 : 0)
+          + (structuredFields.especie ? 0.08 : 0)
+          + (structuredFields.fase ? 0.06 : 0)
+          + (structuredFields.proteina ? 0.04 : 0)
+          + (structuredFields.peso ? 0.05 : 0),
+      );
+      const fallbackConfidence: ProductDetectionConfidence = {
+        score: Number(composedScore.toFixed(2)),
+        level: composedScore >= 0.8 ? 'high' : composedScore >= 0.55 ? 'medium' : 'low',
+      };
+      const confidence = resolved?.confidence ?? fallbackConfidence;
+
+      const product: ScannedProduct = {
+        barcode: '',
+        name: finalName,
+        brand: resolved?.product.brand || structuredFields.marca || undefined,
+        weight: resolved?.product.weight || structuredFields.peso || undefined,
+        manufacturer: resolved?.product.manufacturer || structuredFields.marca || undefined,
+        presentation: resolved?.product.presentation || structuredFields.peso || undefined,
+        category: 'food',
+        found: true,
+      };
+
+      return {
+        product,
+        errorCode: null,
+        origin: resolved?.origin ?? 'parser',
+        resultType: resolved?.resultType ?? (confidence.level === 'high' ? 'complete' : 'partial'),
+        confidence,
+        probableName: payload.probable_name?.trim() || undefined,
+        visibleText: payload.visible_text?.trim() || undefined,
+        productName: payload.product_name?.trim() || undefined,
+        rawTextBlobs: payload.raw_text_blobs ?? [],
+        species: structuredFields.especie,
+        lifeStage: structuredFields.fase,
+        detectedWeight: structuredFields.peso,
+        detectedBrand: structuredFields.marca,
+        assistedConfirmation: Boolean(resolved?.assistedConfirmation),
+        strongTerms: resolved?.dominantTerms?.strongTerms ?? parsedFood.dominantTerms.strongTerms,
+        mediumTerms: resolved?.dominantTerms?.mediumTerms ?? parsedFood.dominantTerms.mediumTerms,
+        weakTerms: resolved?.dominantTerms?.weakTerms ?? parsedFood.dominantTerms.weakTerms,
+        termConflicts: [...(resolved?.strongTermConflicts ?? []), ...(resolved?.mediumTermConflicts ?? [])],
+        structuredFields,
+        extractedRawText,
+        decisionReason: resolvedName
+          ? 'food_image_only_priority_with_resolver: resolved_name + structured_fields'
+          : 'food_image_only_priority: marca+linha > especie+fase > proteina > peso',
+      };
+    } catch (error) {
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        return {
+          product: null,
+          errorCode: 'photo_ai_timeout',
+          structuredFields: {},
+          extractedRawText: '',
+          decisionReason: 'timeout_vision_api',
+        };
+      }
+      return {
+        product: null,
+        errorCode: 'photo_ai_error',
+        structuredFields: {},
+        extractedRawText: '',
+        decisionReason: 'food_image_pipeline_exception',
+      };
+    }
+  }, [petId]);
+
   const openCameraPhotoPicker = useCallback(() => {
     setScannerError(null);
     cameraPhotoInputRef.current?.click();
@@ -973,121 +1262,101 @@ export function ProductDetectionSheetGold({
     setScannerError(null);
     setStep('photo-processing');
 
-    // PIPELINE ESPECÍFICO PARA RAÇÃO - LEITURA EXCLUSIVA POR IMAGEM
+    // food package image pipeline
     if (hint === 'food') {
-      console.log('[SCANNER LOG - RAÇÃO] Iniciando pipeline exclusivo para ração');
-      console.log('[SCANNER LOG - RAÇÃO] Arquivo:', file.name, 'Tamanho:', file.size, 'bytes');
+      console.info('[FoodPackagePipeline] imagem_recebida', {
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+      });
+      const identifiedFood = await identifyFoodByPackageImage(file);
+      console.info('[FoodPackagePipeline] texto_bruto_extraido', {
+        raw_text: identifiedFood.extractedRawText,
+      });
+      console.info('[FoodPackagePipeline] campos_estruturados', identifiedFood.structuredFields);
 
-      const identifiedFromPhoto = await identifyProductFromPhoto(file, undefined);
-      console.log('[SCANNER LOG - RAÇÃO] Resposta da API de visão:', identifiedFromPhoto);
-
-      if (identifiedFromPhoto.product) {
-        console.log('[SCANNER LOG - RAÇÃO] Produto identificado pela IA');
-        const photoProduct = identifiedFromPhoto.product;
-        console.log('[SCANNER LOG - RAÇÃO] Produto base da IA:', photoProduct);
-
-        // EXTRAÇÃO ESTRUTURADA PARA RAÇÃO
-        const structuredFields = {
-          marca: identifiedFromPhoto.detectedBrand || photoProduct.brand,
-          linha: identifiedFromPhoto.productName || photoProduct.name.split(' ').slice(0, 3).join(' '),
-          especie: identifiedFromPhoto.species,
-          fase: identifiedFromPhoto.lifeStage,
-          proteina: identifiedFromPhoto.visibleText?.match(/(frango|salmao|boi|cordeiro|peixe|carne)/i)?.[1],
-          peso: identifiedFromPhoto.detectedWeight || photoProduct.weight,
-        };
-        console.log('[SCANNER LOG - RAÇÃO] Campos estruturados extraídos:', structuredFields);
-
-        // INTERPRETAÇÃO ESTRUTURADA PARA RAÇÃO
-        const interpretedProduct = {
-          ...photoProduct,
-          name: [
-            structuredFields.marca,
-            structuredFields.linha,
-            structuredFields.especie,
-            structuredFields.fase,
-            structuredFields.proteina,
-            structuredFields.peso,
-          ].filter(Boolean).join(' ') || photoProduct.name,
-        };
-        console.log('[SCANNER LOG - RAÇÃO] Produto após interpretação estruturada:', interpretedProduct);
-
-        // RESOLUÇÃO FINAL PARA RAÇÃO - PRIORIZANDO CAMPOS ESTRUTURADOS
-        const finalProduct = interpretedProduct;
-        console.log('[SCANNER LOG - RAÇÃO] Produto final resolvido:', finalProduct);
-        console.log('[SCANNER LOG - RAÇÃO] Motivo: interpretação estruturada baseada em embalagem (prioridade: marca+linha > espécie+fase > proteína > peso)');
-
-        // Aplicar correção se existir
-        const corrected = findLocalCorrection(finalProduct.name, finalProduct.category);
-        const finalName = corrected ?? finalProduct.name;
-        console.log('[SCANNER LOG - RAÇÃO] Nome final (após correção):', finalName);
-
-        // Configurar estado para ração
-        const score = identifiedFromPhoto.confidence?.score ?? 0.75;
-        decisionSourceRef.current = 'ia';
-        aiSuggestedNameRef.current = photoProduct.name;
+      if (identifiedFood.product) {
+        const corrected = findLocalCorrection(identifiedFood.product.name, identifiedFood.product.category);
+        const finalName = corrected ?? identifiedFood.product.name;
+        const score = identifiedFood.confidence?.score ?? 0.72;
+        const origin = identifiedFood.origin ?? 'parser';
+        const resultType = identifiedFood.resultType ?? 'partial';
+        decisionSourceRef.current = origin === 'parser'
+          ? 'parser'
+          : origin === 'fuzzy_match'
+            ? 'fuzzy_match'
+            : origin === 'ia'
+              ? 'ai'
+              : 'partial_name';
+        aiSuggestedNameRef.current = identifiedFood.product.name;
         aiConfidenceRef.current = score;
         decisionScoreRef.current = score;
-        decisionResultTypeRef.current = 'complete';
+        decisionResultTypeRef.current = resultType;
         assistedConfirmationRef.current = false;
-        probableNameRef.current = identifiedFromPhoto.probableName;
-        productNameRef.current = identifiedFromPhoto.productName;
-        visibleTextRef.current = identifiedFromPhoto.visibleText;
-        rawTextBlobsRef.current = identifiedFromPhoto.rawTextBlobs ?? [];
-        speciesRef.current = identifiedFromPhoto.species;
-        lifeStageRef.current = identifiedFromPhoto.lifeStage;
-        detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
-        detectedBrandRef.current = identifiedFromPhoto.detectedBrand ?? photoProduct.brand;
-        strongTermsRef.current = [];
-        mediumTermsRef.current = [];
-        weakTermsRef.current = [];
-        termConflictsRef.current = [];
-
+        probableNameRef.current = identifiedFood.probableName;
+        productNameRef.current = identifiedFood.productName;
+        visibleTextRef.current = identifiedFood.visibleText;
+        rawTextBlobsRef.current = identifiedFood.rawTextBlobs ?? [];
+        speciesRef.current = identifiedFood.species;
+        lifeStageRef.current = identifiedFood.lifeStage;
+        detectedWeightRef.current = identifiedFood.detectedWeight ?? identifiedFood.product.weight;
+        detectedBrandRef.current = identifiedFood.detectedBrand ?? identifiedFood.product.brand;
+        strongTermsRef.current = identifiedFood.strongTerms ?? [];
+        mediumTermsRef.current = identifiedFood.mediumTerms ?? [];
+        weakTermsRef.current = identifiedFood.weakTerms ?? [];
+        termConflictsRef.current = identifiedFood.termConflicts ?? [];
         setScannerError(null);
         setFromHistory(false);
-        const nextProduct = corrected ? { ...finalProduct, name: finalName } : finalProduct;
+        const nextProduct = corrected ? { ...identifiedFood.product, name: finalName } : identifiedFood.product;
         setConfirmed(nextProduct);
         emitProductTelemetry('resolved', {
-          origin: 'ia',
-          result: 'complete',
+          origin,
+          result: resultType,
           score,
           category: nextProduct.category,
           brand: nextProduct.brand ?? null,
         });
         setStep('confirm');
-        console.log('[SCANNER LOG - RAÇÃO] Ração confirmada e pronta para confirmação final');
+        console.info('[FoodPackagePipeline] produto_final_escolhido', nextProduct);
+        console.info('[FoodPackagePipeline] motivo_escolha', {
+          reason: identifiedFood.decisionReason,
+          priority: 'marca+linha > especie+fase > proteina > peso',
+        });
         return;
       }
 
-      console.log('[SCANNER LOG - RAÇÃO] Ração não identificada pela foto');
-      setScannerError(identifiedFromPhoto.errorCode ?? 'photo_ai_not_found');
+      setScannerError(identifiedFood.errorCode ?? 'photo_ai_not_found');
       setManualBarcode('');
       setConfirmed(null);
       setStep('not-found');
       decisionScoreRef.current = 0.15;
       decisionResultTypeRef.current = 'fallback';
       emitProductTelemetry('resolved', {
-        origin: 'ia',
+        origin: 'parser',
         result: 'fallback',
         score: 0.15,
         category: 'food',
         brand: null,
       });
+      console.info('[FoodPackagePipeline] produto_final_escolhido', null);
+      console.info('[FoodPackagePipeline] motivo_escolha', {
+        reason: identifiedFood.decisionReason,
+      });
       return;
     }
 
-    // PIPELINE PADRÃO PARA DEMAIS PRODUTOS - MANTER TUDO INTACTO
-    console.log('[SCANNER LOG - OUTROS] Usando pipeline padrão para produto não-ração');
-    const identifiedFromPhoto2 = await identifyProductFromPhoto(file, undefined);
-    if (identifiedFromPhoto2.product) {
-      const photoProduct = identifiedFromPhoto2.product;
+    // default existing scanner pipeline (intacto para não-ração)
+    const identifiedFromPhoto = await identifyProductFromPhoto(file, undefined);
+    if (identifiedFromPhoto.product) {
+      const photoProduct = identifiedFromPhoto.product;
       // Verificar se há correção prévia para o nome sugerido pela IA
-      const corrected = identifiedFromPhoto2.assistedConfirmation || (identifiedFromPhoto2.termConflicts?.length ?? 0) > 0
+      const corrected = identifiedFromPhoto.assistedConfirmation || (identifiedFromPhoto.termConflicts?.length ?? 0) > 0
         ? null
         : findLocalCorrection(photoProduct.name, photoProduct.category);
       const finalName = corrected ?? photoProduct.name;
-      const score = identifiedFromPhoto2.confidence?.score ?? 0.62;
-      const origin = identifiedFromPhoto2.origin ?? 'partial_name';
-      const resultType = identifiedFromPhoto2.resultType ?? 'partial';
+      const score = identifiedFromPhoto.confidence?.score ?? 0.62;
+      const origin = identifiedFromPhoto.origin ?? 'partial_name';
+      const resultType = identifiedFromPhoto.resultType ?? 'partial';
       decisionSourceRef.current = origin === 'parser'
         ? 'parser'
         : origin === 'fuzzy_match'
@@ -1099,19 +1368,19 @@ export function ProductDetectionSheetGold({
       aiConfidenceRef.current = score;
       decisionScoreRef.current = score;
       decisionResultTypeRef.current = resultType;
-      assistedConfirmationRef.current = Boolean(identifiedFromPhoto2.assistedConfirmation);
-      probableNameRef.current = identifiedFromPhoto2.probableName;
-      productNameRef.current = identifiedFromPhoto2.productName;
-      visibleTextRef.current = identifiedFromPhoto2.visibleText;
-      rawTextBlobsRef.current = identifiedFromPhoto2.rawTextBlobs ?? [];
-      speciesRef.current = identifiedFromPhoto2.species;
-      lifeStageRef.current = identifiedFromPhoto2.lifeStage;
-      detectedWeightRef.current = identifiedFromPhoto2.detectedWeight ?? photoProduct.weight;
-      detectedBrandRef.current = identifiedFromPhoto2.detectedBrand ?? photoProduct.brand;
-      strongTermsRef.current = identifiedFromPhoto2.strongTerms ?? [];
-      mediumTermsRef.current = identifiedFromPhoto2.mediumTerms ?? [];
-      weakTermsRef.current = identifiedFromPhoto2.weakTerms ?? [];
-      termConflictsRef.current = identifiedFromPhoto2.termConflicts ?? [];
+      assistedConfirmationRef.current = Boolean(identifiedFromPhoto.assistedConfirmation);
+      probableNameRef.current = identifiedFromPhoto.probableName;
+      productNameRef.current = identifiedFromPhoto.productName;
+      visibleTextRef.current = identifiedFromPhoto.visibleText;
+      rawTextBlobsRef.current = identifiedFromPhoto.rawTextBlobs ?? [];
+      speciesRef.current = identifiedFromPhoto.species;
+      lifeStageRef.current = identifiedFromPhoto.lifeStage;
+      detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
+      detectedBrandRef.current = identifiedFromPhoto.detectedBrand ?? photoProduct.brand;
+      strongTermsRef.current = identifiedFromPhoto.strongTerms ?? [];
+      mediumTermsRef.current = identifiedFromPhoto.mediumTerms ?? [];
+      weakTermsRef.current = identifiedFromPhoto.weakTerms ?? [];
+      termConflictsRef.current = identifiedFromPhoto.termConflicts ?? [];
       setScannerError(null);
       setFromHistory(false);
       const nextProduct = corrected ? { ...photoProduct, name: finalName } : photoProduct;
@@ -1124,7 +1393,7 @@ export function ProductDetectionSheetGold({
         brand: nextProduct.brand ?? null,
       });
 
-      if ((identifiedFromPhoto2.confidence?.level === 'low' || resultType === 'fallback') && !identifiedFromPhoto2.assistedConfirmation) {
+      if ((identifiedFromPhoto.confidence?.level === 'low' || resultType === 'fallback') && !identifiedFromPhoto.assistedConfirmation) {
         setQuery(finalName);
         setStep('manual');
       } else {
@@ -1133,7 +1402,7 @@ export function ProductDetectionSheetGold({
       return;
     }
 
-    setScannerError(identifiedFromPhoto2.errorCode ?? 'photo_barcode_not_found');
+    setScannerError(identifiedFromPhoto.errorCode ?? 'photo_barcode_not_found');
     setManualBarcode('');
     setConfirmed(null);
     setStep('not-found');
