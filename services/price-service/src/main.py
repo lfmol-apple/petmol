@@ -362,6 +362,7 @@ app.include_router(health_router)
 from .health.router import router as health_v1_router
 app.include_router(health_v1_router)
 app.include_router(health_v1_router, prefix="/api")
+app.include_router(health_v1_router, prefix="/api/api")
 
 # Include analytics router (Motor de Intenção)
 from .analytics.router import router as analytics_router
