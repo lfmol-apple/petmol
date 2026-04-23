@@ -360,22 +360,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           }
         }
       } catch { /* offline */ }
-
-      // Fallback: localStorage cache (petmol_food_control key — API-format fields)
-      try {
-        const raw = localStorage.getItem(storageKey);
-        if (raw) {
-          const cached = JSON.parse(raw);
-          const loadedItems = normalizeLoadedItems(cached);
-          setReminderDays(String(cached.manual_reminder_days_before ?? cached.reminderDays ?? 3));
-          setReminderTime(cached.reminder_time ?? cached.reminderTime ?? '09:00');
-          setItems(loadedItems);
-          if (cached.estimated_end_date) {
-            setApiEstimate({ estimated_end_date: cached.estimated_end_date, estimated_days_left: null });
-          }
-          setHasExisting(loadedItems.some(hasUsefulFoodItem));
-        }
-      } catch { /* silent */ }
       setLoadedExisting(true);
     };
     load();
@@ -488,34 +472,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     setSaveFeedback(hasExisting ? 'Alteracoes salvas com sucesso.' : 'Controle de alimentacao salvo com sucesso.');
     setApiError(null);
 
-    const { requestItems, primaryRequestItem, localPayload, requestBody } = buildPlanPayload(normalizedItems);
+    const { requestItems, primaryRequestItem, requestBody } = buildPlanPayload(normalizedItems);
 
-    // ── 1. Salvar no localStorage PRIMEIRO (otimista) ─────────────────────
-    try {
-      const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
-      localStorage.setItem(storageKey, JSON.stringify({
-        ...existing,
-        ...localPayload,
-        manual_reminder_days_before: parseInt(reminderDays, 10) || 3,
-        reminder_time: reminderTime || '09:00',
-      }));
-    } catch { /* silent */ }
-
-    // ── 2. Fechar form e mostrar feedback imediatamente ─────────────────
-    if (!hasExisting) {
-      trackV1Metric('food_cycle_created', {
-        pet_id: petId,
-        brand: primaryRequestItem?.food_brand ?? null,
-        package_size_kg: primaryRequestItem?.package_size_kg ?? null,
-      });
-    }
-    setHasExisting(true);
-    setFormOpen(false);
-    setSavedOk(true);
-    onSaved?.();
-    setTimeout(() => setSavedOk(false), 4000);
-
-    // ── 3. Tentar sincronizar com API (sem bloquear UX) ────────────────
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
@@ -528,33 +486,75 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
         body: JSON.stringify(requestBody),
       });
 
-      if (res.ok) {
-        // Atualizar produto no histórico de uso
-        try {
-          const usageKey = `petmol_product_usage_${petId}`;
-          const current = JSON.parse(localStorage.getItem(usageKey) || '[]') as Array<{ name: string; count: number; lastUsed: string }>;
-          for (const item of requestItems) {
-            const name = item.food_brand?.trim();
-            if (!name) continue;
-            const found = current.find(entry => entry.name.toLowerCase() === name.toLowerCase());
-            if (found) {
-              found.count += 1;
-              found.lastUsed = localTodayISO();
-            } else {
-              current.push({ name, count: 1, lastUsed: localTodayISO() });
-            }
-          }
-          current.sort((a, b) => b.count - a.count || b.lastUsed.localeCompare(a.lastUsed));
-          localStorage.setItem(usageKey, JSON.stringify(current));
-          setRecurringProducts(current);
-        } catch { /* silent */ }
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(detail || `HTTP ${res.status}`);
       }
-      // Se não ok: dado já está salvo no localStorage, não mostramos erro ao usuário
-    } catch {
-      // Offline: dado já está salvo no localStorage — sem ação adicional
-    }
 
-    setSaving(false);
+      const json = await res.json();
+      const plan = json?.plan;
+      const loadedItems = normalizeLoadedItems(plan ?? {});
+      setItems(loadedItems);
+      setReminderDays(String(plan?.manual_reminder_days_before ?? 3));
+      setReminderTime(plan?.reminder_time ?? '09:00');
+      setApiEstimate({
+        estimated_end_date: json?.estimate?.estimated_end_date ?? null,
+        estimated_days_left: json?.estimate?.estimated_days_left ?? null,
+      });
+      setHasExisting(loadedItems.some(hasUsefulFoodItem));
+      setFormOpen(false);
+
+      try {
+        const existing = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}'); } catch { return {}; } })();
+        localStorage.setItem(storageKey, JSON.stringify({
+          ...existing,
+          ...(plan ?? {}),
+          estimated_end_date: json?.estimate?.estimated_end_date ?? null,
+          estimated_days_left: json?.estimate?.estimated_days_left ?? null,
+          manual_reminder_days_before: plan?.manual_reminder_days_before ?? (parseInt(reminderDays, 10) || 3),
+          reminder_time: plan?.reminder_time ?? (reminderTime || '09:00'),
+        }));
+      } catch { /* silent */ }
+
+      if (!hasExisting) {
+        trackV1Metric('food_cycle_created', {
+          pet_id: petId,
+          brand: primaryRequestItem?.food_brand ?? null,
+          package_size_kg: primaryRequestItem?.package_size_kg ?? null,
+        });
+      }
+
+      try {
+        const usageKey = `petmol_product_usage_${petId}`;
+        const current = JSON.parse(localStorage.getItem(usageKey) || '[]') as Array<{ name: string; count: number; lastUsed: string }>;
+        for (const item of requestItems) {
+          const name = item.food_brand?.trim();
+          if (!name) continue;
+          const found = current.find(entry => entry.name.toLowerCase() === name.toLowerCase());
+          if (found) {
+            found.count += 1;
+            found.lastUsed = localTodayISO();
+          } else {
+            current.push({ name, count: 1, lastUsed: localTodayISO() });
+          }
+        }
+        current.sort((a, b) => b.count - a.count || b.lastUsed.localeCompare(a.lastUsed));
+        localStorage.setItem(usageKey, JSON.stringify(current));
+        setRecurringProducts(current);
+      } catch { /* silent */ }
+
+      setSavedOk(true);
+      onSaved?.();
+      setTimeout(() => setSavedOk(false), 4000);
+    } catch (error) {
+      console.error('[FOOD_CONTROL] save failed', error);
+      setApiError('Não foi possível salvar no servidor. Verifique sua conexão e tente novamente.');
+      setSavedOk(false);
+      setHasExisting(normalizedItems.some(hasUsefulFoodItem));
+      setFormOpen(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {

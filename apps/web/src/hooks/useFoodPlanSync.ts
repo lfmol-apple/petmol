@@ -71,7 +71,7 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
 
   const fetchFeedingPlan = async (petId: string) => {
     const token = getToken();
-    if (!token || !petId) return;
+    if (!petId) return;
 
     const readLocalFoodPlan = (): FeedingPlanEntry | null => {
       try {
@@ -96,7 +96,8 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/health/pets/${petId}/feeding/plan`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
@@ -127,8 +128,7 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
         return;
       }
 
-      const fallback = readLocalFoodPlan();
-      syncFoodPlan(fallback);
+      syncFoodPlan(null);
     } catch (e) {
       console.error('Erro ao carregar plano alimentar:', e);
       const fallback = readLocalFoodPlan();
