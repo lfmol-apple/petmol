@@ -47,7 +47,9 @@ from .services import (
     calculate_days_until_out,
 )
 
-router = APIRouter(prefix="/api/health", tags=["health"])
+# Health v1 routes are defined under /health and mounted with + without "/api"
+# in main.py to support proxy variations (/api prefix stripped or preserved).
+router = APIRouter(prefix="/health", tags=["health"])
 
 
 # ============================================================================

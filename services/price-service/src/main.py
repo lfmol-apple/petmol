@@ -361,6 +361,7 @@ app.include_router(health_router)
 # Include health v1 router (PETMOL MUNDO integration - feeding control + snapshot)
 from .health.router import router as health_v1_router
 app.include_router(health_v1_router)
+app.include_router(health_v1_router, prefix="/api")
 
 # Include analytics router (Motor de Intenção)
 from .analytics.router import router as analytics_router
