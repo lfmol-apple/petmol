@@ -1403,12 +1403,30 @@ async def send_notification(
     request: SendNotificationRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Desativado: envio genérico fora do modelo oficial de 4 camadas."""
-    return {
-        "success": False,
-        "reason": "disabled_use_official_4_layer_jobs",
-        "user_id": str(current_user.id),
+    """Send a simple push to the current user's active device subscription."""
+    subscriptions = _load_subscriptions()
+    sub = subscriptions.get(str(current_user.id))
+    if not sub:
+        raise HTTPException(status_code=404, detail="Nenhuma subscription encontrada")
+
+    payload = {
+        "title": request.title,
+        "body": request.body,
+        "icon": request.icon or "/icons/icon-192x192.png",
+        "badge": "/icons/badge-mono.png",
+        "image": "/brand/notification-banner.png",
+        "tag": request.tag or "petmol",
+        "data": {"url": request.url or "/home"},
+        "requireInteraction": False,
+        "autoCloseMs": 4000,
     }
+    ok = _send_push(sub, payload)
+    if not ok:
+        subscriptions.pop(str(current_user.id), None)
+        _save_subscriptions(subscriptions)
+        raise HTTPException(status_code=410, detail="Subscription expirada")
+
+    return {"success": True, "user_id": str(current_user.id)}
 
 
 @router.post("/send-on-open")
