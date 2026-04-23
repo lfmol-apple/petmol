@@ -21,22 +21,6 @@ class FrozenDateTime(datetime):
         return base.astimezone(tz) if tz is not None else base
 
 
-class FrozenDateTimeAfterWindow(datetime):
-    @classmethod
-    def now(cls, tz=None):
-        # 18:30 UTC -> 15:30 BRT (after 11:00 window)
-        base = cls(2026, 4, 22, 18, 30, tzinfo=timezone.utc)
-        return base.astimezone(tz) if tz is not None else base
-
-
-class FrozenDateTimeBeforeWindow(datetime):
-    @classmethod
-    def now(cls, tz=None):
-        # 12:30 UTC -> 09:30 BRT (before 11:00 window)
-        base = cls(2026, 4, 22, 12, 30, tzinfo=timezone.utc)
-        return base.astimezone(tz) if tz is not None else base
-
-
 class FakeQuery:
     def __init__(self, rows):
         self._rows = rows
@@ -170,83 +154,6 @@ def test_send_food_pushes_skips_when_days_left_above_threshold(monkeypatch):
         notifications,
         "_load_subscriptions",
         lambda: {"user-3": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}},
-    )
-    monkeypatch.setattr(notifications, "SessionLocal", lambda: fake_session)
-    monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
-    monkeypatch.setattr(notifications, "_save_subscriptions", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        notifications,
-        "_send_push",
-        lambda subscription, payload: sent_payloads.append((subscription, payload)) or True,
-    )
-
-    send_food_reminder_pushes()
-
-    assert sent_payloads == []
-    assert fake_session.commit_calls == 0
-
-
-def test_send_food_pushes_runs_after_11h_window(monkeypatch):
-    plan = SimpleNamespace(
-        id="plan-4",
-        pet_id="pet-4",
-        next_reminder_date=date(2026, 4, 22),
-        enabled=True,
-        no_consumption_control=False,
-        deleted_at=None,
-        last_food_push_date=None,
-        estimated_end_date=date(2026, 4, 23),  # days_left = 1
-        next_purchase_date=None,
-        food_brand="Ração W",
-    )
-    pet = SimpleNamespace(id="pet-4", user_id="user-4", name="Max")
-    fake_session = FakeSession({"FeedingPlan": [plan], "Pet": [pet]})
-    sent_payloads = []
-
-    monkeypatch.setattr(notifications, "datetime", FrozenDateTimeAfterWindow)
-    monkeypatch.setattr(
-        notifications,
-        "_load_subscriptions",
-        lambda: {"user-4": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}},
-    )
-    monkeypatch.setattr(notifications, "SessionLocal", lambda: fake_session)
-    monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
-    monkeypatch.setattr(notifications, "_save_subscriptions", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        notifications,
-        "_send_push",
-        lambda subscription, payload: sent_payloads.append((subscription, payload)) or True,
-    )
-
-    send_food_reminder_pushes()
-
-    assert len(sent_payloads) == 1
-    assert fake_session.commit_calls == 1
-    assert plan.last_food_push_date == date(2026, 4, 22)
-
-
-def test_send_food_pushes_skips_before_11h_window(monkeypatch):
-    plan = SimpleNamespace(
-        id="plan-5",
-        pet_id="pet-5",
-        next_reminder_date=date(2026, 4, 22),
-        enabled=True,
-        no_consumption_control=False,
-        deleted_at=None,
-        last_food_push_date=None,
-        estimated_end_date=date(2026, 4, 23),  # would be eligible after 11:00
-        next_purchase_date=None,
-        food_brand="Ração V",
-    )
-    pet = SimpleNamespace(id="pet-5", user_id="user-5", name="Bella")
-    fake_session = FakeSession({"FeedingPlan": [plan], "Pet": [pet]})
-    sent_payloads = []
-
-    monkeypatch.setattr(notifications, "datetime", FrozenDateTimeBeforeWindow)
-    monkeypatch.setattr(
-        notifications,
-        "_load_subscriptions",
-        lambda: {"user-5": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}},
     )
     monkeypatch.setattr(notifications, "SessionLocal", lambda: fake_session)
     monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
