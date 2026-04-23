@@ -264,25 +264,7 @@ export default function ProfilePage() {
   };
 
   const tutorInitial = (tutorData?.name || 'T').trim().charAt(0).toUpperCase();
-  const inpClsObj = (error: boolean = false) => `w-full rounded-xl px-5 py-4 outline-none transition-all placeholder:font-medium font-bold ${
-    error 
-      ? 'bg-rose-50 border-2 border-rose-400 text-rose-900 focus:ring-4 focus:ring-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)] animate-pulse border-dashed'
-      : 'bg-white border-2 border-slate-200 text-slate-900 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:shadow-lg disabled:opacity-60 disabled:bg-slate-50 disabled:border-slate-100 disabled:text-slate-500'
-  } text-[15px] sm:text-sm`;
-
-  // --- Lógica de Guided Sequential Filling ---
-  const isNameEmpty = !tutorData?.name?.trim();
-  const isPhoneEmpty = !tutorData?.phone?.replace(/\D/g,'').trim();
-  
-  const shouldHighlight = (field: 'name' | 'phone') => {
-    if (!editMode) return false;
-    if (field === 'name') return isNameEmpty;
-    if (field === 'phone') return !isNameEmpty && isPhoneEmpty;
-    return false;
-  };
-  const canSave = !isNameEmpty && !isPhoneEmpty;
-  // ------------------------------------------
-
+  const inpCls = `w-full bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm outline-none text-slate-800 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all disabled:opacity-50 disabled:bg-transparent disabled:border-transparent disabled:px-0 placeholder:text-slate-300 font-medium`;
   const pushPermissionLabel: Record<NotificationPermission, string> = {
     granted: 'Permitido',
     denied: 'Bloqueado',
@@ -435,53 +417,41 @@ export default function ProfilePage() {
           <div className="space-y-4 animate-scaleIn" style={{ animationDelay: '100ms' }}>
             {/* Dados pessoais */}
             <div className={G}>
-              
-              {editMode && (isNameEmpty || isPhoneEmpty) && (
-                 <div className="px-4 pt-5 pb-1">
-                   <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-3 rounded-xl font-bold flex items-center gap-2">
-                     <span className="animate-bounce">👉</span> Complete as informações demarcadas para continuar.
-                   </div>
-                 </div>
-              )}
-
               <div className={ROW}>
-                <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 pl-1 ${shouldHighlight('name') ? 'text-rose-500' : 'text-slate-500'}`}>Nome completo *</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Nome completo</label>
                 <input
                   type="text"
                   value={tutorData?.name || ''}
                   onChange={(e) => setTutorData((prev) => prev ? { ...prev, name: e.target.value } : null)}
                   disabled={!editMode}
                   autoComplete="name"
-                  placeholder="Como devemos te chamar?"
-                  className={inpClsObj(shouldHighlight('name'))}
+                  placeholder="Nome completo"
+                  className={inpCls}
                 />
               </div>
               <div className={ROW}>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 pl-1">E-mail</label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 pl-1">E-mail</label>
                 <input
                   type="email"
                   value={tutorData?.email || ''}
                   onChange={(e) => setTutorData((prev) => prev ? { ...prev, email: e.target.value } : null)}
-                  disabled={true} // Email geralmente não é editável diretamente aqui, mas guiamos o focus
+                  disabled={!editMode}
                   autoCapitalize="none"
                   inputMode="email"
                   placeholder="seu@email.com"
-                  className={inpClsObj(false)}
+                  className={inpCls}
                 />
               </div>
               <div className={ROW}>
-                <label className={`block text-[10px] font-black uppercase tracking-widest mb-1.5 pl-1 flex justify-between ${shouldHighlight('phone') ? 'text-rose-500' : 'text-slate-500'}`}>
-                  <span>WhatsApp / Telefone *</span>
-                  {shouldHighlight('phone') && <span className="text-rose-500 animate-pulse">Faltando</span>}
-                </label>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 pl-1">Telefone</label>
                 <input
                   type="tel"
                   value={tutorData?.phone || ''}
                   onChange={(e) => handlePhoneChange(e.target.value)}
-                  disabled={!editMode || isNameEmpty} // Só habilita após preencher o nome
+                  disabled={!editMode}
                   inputMode="tel"
-                  placeholder={editMode && isNameEmpty ? "Preencha seu nome primeiro" : "(11) 99999-9999"}
-                  className={inpClsObj(shouldHighlight('phone'))}
+                  placeholder="(00) 00000-0000"
+                  className={inpCls}
                 />
               </div>
             </div>
@@ -526,30 +496,30 @@ export default function ProfilePage() {
                   </div>
                   <div className={ROW}>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">Rua / Avenida</label>
-                    <input type="text" value={tutorData?.street || ''} onChange={(e) => setTutorData((p) => p ? { ...p, street: e.target.value } : null)} disabled={!editMode} placeholder="Logradouro" className={inpClsObj(false)} />
+                    <input type="text" value={tutorData?.street || ''} onChange={(e) => setTutorData((p) => p ? { ...p, street: e.target.value } : null)} disabled={!editMode} placeholder="Logradouro" className={inpCls} />
                   </div>
                   <div className={`${ROW} grid grid-cols-2 gap-4`}>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">Número</label>
-                      <input type="text" value={tutorData?.number || ''} onChange={(e) => setTutorData((p) => p ? { ...p, number: e.target.value } : null)} disabled={!editMode} placeholder="Nº" className={inpClsObj(false)} />
+                      <input type="text" value={tutorData?.number || ''} onChange={(e) => setTutorData((p) => p ? { ...p, number: e.target.value } : null)} disabled={!editMode} placeholder="Nº" className={inpCls} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">Complemento</label>
-                      <input type="text" value={tutorData?.complement || ''} onChange={(e) => setTutorData((p) => p ? { ...p, complement: e.target.value } : null)} disabled={!editMode} placeholder="Apto, casa..." className={inpClsObj(false)} />
+                      <input type="text" value={tutorData?.complement || ''} onChange={(e) => setTutorData((p) => p ? { ...p, complement: e.target.value } : null)} disabled={!editMode} placeholder="Apto, casa..." className={inpCls} />
                     </div>
                   </div>
                   <div className={ROW}>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">Bairro</label>
-                    <input type="text" value={tutorData?.neighborhood || ''} onChange={(e) => setTutorData((p) => p ? { ...p, neighborhood: e.target.value } : null)} disabled={!editMode} placeholder="Bairro" className={inpClsObj(false)} />
+                    <input type="text" value={tutorData?.neighborhood || ''} onChange={(e) => setTutorData((p) => p ? { ...p, neighborhood: e.target.value } : null)} disabled={!editMode} placeholder="Bairro" className={inpCls} />
                   </div>
                   <div className={`${ROW} grid grid-cols-3 gap-4`}>
                     <div className="col-span-2">
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">Cidade</label>
-                      <input type="text" value={tutorData?.city || ''} onChange={(e) => setTutorData((p) => p ? { ...p, city: e.target.value } : null)} disabled={!editMode} placeholder="Cidade" className={inpClsObj(false)} />
+                      <input type="text" value={tutorData?.city || ''} onChange={(e) => setTutorData((p) => p ? { ...p, city: e.target.value } : null)} disabled={!editMode} placeholder="Cidade" className={inpCls} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 mb-1.5">UF</label>
-                      <input type="text" value={tutorData?.state || ''} onChange={(e) => setTutorData((p) => p ? { ...p, state: e.target.value.toUpperCase() } : null)} disabled={!editMode} maxLength={2} placeholder="UF" className={inpClsObj(false)} />
+                      <input type="text" value={tutorData?.state || ''} onChange={(e) => setTutorData((p) => p ? { ...p, state: e.target.value.toUpperCase() } : null)} disabled={!editMode} maxLength={2} placeholder="UF" className={inpCls} />
                     </div>
                   </div>
                   {!editMode && tutorData?.street && (
@@ -785,13 +755,11 @@ export default function ProfilePage() {
                 >
                   Cancelar
                 </button>
-                <button type="button" onClick={handleSave} disabled={saving || !canSave}
-                  className="flex-[1.5] py-4 rounded-xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[13px] font-black uppercase tracking-[0.15em] shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:from-slate-400 disabled:to-slate-500 disabled:shadow-none">
+                <button type="button" onClick={handleSave} disabled={saving}
+                  className="flex-[1.5] py-4 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-sm font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
                   {saving ? (
                     <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    canSave ? 'Salvar Dados' : 'Dados Pendentes'
-                  )}
+                  ) : 'Salvar Dados'}
                 </button>
               </div>
             ) : (
