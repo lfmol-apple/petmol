@@ -973,24 +973,110 @@ export function ProductDetectionSheetGold({
     setScannerError(null);
     setStep('photo-processing');
 
-    // O Html5Qrcode causava falsos positivos de barcode na primeira leitura, resultando em
-    // retorno antecipado com produto errado (via GTIN) sem nunca passar pela visão de IA.
-    // A segunda leitura era correta porque o Html5Qrcode falhava e caía na IA.
-    // Solução: sempre usar diretamente a visão de IA, que já detecta e interpreta barcodes.
-    const identifiedFromPhoto = await identifyProductFromPhoto(file, undefined);
-    if (identifiedFromPhoto.product) {
-      const photoProduct = identifiedFromPhoto.product;
-      // Verificar se há correção prévia para o nome sugerido pela IA
-      const corrected = identifiedFromPhoto.assistedConfirmation || (identifiedFromPhoto.termConflicts?.length ?? 0) > 0
-        ? null
-        : findLocalCorrection(photoProduct.name, photoProduct.category);
-      const finalName = corrected ?? photoProduct.name;
-      const score = identifiedFromPhoto.confidence?.score ?? 0.62;
-      const origin = identifiedFromPhoto.origin ?? 'partial_name';
-      const resultType = identifiedFromPhoto.resultType ?? 'partial';
-      decisionSourceRef.current = origin === 'parser'
-        ? 'parser'
-        : origin === 'fuzzy_match'
+    // PIPELINE ESPECÍFICO PARA RAÇÃO - LEITURA EXCLUSIVA POR IMAGEM
+    if (hint === 'food') {
+      console.log('[SCANNER LOG - RAÇÃO] Iniciando pipeline exclusivo para ração');
+      console.log('[SCANNER LOG - RAÇÃO] Arquivo:', file.name, 'Tamanho:', file.size, 'bytes');
+
+      const identifiedFromPhoto = await identifyProductFromPhoto(file, undefined);
+      console.log('[SCANNER LOG - RAÇÃO] Resposta da API de visão:', identifiedFromPhoto);
+
+      if (identifiedFromPhoto.product) {
+        console.log('[SCANNER LOG - RAÇÃO] Produto identificado pela IA');
+        const photoProduct = identifiedFromPhoto.product;
+        console.log('[SCANNER LOG - RAÇÃO] Produto base da IA:', photoProduct);
+
+        // EXTRAÇÃO ESTRUTURADA PARA RAÇÃO
+        const structuredFields = {
+          marca: identifiedFromPhoto.detectedBrand || photoProduct.brand,
+          linha: identifiedFromPhoto.productName || photoProduct.name.split(' ').slice(0, 3).join(' '),
+          especie: identifiedFromPhoto.species,
+          fase: identifiedFromPhoto.lifeStage,
+          proteina: identifiedFromPhoto.visibleText?.match(/(frango|salmao|boi|cordeiro|peixe|carne)/i)?.[1],
+          peso: identifiedFromPhoto.detectedWeight || photoProduct.weight,
+        };
+        console.log('[SCANNER LOG - RAÇÃO] Campos estruturados extraídos:', structuredFields);
+
+        // INTERPRETAÇÃO ESTRUTURADA PARA RAÇÃO
+        const interpretedProduct = {
+          ...photoProduct,
+          name: [
+            structuredFields.marca,
+            structuredFields.linha,
+            structuredFields.especie,
+            structuredFields.fase,
+            structuredFields.proteina,
+            structuredFields.peso,
+          ].filter(Boolean).join(' ') || photoProduct.name,
+        };
+        console.log('[SCANNER LOG - RAÇÃO] Produto após interpretação estruturada:', interpretedProduct);
+
+        // RESOLUÇÃO FINAL PARA RAÇÃO - PRIORIZANDO CAMPOS ESTRUTURADOS
+        const finalProduct = interpretedProduct;
+        console.log('[SCANNER LOG - RAÇÃO] Produto final resolvido:', finalProduct);
+        console.log('[SCANNER LOG - RAÇÃO] Motivo: interpretação estruturada baseada em embalagem (prioridade: marca+linha > espécie+fase > proteína > peso)');
+
+        // Aplicar correção se existir
+        const corrected = findLocalCorrection(finalProduct.name, finalProduct.category);
+        const finalName = corrected ?? finalProduct.name;
+        console.log('[SCANNER LOG - RAÇÃO] Nome final (após correção):', finalName);
+
+        // Configurar estado para ração
+        const score = identifiedFromPhoto.confidence?.score ?? 0.75;
+        decisionSourceRef.current = 'ia';
+        aiSuggestedNameRef.current = photoProduct.name;
+        aiConfidenceRef.current = score;
+        decisionScoreRef.current = score;
+        decisionResultTypeRef.current = 'complete';
+        assistedConfirmationRef.current = false;
+        probableNameRef.current = identifiedFromPhoto.probableName;
+        productNameRef.current = identifiedFromPhoto.productName;
+        visibleTextRef.current = identifiedFromPhoto.visibleText;
+        rawTextBlobsRef.current = identifiedFromPhoto.rawTextBlobs ?? [];
+        speciesRef.current = identifiedFromPhoto.species;
+        lifeStageRef.current = identifiedFromPhoto.lifeStage;
+        detectedWeightRef.current = identifiedFromPhoto.detectedWeight ?? photoProduct.weight;
+        detectedBrandRef.current = identifiedFromPhoto.detectedBrand ?? photoProduct.brand;
+        strongTermsRef.current = [];
+        mediumTermsRef.current = [];
+        weakTermsRef.current = [];
+        termConflictsRef.current = [];
+
+        setScannerError(null);
+        setFromHistory(false);
+        const nextProduct = corrected ? { ...finalProduct, name: finalName } : finalProduct;
+        setConfirmed(nextProduct);
+        emitProductTelemetry('resolved', {
+          origin: 'ia',
+          result: 'complete',
+          score,
+          category: nextProduct.category,
+          brand: nextProduct.brand ?? null,
+        });
+        setStep('confirm');
+        console.log('[SCANNER LOG - RAÇÃO] Ração confirmada e pronta para confirmação final');
+        return;
+      }
+
+      console.log('[SCANNER LOG - RAÇÃO] Ração não identificada pela foto');
+      setScannerError(identifiedFromPhoto.errorCode ?? 'photo_ai_not_found');
+      setManualBarcode('');
+      setConfirmed(null);
+      setStep('not-found');
+      decisionScoreRef.current = 0.15;
+      decisionResultTypeRef.current = 'fallback';
+      emitProductTelemetry('resolved', {
+        origin: 'ia',
+        result: 'fallback',
+        score: 0.15,
+        category: 'food',
+        brand: null,
+      });
+      return;
+    }
+
+    // PIPELINE PADRÃO PARA DEMAIS PRODUTOS - MANTER TUDO INTACTO
+    console.log('[SCANNER LOG - OUTROS] Usando pipeline padrão para produto não-ração');
           ? 'fuzzy_match'
         : origin === 'ia'
           ? 'ai'
