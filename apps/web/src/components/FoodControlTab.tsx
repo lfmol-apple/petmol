@@ -548,7 +548,14 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       setTimeout(() => setSavedOk(false), 4000);
     } catch (error) {
       console.error('[FOOD_CONTROL] save failed', error);
-      setApiError('Não foi possível salvar no servidor. Verifique sua conexão e tente novamente.');
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('401') || message.includes('403')) {
+        setApiError('Sessão expirada. Faça login novamente para salvar.');
+      } else if (message.trim()) {
+        setApiError(`Não foi possível salvar no servidor: ${message.slice(0, 140)}`);
+      } else {
+        setApiError('Não foi possível salvar no servidor. Verifique sua conexão e tente novamente.');
+      }
       setSavedOk(false);
       setHasExisting(normalizedItems.some(hasUsefulFoodItem));
       setFormOpen(true);
