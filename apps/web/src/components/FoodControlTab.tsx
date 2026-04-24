@@ -10,6 +10,7 @@ import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import type { ScannedProduct } from '@/lib/productScanner';
 import { googleShoppingUrl } from '@/lib/externalShopping';
 import { resolveFoodCommerceSnapshot } from '@/features/commerce/homeContextualCommerce';
+import { requestUserDecision } from '@/features/interactions/userPromptChannel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
