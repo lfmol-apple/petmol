@@ -64,11 +64,10 @@ export function useHomeItemSheetActions({
   }, [setShowFoodSheet]);
 
   const handleFoodSaved = useCallback(() => {
-    setShowFoodSheet(false);
     if (selectedPetId) {
       fetchFeedingPlan(selectedPetId);
     }
-  }, [fetchFeedingPlan, selectedPetId, setShowFoodSheet]);
+  }, [fetchFeedingPlan, selectedPetId]);
 
   const closeVaccineSheet = useCallback(() => {
     setShowVaccineSheet(false);

@@ -7,6 +7,7 @@ import { latestVaccinePerGroup } from '@/lib/vaccineUtils';
 import { ModalPortal } from '@/components/ModalPortal';
 import { localTodayISO } from '@/lib/localDate';
 import { trackPartnerClicked } from '@/lib/v1Metrics';
+import { resolvePetPhotoUrl } from '@/lib/petPhoto';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ function computeStatus(overdue: number, nextDiff: number | null) {
 export interface VaccineItemSheetProps {
   petName?: string;
   petSpecies?: string;
+  petPhotoUrl?: string | null;
   vaccines: VaccineRecord[];
   onClose: () => void;
   onQuickAdd: () => void;
@@ -70,6 +72,7 @@ export interface VaccineItemSheetProps {
 export function VaccineItemSheet({
   petName,
   petSpecies,
+  petPhotoUrl,
   vaccines,
   onClose,
   onQuickAdd,
@@ -86,6 +89,7 @@ export function VaccineItemSheet({
   handleFilesSelectedAppend,
   handleProcessCards,
 }: VaccineItemSheetProps) {
+  const petPhotoSrc = resolvePetPhotoUrl(petPhotoUrl);
   const [mode, setMode] = useState<'view' | 'buy'>('view');
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -198,8 +202,12 @@ export function VaccineItemSheet({
         {/* Header */}
         <div className="px-5 pt-4 pb-3 bg-sky-50 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl flex-shrink-0">
-              💉
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-white shadow-sm flex items-center justify-center text-3xl flex-shrink-0">
+              {petPhotoSrc ? (
+                <img src={petPhotoSrc} alt={petName || 'Pet'} className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <span>{petSpecies === 'cat' || petSpecies === 'cats' ? '🐱' : '🐶'}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -223,13 +231,30 @@ export function VaccineItemSheet({
                 <span className={`text-[13px] font-semibold ${status.text} truncate`}>{status.label}</span>
               </div>
             </div>
-            <button
-              onClick={mode === 'buy' ? () => setMode('view') : onClose}
-              className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
-              aria-label="Fechar"
-            >
-              {mode === 'buy' ? '‹' : '✕'}
-            </button>
+            {mode === 'buy' ? (
+              <button
+                type="button"
+                onClick={() => setMode('view')}
+                onTouchEnd={() => setMode('view')}
+                className="relative z-10 pointer-events-auto w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+                aria-label="Voltar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="relative z-10 pointer-events-auto w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+                aria-label="Fechar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -564,7 +589,9 @@ export function VaccineItemSheet({
             </div>
 
             <button
+              type="button"
               onClick={() => setMode('view')}
+              onTouchEnd={() => setMode('view')}
               className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200"
             >
               Voltar para detalhes

@@ -7,6 +7,7 @@ import type { GroomingRecord, GroomingType } from '@/lib/types/home';
 import { ModalPortal } from '@/components/ModalPortal';
 import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
+import { resolvePetPhotoUrl } from '@/lib/petPhoto';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function addDays(dateStr: string, days: number): string {
@@ -67,6 +68,8 @@ function computeStatus(nextDate?: string | null) {
 interface GroomingItemSheetProps {
   petId: string;
   petName?: string;
+  petSpecies?: string;
+  petPhotoUrl?: string | null;
   groomingRecords: GroomingRecord[];
   onClose: () => void;
   onRefresh: () => Promise<void>;
@@ -78,10 +81,13 @@ type ViewMode = 'view' | 'add' | 'edit';
 export function GroomingItemSheet({
   petId,
   petName,
+  petSpecies,
+  petPhotoUrl,
   groomingRecords,
   onClose,
   onRefresh,
 }: GroomingItemSheetProps) {
+  const petPhotoSrc = resolvePetPhotoUrl(petPhotoUrl);
   const [mode, setMode] = useState<ViewMode>('view');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -309,8 +315,12 @@ export function GroomingItemSheet({
         {/* Header */}
         <div className="px-5 pt-4 pb-4 bg-emerald-50 border-b border-emerald-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-2xl flex-shrink-0">
-              🛁
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-white shadow-sm flex items-center justify-center text-3xl flex-shrink-0">
+              {petPhotoSrc ? (
+                <img src={petPhotoSrc} alt={petName || 'Pet'} className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <span>{petSpecies === 'cat' ? '🐱' : '🐶'}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-[17px] font-bold text-gray-900 leading-tight">Higiene e Petshop</h2>
@@ -322,13 +332,30 @@ export function GroomingItemSheet({
                 </p>
               )}
             </div>
-            <button
-              onClick={onClose}
-              className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
-              aria-label="Fechar"
-            >
-              ✕
-            </button>
+            {mode !== 'view' ? (
+              <button
+                type="button"
+                onClick={() => { setMode('view'); setEditRecord(null); }}
+                onTouchEnd={() => { setMode('view'); setEditRecord(null); }}
+                className="relative z-10 pointer-events-auto w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+                aria-label="Voltar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="relative z-10 pointer-events-auto w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+                aria-label="Fechar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
 
           {/* Status badge */}
@@ -498,7 +525,9 @@ export function GroomingItemSheet({
           {mode === 'add' && (
             <div className="p-5 pb-8 space-y-4">
               <button
+                type="button"
                 onClick={() => setMode('view')}
+                onTouchEnd={() => setMode('view')}
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
               >
                 ‹ Voltar
@@ -604,7 +633,9 @@ export function GroomingItemSheet({
           {mode === 'edit' && editRecord && (
             <div className="p-5 pb-8 space-y-4">
               <button
+                type="button"
                 onClick={() => { setMode('view'); setEditRecord(null); }}
+                onTouchEnd={() => { setMode('view'); setEditRecord(null); }}
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
               >
                 ‹ Voltar

@@ -11,6 +11,7 @@ import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import { IosSwitch } from '@/components/ui/IosSwitch';
 import type { ScannedProduct } from '@/lib/productScanner';
 import { requestUserDecision } from '@/features/interactions/userPromptChannel';
+import { resolvePetPhotoUrl } from '@/lib/petPhoto';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,8 @@ const EMPTY_FORM: MedForm = {
 export interface MedicationItemSheetProps {
   petId: string;
   petName?: string;
+  petSpecies?: string;
+  petPhotoUrl?: string | null;
   petEvents: PetEventRecord[];
   onClose: () => void;
   onRefresh: () => Promise<void>;
@@ -102,10 +105,13 @@ const inputCls =
 export function MedicationItemSheet({
   petId,
   petName,
+  petSpecies,
+  petPhotoUrl,
   petEvents,
   onClose,
   onRefresh,
 }: MedicationItemSheetProps) {
+  const petPhotoSrc = resolvePetPhotoUrl(petPhotoUrl);
   const [mode, setMode] = useState<Mode>('view');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<MedForm>(EMPTY_FORM);
@@ -422,8 +428,12 @@ export function MedicationItemSheet({
         {/* Header */}
         <div className="px-5 pt-4 pb-3 bg-purple-50 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl flex-shrink-0">
-              💊
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-white shadow-sm flex items-center justify-center text-3xl flex-shrink-0">
+              {petPhotoSrc ? (
+                <img src={petPhotoSrc} alt={petName || 'Pet'} className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <span>{petSpecies === 'cat' ? '🐱' : '🐶'}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -448,13 +458,30 @@ export function MedicationItemSheet({
                 </span>
               )}
             </div>
-            <button
-              onClick={mode !== 'view' ? () => setMode('view') : onClose}
-              className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
-              aria-label="Fechar"
-            >
-              {mode !== 'view' ? '‹' : '✕'}
-            </button>
+            {mode !== 'view' ? (
+              <button
+                type="button"
+                onClick={() => setMode('view')}
+                onTouchEnd={() => setMode('view')}
+                className="relative z-10 pointer-events-auto w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+                aria-label="Voltar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="relative z-10 pointer-events-auto w-9 h-9 rounded-full bg-white/80 flex items-center justify-center text-gray-500 hover:bg-white shadow-sm flex-shrink-0"
+                aria-label="Fechar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4">
+                  <path d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -765,7 +792,9 @@ export function MedicationItemSheet({
               </div>
 
               <button
+                type="button"
                 onClick={() => setMode('view')}
+                onTouchEnd={() => setMode('view')}
                 className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200"
               >
                 Voltar para tratamentos

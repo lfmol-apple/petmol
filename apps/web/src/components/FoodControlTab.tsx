@@ -10,7 +10,6 @@ import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import type { ScannedProduct } from '@/lib/productScanner';
 import { googleShoppingUrl } from '@/lib/externalShopping';
 import { resolveFoodCommerceSnapshot } from '@/features/commerce/homeContextualCommerce';
-import { requestUserDecision } from '@/features/interactions/userPromptChannel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,6 +47,14 @@ export interface FoodControlTabState {
   foodBrand: string;
   daysLeft: number | null;
   restockDate: string | null;
+  packageSizeKg: number | null;
+  dailyConsumptionG: number | null;
+  startDate: string | null;
+}
+
+export interface FoodControlTabFormRequest {
+  id: number;
+  mode: 'add' | 'edit';
 }
 
 export interface FoodControlTabProps {
@@ -57,6 +64,7 @@ export interface FoodControlTabProps {
   species?: 'dog' | 'cat';
   onSaved?: () => void;
   onStateChange?: (state: FoodControlTabState) => void;
+  formRequest?: FoodControlTabFormRequest | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -268,7 +276,7 @@ function buildNotes(items: PersistedFoodItem[]): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function FoodControlTab({ petId, petName: _petName, countryCode, species, onSaved, onStateChange }: FoodControlTabProps) {
+export function FoodControlTab({ petId, petName: _petName, countryCode, species, onSaved, onStateChange, formRequest }: FoodControlTabProps) {
   const storageKey = `petmol_food_control_${petId}`;
 
   const [items, setItems] = useState<SimpleFoodData[]>([createEmptyFoodItem(true)]);
@@ -451,7 +459,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
         package_size_kg: packageSizeKg,
         daily_amount_g: dailyAmountG,
         last_refill_date: primaryRequestItem?.last_refill_date ?? null,
-        safety_buffer_days: 3,
+        safety_buffer_days: parseInt(reminderDays, 10) || 3,
         mode: 'kibble',
         enabled: true,
         notes: buildNotes(requestItems),
@@ -640,8 +648,34 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       foodBrand: primaryItem.brand.trim(),
       daysLeft: displayDaysLeft ?? null,
       restockDate: displayEndDate ?? null,
+      packageSizeKg: primaryMetrics.packageSizeKg ?? null,
+      dailyConsumptionG: primaryMetrics.dailyConsumptionG ?? null,
+      startDate: primaryItem.startDate || null,
     });
-  }, [commerceSnapshot?.status, onStateChange, primaryItem.brand, showForm]);
+  }, [
+    commerceSnapshot?.status,
+    displayDaysLeft,
+    displayEndDate,
+    onStateChange,
+    primaryItem.brand,
+    primaryItem.startDate,
+    primaryMetrics.dailyConsumptionG,
+    primaryMetrics.packageSizeKg,
+    showForm,
+  ]);
+
+  useEffect(() => {
+    if (!formRequest) return;
+    setApiError(null);
+    setDeleteFeedback(null);
+    setRestockFeedback(null);
+    setSavedOk(false);
+    if (formRequest.mode === 'add') {
+      setItems((current) => ensurePrimaryItem([...current, createEmptyFoodItem(false)]));
+    }
+    setFormMode(formRequest.mode);
+    setFormOpen(true);
+  }, [formRequest]);
 
   return (
     <div className="overflow-x-hidden p-3 space-y-3 pb-6 sm:p-4 sm:pb-8">
@@ -759,13 +793,13 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
 
           {/* Actions */}
           <div className="grid grid-cols-2 gap-2">
-            <button
+            <button type="button"
               onClick={openAddNewItem}
               className="min-h-[56px] rounded-2xl border border-emerald-200 bg-emerald-50 px-2 py-2.5 text-sm font-semibold leading-tight text-emerald-800 hover:bg-emerald-100"
             >
               ➕ Adicionar outro alimento
             </button>
-            <button
+            <button type="button"
               onClick={openEditForm}
               className="min-h-[56px] rounded-2xl border border-blue-200 bg-blue-50 px-2 py-2.5 text-sm font-semibold leading-tight text-blue-800 hover:bg-blue-100"
             >
@@ -779,15 +813,6 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       {/* ── FORM MODE ─────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="space-y-3">
-          {hasExisting && (
-            <button
-              onClick={() => setFormOpen(false)}
-              className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
-            >
-              ‹ Voltar
-            </button>
-          )}
-
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3 sm:p-4">
             <div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
               {formMode === 'add'
@@ -994,7 +1019,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             </div>
           )}
 
-          <button
+          <button type="button"
             onClick={handleSave}
             disabled={saving}
             className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
@@ -1003,7 +1028,7 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           </button>
 
           {hasExisting && formMode === 'edit' && (
-            <button
+            <button type="button"
               onClick={handleDelete}
               disabled={saving}
               className="w-full py-3 rounded-2xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold shadow-sm disabled:opacity-50 active:scale-[0.99] transition-all hover:bg-red-100"

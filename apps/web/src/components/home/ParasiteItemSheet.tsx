@@ -11,6 +11,7 @@ import { ReminderPicker } from '@/components/ReminderPicker';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { ProductBarcodeScanner } from '@/components/ProductBarcodeScanner';
 import type { ProductCategory, ScannedProduct } from '@/lib/productScanner';
+import { resolvePetPhotoUrl } from '@/lib/petPhoto';
 
 // ── Config por tipo ──────────────────────────────────────────────────────────
 const CONFIG = {
@@ -111,6 +112,8 @@ interface ParasiteItemSheetProps {
   type: 'dewormer' | 'flea_tick' | 'collar';
   petId: string;
   petName?: string;
+  petSpecies?: string;
+  petPhotoUrl?: string | null;
   /** Controls already filtered by this.type, passed from parent */
   parasiteControls: ParasiteControl[];
   onClose: () => void;
@@ -124,11 +127,14 @@ export function ParasiteItemSheet({
   type,
   petId,
   petName,
+  petSpecies,
+  petPhotoUrl,
   parasiteControls,
   onClose,
   onRefresh,
 }: ParasiteItemSheetProps) {
   const cfg = CONFIG[type];
+  const petPhotoSrc = resolvePetPhotoUrl(petPhotoUrl);
   const [mode, setMode] = useState<ViewMode>('view');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -421,8 +427,12 @@ export function ParasiteItemSheet({
         {/* Header */}
         <div className={`px-6 pt-1 pb-5 ${cfg.colorLight} border-b border-gray-100 flex-shrink-0 relative overflow-hidden animate-prime-shine`}>
           <div className="flex items-center gap-4 relative z-10">
-            <div className="w-12 h-12 rounded-[18px] bg-white shadow-xl shadow-gray-200/50 flex items-center justify-center text-2xl flex-shrink-0 ring-1 ring-black/5">
-              {cfg.icon}
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-white shadow-xl shadow-gray-200/50 flex items-center justify-center text-3xl flex-shrink-0 ring-1 ring-black/5">
+              {petPhotoSrc ? (
+                <img src={petPhotoSrc} alt={petName || 'Pet'} className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <span>{petSpecies === 'cat' ? '🐱' : '🐶'}</span>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -440,15 +450,30 @@ export function ParasiteItemSheet({
                 <span className={`text-[13px] font-black uppercase tracking-wider ${status.text} truncate`}>{status.label}</span>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-10 h-10 rounded-full bg-white/60 backdrop-blur-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white shadow-sm flex-shrink-0 transition-all active:scale-90"
-              aria-label="Fechar"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            {mode !== 'view' ? (
+              <button
+                type="button"
+                onClick={() => { setMode('view'); setEditRecord(null); }}
+                onTouchEnd={() => { setMode('view'); setEditRecord(null); }}
+                className="relative z-10 pointer-events-auto w-10 h-10 rounded-full bg-white/60 backdrop-blur-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white shadow-sm flex-shrink-0 transition-all active:scale-90"
+                aria-label="Voltar"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-5 h-5">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="relative z-10 pointer-events-auto w-10 h-10 rounded-full bg-white/60 backdrop-blur-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white shadow-sm flex-shrink-0 transition-all active:scale-90"
+                aria-label="Fechar"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -459,7 +484,7 @@ export function ParasiteItemSheet({
           {mode === 'view' && (
             <div className="p-5 space-y-3 pb-8">
 
-              {/* Active product card — product, status and next application at a glance */}
+              {/* Active product card */}
               {current && (() => {
                 const urgentBorder =
                   status.dot === 'bg-red-500' ? 'border-red-300 bg-red-50' :
@@ -491,40 +516,47 @@ export function ParasiteItemSheet({
                 );
               })()}
 
+              {/* Empty state */}
+              {!current && (
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center">
+                  <p className="text-4xl mb-3">{cfg.icon}</p>
+                  <p className="text-sm font-semibold text-gray-600">Nenhum registro encontrado</p>
+                  <p className="text-xs text-gray-400 mt-1">Registre a primeira aplicação abaixo</p>
+                </div>
+              )}
 
-              {/* Secondary actions — compact and wrap-friendly */}
-              <div className="flex flex-wrap gap-2">
+              {/* PRIMARY CTA — buy */}
+              {current && (
+                <button
+                  onClick={() => setMode('buy')}
+                  className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all text-white text-[16px] font-black shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2.5"
+                >
+                  <span className="text-xl">🛒</span>
+                  Comprar novamente
+                </button>
+              )}
+              {current && (
+                <p className="text-center text-[10px] text-gray-400 -mt-1">
+                  Petz · Cobasi · Amazon · Petlove e mais
+                </p>
+              )}
+
+              {/* Secondary actions */}
+              <div className="flex gap-2">
                 <button
                   onClick={() => setMode('apply')}
-                  className={`min-w-[132px] flex-1 py-3 rounded-2xl text-sm font-semibold shadow-sm active:opacity-70 ${cfg.colorBtn}`}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold shadow-sm active:opacity-70 ${cfg.colorBtn}`}
                 >
                   <span className="mr-1.5">{cfg.icon}</span>
                   {cfg.ctaLabel}
                 </button>
                 <button
                   onClick={() => current ? startEdit(current) : setMode('apply')}
-                  className={`min-w-[132px] flex-1 py-3 rounded-2xl text-sm font-semibold active:opacity-70 ${cfg.colorLight} ${cfg.colorAccent} border ${cfg.colorBorder}`}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold active:opacity-70 ${cfg.colorLight} ${cfg.colorAccent} border ${cfg.colorBorder}`}
                 >
                   ✏️ Editar
                 </button>
-                {current && (
-                  <button
-                    onClick={() => setConfirmDeleteId(current.id)}
-                    className="min-w-[132px] flex-1 py-3 rounded-2xl text-sm font-semibold active:opacity-70 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
-                  >
-                    🗑 Excluir registro
-                  </button>
-                )}
               </div>
-
-              {/* Empty state — only shown when no records */}
-              {!current && (
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-8 text-center">
-                  <p className="text-4xl mb-3">{cfg.icon}</p>
-                  <p className="text-sm font-semibold text-gray-600">Nenhum registro encontrado</p>
-                  <p className="text-xs text-gray-400 mt-1">Registre a primeira aplicação acima</p>
-                </div>
-              )}
 
               {/* History — collapsed accordion */}
               {sorted.length > 0 && (
@@ -600,40 +632,6 @@ export function ParasiteItemSheet({
                   )}
                 </div>
               )}
-
-              {/* Botão de compra suavizado ao final */}
-              {current?.product_name && (
-                <a
-                  href={`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(current.product_name + ' pet')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-2xl hover:bg-emerald-100 transition-all active:scale-[0.98] shadow-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🔄</span>
-                    <div className="text-left">
-                      <p className="text-[13px] font-bold text-emerald-900">Recomprar {current.product_name}</p>
-                      <p className="text-[11px] text-emerald-700">Produto que você costuma usar · via Google Shopping</p>
-                    </div>
-                  </div>
-                  <span className="text-emerald-400 text-lg font-bold">›</span>
-                </a>
-              )}
-              <button
-                onClick={() => setMode('buy')}
-                className="w-full flex items-center justify-between p-4 bg-blue-300 border border-blue-400/30 rounded-2xl hover:bg-blue-400/40 transition-all active:scale-[0.98] mt-4 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-xl shadow-sm">
-                    🛒
-                  </div>
-                  <div className="text-left">
-                    <p className="text-[14px] font-bold text-blue-900">Preciso comprar</p>
-                    <p className="text-[12px] text-blue-700/70">Ver onde encontrar {cfg.title.toLowerCase()}</p>
-                  </div>
-                </div>
-                <span className="text-blue-400 text-lg font-bold">›</span>
-              </button>
             </div>
           )}
 
@@ -641,7 +639,9 @@ export function ParasiteItemSheet({
           {mode === 'apply' && (
             <div className="p-5 pb-8 space-y-4">
               <button
+                type="button"
                 onClick={() => setMode('view')}
+                onTouchEnd={() => setMode('view')}
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
               >
                 ‹ Voltar
@@ -727,7 +727,9 @@ export function ParasiteItemSheet({
           {mode === 'edit' && editRecord && (
             <div className="p-5 pb-8 space-y-4">
               <button
+                type="button"
                 onClick={() => { setMode('view'); setEditRecord(null); }}
+                onTouchEnd={() => { setMode('view'); setEditRecord(null); }}
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
               >
                 ‹ Voltar
@@ -799,7 +801,9 @@ export function ParasiteItemSheet({
           {mode === 'buy' && (
             <div className="p-5 pb-8 space-y-4">
               <button
+                type="button"
                 onClick={() => setMode('view')}
+                onTouchEnd={() => setMode('view')}
                 className="flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium mb-1"
               >
                 ‹ Voltar
