@@ -180,6 +180,7 @@ export function PushActionSheet({
               )}
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 flex-shrink-0"
             >
@@ -276,10 +277,6 @@ export function PushActionSheet({
               itemName={itemName}
               loading={loading}
               setLoading={setLoading}
-              costValue={costValue}
-              setCostValue={setCostValue}
-              showCostInput={showCostInput}
-              setShowCostInput={setShowCostInput}
               setDone={setDone}
               onClose={onClose}
               onOpenFull={onOpenFull}
@@ -315,6 +312,7 @@ export function PushActionSheet({
 
           {/* Ver detalhes link */}
           <button
+            type="button"
             onClick={onOpenFull}
             className="w-full text-center text-xs text-gray-400 py-2 hover:text-gray-600 transition-colors"
           >
@@ -333,10 +331,6 @@ function FoodActions({
   itemName,
   loading,
   setLoading,
-  costValue,
-  setCostValue,
-  showCostInput,
-  setShowCostInput,
   setDone,
   onClose,
   onOpenFull,
@@ -346,56 +340,73 @@ function FoodActions({
   itemName?: string;
   loading: boolean;
   setLoading: (v: boolean) => void;
-  costValue: string;
-  setCostValue: (v: string) => void;
-  showCostInput: boolean;
-  setShowCostInput: (v: boolean) => void;
   setDone: (v: string) => void;
   onClose: () => void;
   onOpenFull: () => void;
   onOpenCommerce?: () => void;
 }) {
-  const handleFoodRestock = async (cost?: number) => {
-    const today = localTodayISO();
-    const key = `petmol_food_control_${petId}`;
-    let apiSucceeded = false;
+  const dispatchFoodPlanUpdated = () => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('petmol:feeding-plan-updated', { detail: { petId } }));
+  };
 
+  const callAdjust = async (targetDate: string) => {
+    const token = getAuthToken();
+    if (!token) return false;
+    const response = await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/adjust`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      credentials: 'include',
+      body: JSON.stringify({
+        action: 'set_end_date',
+        target_date: targetDate,
+        new_end_date: targetDate,
+      }),
+    });
+    return response.ok;
+  };
+
+  const handleStillHasFood = async () => {
+    const today = localTodayISO();
+    const dt = new Date(`${today}T00:00:00`);
+    dt.setDate(dt.getDate() + 3);
+    const targetDate = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
     try {
-      const token = getAuthToken();
-      if (token) {
-        setLoading(true);
-        await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/restock`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          credentials: 'include',
-          body: JSON.stringify({ refill_date: today }),
-        });
-        apiSucceeded = true;
+      setLoading(true);
+      const ok = await callAdjust(targetDate);
+      if (!ok) {
+        setDone('⚠️ Não conseguimos ajustar agora');
+        setTimeout(onClose, 1400);
+        return;
       }
-    } catch { /* offline fallback below */ } finally {
+      trackV1Metric('push_action_still_has_food', { source: 'push_action_sheet', pet_id: petId, item_name: itemName ?? null });
+      trackV1Metric('food_still_has_food', { source: 'push_action_sheet', pet_id: petId, item_name: itemName ?? null });
+      dispatchFoodPlanUpdated();
+      setDone('Boa! Vamos ajustar isso.');
+      setTimeout(onClose, 1200);
+    } finally {
       setLoading(false);
     }
+  };
 
-    // Write localStorage only after API success, or as offline fallback
-    if (apiSucceeded || !getAuthToken()) {
-      try {
-        const raw = localStorage.getItem(key);
-        const data = raw ? JSON.parse(raw) : {};
-        data.last_purchase_date = today;
-        if (cost != null) data.last_cost = cost;
-        localStorage.setItem(key, JSON.stringify(data));
-      } catch { /* silent */ }
+  const handleFinished = async () => {
+    const today = localTodayISO();
+    try {
+      setLoading(true);
+      const ok = await callAdjust(today);
+      if (!ok) {
+        setDone('⚠️ Não conseguimos ajustar agora');
+        setTimeout(onClose, 1400);
+        return;
+      }
+      trackV1Metric('push_action_finished', { source: 'push_action_sheet', pet_id: petId, item_name: itemName ?? null });
+      trackV1Metric('food_finished_early', { source: 'push_action_sheet', pet_id: petId, item_name: itemName ?? null });
+      dispatchFoodPlanUpdated();
+      setDone('Anotado, vamos ajustar o consumo.');
+      setTimeout(onClose, 1200);
+    } finally {
+      setLoading(false);
     }
-
-    trackV1Metric('food_restock_confirmed', {
-      source: 'push_action_sheet',
-      pet_id: petId,
-      item_name: itemName ?? null,
-      cost: cost ?? null,
-    });
-    trackReminderActionCompleted({ source: 'push_action_sheet', item_type: 'food', pet_id: petId, item_name: itemName ?? null });
-    setDone('✅ Compra registrada! Novo ciclo iniciado.');
-    setTimeout(onClose, 1500);
   };
 
   return (
@@ -408,39 +419,21 @@ function FoodActions({
         onClick={() => { if (onOpenCommerce) onOpenCommerce(); else onOpenFull(); }}
       />
       <ActionButton
-        emoji="✅"
-        label="Já comprei"
-        desc="Registrar compra e novo ciclo"
-        color="green"
+        emoji="📦"
+        label="Ainda tenho"
+        desc="Empurrar previsão em 3 dias"
+        color="amber"
         loading={loading}
-        onClick={() => {
-          if (!showCostInput) { setShowCostInput(true); return; }
-          handleFoodRestock(costValue ? parseFloat(costValue) : undefined);
-        }}
+        onClick={handleStillHasFood}
       />
-      {showCostInput && (
-        <CostInput
-          value={costValue}
-          onChange={setCostValue}
-          onConfirm={() => handleFoodRestock(costValue ? parseFloat(costValue) : undefined)}
-          loading={loading}
-        />
-      )}
-      {!showCostInput && (
-        <>
-          <ActionButton
-            emoji="📦"
-            label="Ainda tenho"
-            desc="Adiar previsão em 5 dias"
-            color="amber"
-            onClick={() => {
-              setDone('📦 Previsão adiada em 5 dias');
-              setTimeout(onClose, 1200);
-            }}
-          />
-          <ActionButton emoji="🔄" label="Troquei o produto" desc="Cadastrar novo produto" color="gray" onClick={onOpenFull} />
-        </>
-      )}
+      <ActionButton
+        emoji="⚠️"
+        label="Acabou"
+        desc="Marcar fim do pacote hoje"
+        color="gray"
+        loading={loading}
+        onClick={handleFinished}
+      />
     </>
   );
 }
@@ -471,6 +464,7 @@ function ActionButton({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={loading}
       className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border transition-all active:scale-[0.98] ${colorMap[color]} ${loading ? 'opacity-60' : ''}`}
@@ -510,6 +504,7 @@ function CostInput({
         autoFocus
       />
       <button
+        type="button"
         onClick={onConfirm}
         disabled={loading}
         className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 active:scale-95 transition-all disabled:opacity-50 flex-shrink-0"

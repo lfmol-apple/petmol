@@ -59,6 +59,7 @@ function flattenFeedingPlan(raw: Record<string, unknown>): FeedingPlanEntry {
       null,
     next_reminder_date: typeof raw.next_reminder_date === 'string' ? raw.next_reminder_date : null,
     estimated_end_date: typeof raw.estimated_end_date === 'string' ? raw.estimated_end_date : null,
+    estimated_days_left: typeof raw.estimated_days_left === 'number' ? raw.estimated_days_left : null,
     manual_reminder_days_before:
       (typeof raw.manual_reminder_days_before === 'number' ? raw.manual_reminder_days_before : null) ??
       (typeof raw.manualDaysBefore === 'number' ? raw.manualDaysBefore : null) ??
@@ -106,6 +107,7 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
           ...(data.plan ?? {}),
           next_reminder_date: data.estimate?.recommended_alert_date ?? null,
           estimated_end_date: data.estimate?.estimated_end_date ?? null,
+          estimated_days_left: data.estimate?.estimated_days_left ?? null,
         });
         syncFoodPlan(flat);
         try {
@@ -117,6 +119,7 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
             next_purchase_date: flat.next_purchase_date ?? local.next_purchase_date,
             next_reminder_date: flat.next_reminder_date ?? local.next_reminder_date,
             estimated_end_date: flat.estimated_end_date ?? local.estimated_end_date,
+            estimated_days_left: flat.estimated_days_left ?? local.estimated_days_left ?? null,
             manual_reminder_days_before:
               (flat.manual_reminder_days_before as number | null | undefined) ??
               local.manual_reminder_days_before ??

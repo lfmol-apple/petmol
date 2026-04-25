@@ -9,6 +9,7 @@ export interface FeedingPlanEntry {
   next_purchase_date?: string | null;
   next_reminder_date?: string | null;
   estimated_end_date?: string | null;
+  estimated_days_left?: number | null;
   [key: string]: unknown;
 }
 

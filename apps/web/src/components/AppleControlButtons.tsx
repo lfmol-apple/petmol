@@ -14,6 +14,8 @@ interface AppleControlButtonsProps {
   onMedicacaoClick?: () => void;
   onFamilyClick?: () => void;
   hasFoodData?: boolean;
+  foodHeadline?: string;
+  foodSubline?: string;
 
   // Alert overrides from engine H1
   alertHealth?: boolean;
@@ -65,6 +67,8 @@ export function AppleControlButtons({
   onBanhoTosaClick,
   onFamilyClick,
   hasFoodData,
+  foodHeadline,
+  foodSubline,
   alertHealth,
   alertGrooming,
   alertFood,
@@ -87,6 +91,7 @@ export function AppleControlButtons({
         <div className="grid grid-cols-2 gap-2.5">
           {/* 1. ALIMENTAÇÃO — hero card, primeira posição */}
           <button
+            type="button"
             onClick={onAlimentacaoClick}
             className="group relative overflow-hidden rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-100 to-orange-200 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
@@ -97,13 +102,21 @@ export function AppleControlButtons({
             <div className="flex h-full flex-col justify-center pr-8 pt-3 text-left">
               <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
               <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-amber-800">
-                {hasFoodData ? t('home.food.desc') : 'Toque para escanear a ração'}
+                {hasFoodData
+                  ? (foodHeadline || t('home.food.desc'))
+                  : 'Toque para escanear a ração'}
               </p>
+              {hasFoodData && foodSubline && (
+                <p className="mt-0.5 line-clamp-1 text-[10px] sm:text-xs leading-[1.15] text-amber-900/80">
+                  {foodSubline}
+                </p>
+              )}
             </div>
           </button>
 
           {/* 2. SAÚDE */}
           <button
+            type="button"
             onClick={onHealthClick}
             className="group relative overflow-hidden rounded-xl border border-blue-400 bg-gradient-to-br from-sky-100 via-blue-100 to-blue-200 p-3 min-h-[80px] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
@@ -119,6 +132,7 @@ export function AppleControlButtons({
 
           {/* 3. HIGIENE */}
           <button
+            type="button"
             onClick={onBanhoTosaClick}
             className="group relative overflow-hidden rounded-xl border border-green-400 bg-gradient-to-br from-emerald-100 via-green-100 to-lime-100 p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95"
           >
@@ -134,6 +148,7 @@ export function AppleControlButtons({
 
           {/* 4. SCANNER / COMPRAS */}
           <button
+            type="button"
             onClick={() => setShowShoppingSheet(true)}
             className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-[#2563eb] via-[#1e6fd9] to-[#7c3aed] p-3 min-h-[74px] transition-all duration-200 hover:-translate-y-1 hover:shadow-lg active:scale-95 hover:from-[#1d4ed8] hover:to-[#6d28d9]"
           >
@@ -147,6 +162,7 @@ export function AppleControlButtons({
 
           {/* 5. DOCUMENTOS — full width */}
           <button
+            type="button"
             onClick={onDocumentosClick}
             className="group col-span-2 relative overflow-hidden rounded-xl border border-slate-600/50 bg-gradient-to-r from-slate-700 to-slate-800 p-3 min-h-[56px] transition-all duration-300 hover:shadow-xl active:scale-[0.98]"
           >

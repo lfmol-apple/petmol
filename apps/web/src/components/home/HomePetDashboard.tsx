@@ -29,6 +29,17 @@ function formatReminderBadge(diff: number): string {
   return `em ${diff}d`;
 }
 
+function diffDaysFromIso(isoDate: string): number | null {
+  if (!isoDate) return null;
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const target = new Date(y, m - 1, d);
+  const today = new Date();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  return Math.round((startTarget.getTime() - startToday.getTime()) / 86400000);
+}
+
 function getReminderTone(diff: number): string {
   if (diff === 0) return 'border-amber-300 bg-amber-50 text-amber-900 shadow-[0_0_12px_rgba(251,191,36,0.2)]';
   if (diff <= 3) return 'border-orange-200 bg-orange-50 text-orange-800';
@@ -184,8 +195,35 @@ export function HomePetDashboard({
     onOpenEvents,
   ]);
   
-  const hasFoodData = Object.keys(feedingPlan).length > 0 &&
-    !!feedingPlan[currentPet.pet_id]?.items?.length;
+  const hasFoodData = Object.keys(feedingPlan).length > 0 && (() => {
+    const plan = feedingPlan[currentPet.pet_id];
+    if (!plan) return false;
+    return Boolean(
+      plan.items?.length ||
+      plan.food_brand ||
+      plan.brand ||
+      plan.estimated_end_date ||
+      typeof plan.estimated_days_left === 'number',
+    );
+  })();
+  const foodPlan = feedingPlan[currentPet.pet_id] ?? null;
+  const foodDaysLeft = typeof foodPlan?.estimated_days_left === 'number'
+    ? foodPlan.estimated_days_left
+    : (foodPlan?.estimated_end_date ? diffDaysFromIso(foodPlan.estimated_end_date) : null);
+  const foodHeadline = !hasFoodData
+    ? null
+    : foodDaysLeft == null
+      ? 'Plano de alimentação ativo'
+      : foodDaysLeft < 0
+        ? 'Pode estar sem ração'
+        : foodDaysLeft <= 3
+          ? `Acabando em ${foodDaysLeft} dia${foodDaysLeft === 1 ? '' : 's'}`
+          : `${foodDaysLeft} dias restantes`;
+  const foodSubline = !hasFoodData
+    ? null
+    : foodPlan?.estimated_end_date
+      ? `Acaba em ${formatReminderDate(foodPlan.estimated_end_date)}`
+      : null;
 
   return (
     <div className="relative px-2 pt-2 pb-6 space-y-4">
@@ -197,6 +235,8 @@ export function HomePetDashboard({
         onMedicacaoClick={onOpenMedication}
         onFamilyClick={onOpenFamily}
         hasFoodData={hasFoodData}
+        foodHeadline={foodHeadline ?? undefined}
+        foodSubline={foodSubline ?? undefined}
         alertHealth={alertHealth}
         alertGrooming={alertGrooming}
         alertFood={alertFood}

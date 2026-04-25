@@ -592,6 +592,23 @@ export default function HomePage() {
     };
   }, []); // deps vazio: listener criado 1x, freshness garantida pelo ref
 
+  useEffect(() => {
+    const onFoodPlanUpdated = (event: Event) => {
+      const custom = event as CustomEvent<{ petId?: string }>;
+      const eventPetId = custom.detail?.petId;
+      if (!eventPetId) {
+        refreshAllRef.current();
+        return;
+      }
+      void fetchFeedingPlan(eventPetId);
+      if (selectedPetId === eventPetId) {
+        refreshAllRef.current();
+      }
+    };
+    window.addEventListener('petmol:feeding-plan-updated', onFoodPlanUpdated as EventListener);
+    return () => window.removeEventListener('petmol:feeding-plan-updated', onFoodPlanUpdated as EventListener);
+  }, [fetchFeedingPlan, selectedPetId]);
+
   // Carregar documentos ao abrir a aba de eventos (para exibir docs vinculados)
   useEffect(() => {
     if (healthActiveTab === 'eventos' && selectedPetId) {
@@ -954,6 +971,10 @@ export default function HomePage() {
       return;
     }
 
+    if (intent.target === 'food') {
+      setFoodSheetInitialMode('buy');
+    }
+
     openHomeContextualCommerce(intent, {
       openFoodSheet: handleOpenFood,
       openParasiteSheet: handleOpenVermifugo,
@@ -1087,12 +1108,12 @@ export default function HomePage() {
 
     if (normalizedAction === 'still_has') {
       endpoint = `${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/adjust`;
-      payload = { action: 'set_end_date', days: 0, target_date: addDays(3) };
+      payload = { action: 'set_end_date', days: 0, target_date: addDays(3), new_end_date: addDays(3) };
       successMessage = '✅ Previsão ajustada';
       eventName = 'push_action_still_has_food';
     } else if (normalizedAction === 'finished') {
       endpoint = `${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/adjust`;
-      payload = { action: 'set_end_date', days: 0, target_date: today };
+      payload = { action: 'set_end_date', days: 0, target_date: today, new_end_date: today };
       successMessage = '✅ Ração marcada como finalizada';
       eventName = 'push_action_finished';
     } else if (normalizedAction === 'purchase_confirmed' || normalizedAction === 'comprei') {
@@ -1131,6 +1152,9 @@ export default function HomePage() {
       }
 
       await fetchFeedingPlan(petId);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('petmol:feeding-plan-updated', { detail: { petId } }));
+      }
       showAppToast(successMessage);
     } catch {
       showAppToast('Sem conexão para concluir a ação da notificação.');
