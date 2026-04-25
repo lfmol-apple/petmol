@@ -11,6 +11,7 @@
  *   badge:   string,
  *   tag:     string,
  *   data:    { url: string },
+ *   actions: [{ action: string, title: string, icon?: string }],
  *   requireInteraction: boolean,
  *   autoCloseMs: number,
  * }
@@ -35,6 +36,7 @@ self.addEventListener('push', (event) => {
     image: normalized.image,
     tag: normalized.tag,
     data: normalized.data,
+    actions: normalized.actions,
     requireInteraction: normalized.requireInteraction === true,
     renotify: normalized.renotify === true,
   };
@@ -63,6 +65,22 @@ function normalizePushPayload(payload) {
   const rawTitle = String(source.title || '').trim();
   const rawBody = String(source.body || '').trim();
   const url = String(sourceData.url || source.url || '/home').trim() || '/home';
+  const actionUrls = sourceData.action_urls && typeof sourceData.action_urls === 'object'
+    ? sourceData.action_urls
+    : {};
+  const actions = Array.isArray(source.actions)
+    ? source.actions
+      .slice(0, 4)
+      .map((candidate) => {
+        if (!candidate || typeof candidate !== 'object') return null;
+        const action = String(candidate.action || '').trim();
+        const title = String(candidate.title || '').trim();
+        if (!action || !title) return null;
+        const icon = String(candidate.icon || '').trim();
+        return icon ? { action, title, icon } : { action, title };
+      })
+      .filter(Boolean)
+    : [];
 
   const titleBase = rawTitle || 'PETMOL';
   const title = titleBase.startsWith('🐾') ? titleBase : `🐾 ${titleBase}`;
@@ -80,7 +98,8 @@ function normalizePushPayload(payload) {
     badge: String(source.badge || '/icons/badge-mono.png'),
     image: String(source.image || '/brand/notification-banner.png'),
     tag: String(source.tag || 'petmol'),
-    data: { url },
+    data: { url, action_urls: actionUrls },
+    actions,
     requireInteraction,
     autoCloseMs,
     renotify: source.renotify === true,
@@ -90,7 +109,16 @@ function normalizePushPayload(payload) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const rawUrl = event.notification.data?.url || '/home';
+  const action = String(event.action || '').trim();
+  const actionUrls = event.notification.data?.action_urls;
+  const actionUrl =
+    action &&
+    actionUrls &&
+    typeof actionUrls === 'object' &&
+    typeof actionUrls[action] === 'string'
+      ? actionUrls[action]
+      : null;
+  const rawUrl = actionUrl || event.notification.data?.url || '/home';
   const targetUrl = normalizeNotificationClickUrl(rawUrl);
 
   event.waitUntil(

@@ -55,7 +55,7 @@ export interface FoodControlTabState {
 
 export interface FoodControlTabFormRequest {
   id: number;
-  mode: 'add' | 'edit';
+  mode: 'add' | 'edit' | 'quick_setup';
 }
 
 export interface FoodControlTabProps {
@@ -66,6 +66,9 @@ export interface FoodControlTabProps {
   onSaved?: () => void;
   onStateChange?: (state: FoodControlTabState) => void;
   formRequest?: FoodControlTabFormRequest | null;
+  embedded?: boolean;
+  hideInternalHeader?: boolean;
+  onRequestBack?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -277,7 +280,18 @@ function buildNotes(items: PersistedFoodItem[]): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function FoodControlTab({ petId, petName: _petName, countryCode, species, onSaved, onStateChange, formRequest }: FoodControlTabProps) {
+export function FoodControlTab({
+  petId,
+  petName: _petName,
+  countryCode,
+  species,
+  onSaved,
+  onStateChange,
+  formRequest,
+  embedded = false,
+  hideInternalHeader = false,
+  onRequestBack,
+}: FoodControlTabProps) {
   const storageKey = `petmol_food_control_${petId}`;
 
   const [items, setItems] = useState<SimpleFoodData[]>([createEmptyFoodItem(true)]);
@@ -291,7 +305,8 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const [reminderTime, setReminderTime] = useState('09:00');
   const [loadedExisting, setLoadedExisting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<'add' | 'edit'>('edit');
+  const [formMode, setFormMode] = useState<'add' | 'edit' | 'quick_setup'>('edit');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
   const [restockFeedback, setRestockFeedback] = useState<string | null>(null);
   const [apiEstimate, setApiEstimate] = useState<{ estimated_end_date: string | null; estimated_days_left: number | null } | null>(null);
@@ -478,10 +493,26 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
   const handleSave = async () => {
     setSaving(true);
     setSavedOk(false);
-    setSaveFeedback(hasExisting ? 'Alteracoes salvas com sucesso.' : 'Controle de alimentacao salvo com sucesso.');
+    if (formMode === 'quick_setup') {
+      setSaveFeedback('Racao cadastrada com sucesso.');
+    } else {
+      setSaveFeedback(hasExisting ? 'Alteracoes salvas com sucesso.' : 'Controle de alimentacao salvo com sucesso.');
+    }
     setApiError(null);
 
-    const { requestItems, primaryRequestItem, requestBody } = buildPlanPayload(normalizedItems);
+    const sourceItems = formMode === 'quick_setup'
+      ? ensurePrimaryItem([
+          {
+            ...primaryItem,
+            isPrimary: true,
+            trackingMethod: 'duration',
+            startDate: primaryItem.startDate || localTodayISO(),
+            durationDays: primaryItem.durationDays || '30',
+            dailyConsumptionG: '',
+          },
+        ])
+      : normalizedItems;
+    const { requestItems, primaryRequestItem, requestBody } = buildPlanPayload(sourceItems);
 
     try {
       const token = getToken();
@@ -671,8 +702,24 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
     setDeleteFeedback(null);
     setRestockFeedback(null);
     setSavedOk(false);
+    setShowAdvanced(false);
     if (formRequest.mode === 'add') {
       setItems((current) => ensurePrimaryItem([...current, createEmptyFoodItem(false)]));
+    }
+    if (formRequest.mode === 'quick_setup') {
+      setItems((current) => {
+        const primary = getPrimaryItem(current);
+        return ensurePrimaryItem([
+          {
+            ...primary,
+            isPrimary: true,
+            trackingMethod: 'duration',
+            startDate: primary.startDate || localTodayISO(),
+            durationDays: primary.durationDays || '30',
+            dailyConsumptionG: '',
+          },
+        ]);
+      });
     }
     setFormMode(formRequest.mode);
     setFormOpen(true);
@@ -814,90 +861,116 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
       {/* ── FORM MODE ─────────────────────────────────────────────────────── */}
       {showForm && (
         <div className="space-y-3">
+          {hasExisting && !hideInternalHeader && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onRequestBack) {
+                  onRequestBack();
+                  return;
+                }
+                setFormOpen(false);
+              }}
+              className={`flex items-center gap-2 text-sm font-medium mb-1 ${embedded ? 'text-gray-600 hover:text-gray-800' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              ‹ Voltar
+            </button>
+          )}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-3 sm:p-4">
             <div className="rounded-2xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
               {formMode === 'add'
-                ? 'Preencha os dados do novo alimento concomitante.'
+                ? 'Preencha os dados do segundo alimento.'
+                : formMode === 'quick_setup'
+                  ? 'Confirme os dados da ração principal para ativar o controle.'
                 : 'Ajuste os dados do alimento para atualizar o controle.'}
             </div>
 
             {(formMode === 'add'
               ? normalizedItems.filter((i) => !i.isPrimary)
+              : formMode === 'quick_setup'
+                ? [primaryItem]
               : orderPrimaryFirst(normalizedItems)
             ).map((item, index) => {
               const itemMetrics = getItemMetrics(item);
+              const isQuickSetup = formMode === 'quick_setup';
               return (
                 <div key={item.id} className="rounded-2xl border border-slate-200 p-3 space-y-2.5 bg-slate-50">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="text-base font-bold text-slate-900">{item.brand || `Produto ${index + 1}`}</p>
+                      <p className="text-base font-bold text-slate-900">{item.brand || (isQuickSetup ? 'Ração principal' : `Produto ${index + 1}`)}</p>
                       <p className="text-xs text-slate-500">
-                        {item.isPrimary ? 'Produto principal monitorado' : 'Produto adicional'}
+                        {isQuickSetup ? 'Ração principal' : (item.isPrimary ? 'Produto principal monitorado' : 'Produto adicional')}
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      {!item.isPrimary && (
-                        <button
-                          type="button"
-                          onClick={() => setPrimaryItem(item.id)}
-                          className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
-                        >
-                          Usar no monitoramento
-                        </button>
-                      )}
-                      {normalizedItems.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeFoodItem(item.id)}
-                          className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
-                        >
-                          Remover
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <ProductBarcodeScanner
-                    label="📷 Escanear ou fotografar produto"
-                    expectedCategory="food"
-                    petId={petId}
-                    defaultMode="photo"
-                    allowScanning={false}
-                    onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
-                  />
-
-                  <div className="space-y-2">
-                    <label className="block text-xs font-semibold text-gray-600">Como deseja controlar este alimento?</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'weight' }))}
-                        className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
-                          item.trackingMethod === 'weight'
-                            ? 'border-amber-300 bg-amber-50 text-amber-900'
-                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        ⚖️ Por peso
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'duration' }))}
-                        className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
-                          item.trackingMethod === 'duration'
-                            ? 'border-amber-300 bg-amber-50 text-amber-900'
-                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        ⏳ Por duração
-                      </button>
-                    </div>
-                    {item.isPrimary && (
-                      <p className="text-xs text-gray-500">
-                        O item principal continua controlando os lembretes e pushes de reposição.
-                      </p>
+                    {!isQuickSetup && (
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {!item.isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => setPrimaryItem(item.id)}
+                            className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-amber-200 text-amber-800 hover:bg-amber-50"
+                          >
+                            Usar no monitoramento
+                          </button>
+                        )}
+                        {normalizedItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeFoodItem(item.id)}
+                            className="min-h-[44px] px-2.5 py-2.5 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 hover:bg-red-50"
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
+
+                  {!isQuickSetup && showAdvanced && (
+                    <ProductBarcodeScanner
+                      label="📷 Escanear ou fotografar produto"
+                      expectedCategory="food"
+                      petId={petId}
+                      defaultMode="photo"
+                      allowScanning={false}
+                      onProductConfirmed={(product) => applyScannedProduct(item.id, product)}
+                    />
+                  )}
+
+                  {!isQuickSetup && showAdvanced && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-gray-600">Como deseja controlar este alimento?</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'weight' }))}
+                          className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
+                            item.trackingMethod === 'weight'
+                              ? 'border-amber-300 bg-amber-50 text-amber-900'
+                              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          ⚖️ Por peso
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateItem(item.id, (current) => ({ ...current, trackingMethod: 'duration' }))}
+                          className={`min-h-[44px] rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all ${
+                            item.trackingMethod === 'duration'
+                              ? 'border-amber-300 bg-amber-50 text-amber-900'
+                              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          ⏳ Por duração
+                        </button>
+                      </div>
+                      {item.isPrimary && (
+                        <p className="text-xs text-gray-500">
+                          O item principal continua controlando os lembretes e pushes de reposição.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-600 mb-1">Marca / Produto</label>
@@ -910,7 +983,127 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
                     />
                   </div>
 
-                  {item.trackingMethod === 'weight' ? (
+                  {isQuickSetup ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Pacote (kg)</label>
+                          <input
+                            type="number"
+                            min={0.1}
+                            step={0.5}
+                            value={item.packageSizeKg}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, packageSizeKg: e.target.value }))}
+                            placeholder="Ex: 7.5"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
+                          <input
+                            type="date"
+                            value={item.startDate}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-gray-600">Esse pacote costuma durar quantos dias?</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[15, 30, 45, 60].map((days) => {
+                            const active = String(days) === item.durationDays;
+                            return (
+                              <button
+                                key={days}
+                                type="button"
+                                onClick={() => updateItem(item.id, (current) => ({ ...current, durationDays: String(days) }))}
+                                className={`min-h-[44px] rounded-xl border px-2 py-2 text-sm font-semibold transition-all ${
+                                  active
+                                    ? 'border-amber-300 bg-amber-50 text-amber-900'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                {days}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Informar outro (dias)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={item.durationDays}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, durationDays: e.target.value }))}
+                            placeholder="Ex: 25"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : !showAdvanced ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Pacote (kg)</label>
+                          <input
+                            type="number"
+                            min={0.1}
+                            step={0.5}
+                            value={item.packageSizeKg}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, packageSizeKg: e.target.value }))}
+                            placeholder="Ex: 7.5"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Data início</label>
+                          <input
+                            type="date"
+                            value={item.startDate}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, startDate: e.target.value }))}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-gray-600">Esse pacote costuma durar quantos dias?</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[15, 30, 45, 60].map((days) => {
+                            const active = String(days) === item.durationDays;
+                            return (
+                              <button
+                                key={days}
+                                type="button"
+                                onClick={() => updateItem(item.id, (current) => ({ ...current, durationDays: String(days), trackingMethod: 'duration' }))}
+                                className={`min-h-[44px] rounded-xl border px-2 py-2 text-sm font-semibold transition-all ${
+                                  active
+                                    ? 'border-amber-300 bg-amber-50 text-amber-900'
+                                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                {days}d
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-600 mb-1">Informar outro (dias)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={item.durationDays}
+                            onChange={e => updateItem(item.id, (current) => ({ ...current, durationDays: e.target.value, trackingMethod: 'duration' }))}
+                            placeholder="Ex: 25"
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : item.trackingMethod === 'weight' ? (
                     <>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -1002,6 +1195,16 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
             })}
           </div>
 
+          {formMode !== 'quick_setup' && (
+            <button
+              type="button"
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="w-full min-h-[44px] py-3 text-xs font-medium text-gray-400 hover:text-gray-600 transition-colors text-center"
+            >
+              {showAdvanced ? '← Modo simples' : '⚙️ Modo avançado'}
+            </button>
+          )}
+
           <ReminderPicker
             days={reminderDays}
             time={reminderTime}
@@ -1023,16 +1226,16 @@ export function FoodControlTab({ petId, petName: _petName, countryCode, species,
           <button type="button"
             onClick={handleSave}
             disabled={saving}
-            className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
+            className="w-full py-3.5 min-h-[44px] rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold shadow-md disabled:opacity-50 active:scale-[0.99] transition-all"
           >
-            {saving ? 'Salvando...' : hasExisting ? '✅ Atualizar alimentação' : '✅ Confirmar alimentação'}
+            {saving ? 'Salvando...' : formMode === 'quick_setup' ? '✅ Confirmar alimentação' : hasExisting ? '✅ Atualizar alimentação' : '✅ Confirmar alimentação'}
           </button>
 
           {hasExisting && formMode === 'edit' && (
             <button type="button"
               onClick={handleDelete}
               disabled={saving}
-              className="w-full py-3 rounded-2xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold shadow-sm disabled:opacity-50 active:scale-[0.99] transition-all hover:bg-red-100"
+              className="w-full py-3.5 min-h-[44px] rounded-2xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold shadow-sm disabled:opacity-50 active:scale-[0.99] transition-all hover:bg-red-100"
             >
               🗑 Excluir controle
             </button>

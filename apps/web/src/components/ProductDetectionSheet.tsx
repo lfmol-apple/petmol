@@ -391,6 +391,7 @@ export interface ProductDetectionSheetProps {
   petName?: string;
   hint?: ProductCategory;
   defaultMode?: 'scan' | 'manual' | 'photo';
+  photoEntry?: 'camera' | 'gallery';
   allowScanning?: boolean;
   onProductConfirmed: (product: ScannedProduct) => void;
   onClose: () => void;
@@ -401,6 +402,7 @@ export function ProductDetectionSheetGold({
   petName,
   hint,
   defaultMode,
+  photoEntry,
   allowScanning = true,
   onProductConfirmed,
   onClose,
@@ -436,6 +438,7 @@ export function ProductDetectionSheetGold({
   const termConflictsRef = useRef<string[]>([]);
   const scanHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBootingRef = useRef(false);
+  const photoEntryTriggeredRef = useRef(false);
 
   const initialStep: Step = defaultMode === 'scan'
     ? 'scanning'
@@ -876,6 +879,18 @@ export function ProductDetectionSheetGold({
     setScannerError(null);
     galleryPhotoInputRef.current?.click();
   }, []);
+
+  useEffect(() => {
+    if (step !== 'photo-capture') return;
+    if (!photoEntry) return;
+    if (photoEntryTriggeredRef.current) return;
+    photoEntryTriggeredRef.current = true;
+    const timer = setTimeout(() => {
+      if (photoEntry === 'camera') openCameraPhotoPicker();
+      else openGalleryPhotoPicker();
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [openCameraPhotoPicker, openGalleryPhotoPicker, photoEntry, step]);
 
   useEffect(() => {
     setHistory(loadScanHistory(petId, hint).slice(0, 5));

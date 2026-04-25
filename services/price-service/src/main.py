@@ -368,6 +368,11 @@ app.include_router(health_v1_router, prefix="/api/api")
 from .analytics.router import router as analytics_router
 app.include_router(analytics_router)
 
+# Include product metrics router (food funnel summaries)
+from .metrics.router import router as metrics_router
+app.include_router(metrics_router)
+app.include_router(metrics_router, prefix="/api")
+
 # Include partner handoff router (shop/doglife)
 from .handoff_partner import router as handoff_partner_router
 app.include_router(handoff_partner_router)

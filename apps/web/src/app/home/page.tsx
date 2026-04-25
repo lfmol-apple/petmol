@@ -53,7 +53,7 @@ import { useQuickMark } from '@/hooks/useQuickMark';
 import { vaccineInfo, commonVaccines } from '@/data/vaccineInfo';
 
 import { hasCompletedOnboarding } from '@/lib/ownerProfile';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BACKEND_BASE, API_BASE_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 import { dateToLocalISO, localTodayISO } from '@/lib/localDate';
 import { useAuth } from '@/contexts/AuthContext';
@@ -171,6 +171,7 @@ export default function HomePage() {
   const pushActionSheetWasOpenRef = useRef(false);
   const editModalWasOpenRef = useRef(false);
   const vaccineSheetWasOpenRef = useRef(false);
+  const handledPushFoodActionRef = useRef<string | null>(null);
   const [showAddPetModal, setShowAddPetModal] = useState(false);
   const [showHealthModal, setShowHealthModal] = useState(false);
   const [showEmergencySheet, setShowEmergencySheet] = useState(false);
@@ -1055,6 +1056,87 @@ export default function HomePage() {
     }
   }, [showEditModal, router]);
 
+  const applyFoodPushAction = useCallback(async (petId: string, action: string) => {
+    const normalizedAction = action.trim().toLowerCase();
+    if (!normalizedAction) return;
+
+    if (normalizedAction === 'buy') {
+      trackV1Metric('push_action_buy', { source: 'push_notification', pet_id: petId, action: normalizedAction });
+      trackV1Metric('food_buy_clicked', { source: 'push_notification', pet_id: petId });
+      return;
+    }
+
+    const token = getToken();
+    if (!token) {
+      showAppToast('Faça login para confirmar a ação da ração.');
+      return;
+    }
+
+    const today = localTodayISO();
+    const addDays = (days: number) => {
+      const date = new Date(`${today}T00:00:00`);
+      date.setDate(date.getDate() + days);
+      return dateToLocalISO(date);
+    };
+
+    let endpoint = '';
+    let method: 'POST' | 'PATCH' = 'PATCH';
+    let payload: Record<string, unknown> = {};
+    let successMessage = '';
+    let eventName: 'push_action_still_has_food' | 'push_action_finished' | 'push_action_purchase_confirmed';
+
+    if (normalizedAction === 'still_has') {
+      endpoint = `${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/adjust`;
+      payload = { action: 'set_end_date', days: 0, target_date: addDays(3) };
+      successMessage = '✅ Previsão ajustada';
+      eventName = 'push_action_still_has_food';
+    } else if (normalizedAction === 'finished') {
+      endpoint = `${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/adjust`;
+      payload = { action: 'set_end_date', days: 0, target_date: today };
+      successMessage = '✅ Ração marcada como finalizada';
+      eventName = 'push_action_finished';
+    } else if (normalizedAction === 'purchase_confirmed' || normalizedAction === 'comprei') {
+      endpoint = `${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan/restock`;
+      method = 'POST';
+      payload = { refill_date: today };
+      successMessage = '✅ Novo ciclo iniciado';
+      eventName = 'push_action_purchase_confirmed';
+    } else {
+      return;
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        showAppToast('Não foi possível aplicar esta ação agora.');
+        return;
+      }
+
+      trackV1Metric(eventName, { source: 'push_notification', pet_id: petId, action: normalizedAction });
+      if (normalizedAction === 'still_has') {
+        trackV1Metric('food_still_has_food', { source: 'push_notification', pet_id: petId });
+      } else if (normalizedAction === 'finished') {
+        trackV1Metric('food_finished_early', { source: 'push_notification', pet_id: petId });
+      } else {
+        trackV1Metric('food_purchase_confirmed', { source: 'push_notification', pet_id: petId });
+      }
+
+      await fetchFeedingPlan(petId);
+      showAppToast(successMessage);
+    } catch {
+      showAppToast('Sem conexão para concluir a ação da notificação.');
+    }
+  }, [fetchFeedingPlan]);
+
   // ── Deep link: abre modal via query string ao montar (ex.: push notification) ──
   // URL pattern: /home?modal=vaccines&petId=<id>
   // Suportado: vaccines | parasites | medication | eventos | grooming | health | food
@@ -1077,8 +1159,10 @@ export default function HomePage() {
 
     const eventId = params.get('eventId') || undefined;
     const itemName = params.get('itemName') || undefined;
+    const pushFoodAction = params.get('push_food_action') || params.get('push_action');
+    const mode = params.get('mode');
 
-    if (modal === 'food' && params.get('action') === 'buy') {
+    if (modal === 'food' && (params.get('action') === 'buy' || mode === 'buy')) {
       setFoodSheetInitialMode('buy');
     }
 
@@ -1094,9 +1178,17 @@ export default function HomePage() {
       applyHomeSurfaceResolution(destination);
     }
 
+    if (modal === 'food' && pushFoodAction && resolvedPetId) {
+      const key = `${resolvedPetId}:${pushFoodAction}`;
+      if (handledPushFoodActionRef.current !== key) {
+        handledPushFoodActionRef.current = key;
+        void applyFoodPushAction(resolvedPetId, pushFoodAction);
+      }
+    }
+
     // limpa query string sem recarregar a página
     window.history.replaceState({}, '', '/home');
-  }, [applyHomeSurfaceResolution, pets, selectedPetId]);
+  }, [applyFoodPushAction, applyHomeSurfaceResolution, pets, selectedPetId]);
 
 
   // Fetch documents when vet history modal opens
@@ -1631,6 +1723,8 @@ export default function HomePage() {
           type="dewormer"
           petId={selectedPetId}
           petName={currentPet?.pet_name}
+          petSpecies={currentPet?.species}
+          petPhotoUrl={currentPet?.photo}
           parasiteControls={parasiteControls.filter(p => p.type === 'dewormer' || p.type === 'heartworm' || p.type === 'leishmaniasis')}
           onClose={closeVermifugoSheet}
           onRefresh={loadParasiteControls}
@@ -1642,6 +1736,8 @@ export default function HomePage() {
           type="flea_tick"
           petId={selectedPetId}
           petName={currentPet?.pet_name}
+          petSpecies={currentPet?.species}
+          petPhotoUrl={currentPet?.photo}
           parasiteControls={parasiteControls.filter(p => p.type === 'flea_tick')}
           onClose={closeAntipulgasSheet}
           onRefresh={loadParasiteControls}
@@ -1653,6 +1749,8 @@ export default function HomePage() {
           type="collar"
           petId={selectedPetId}
           petName={currentPet?.pet_name}
+          petSpecies={currentPet?.species}
+          petPhotoUrl={currentPet?.photo}
           parasiteControls={parasiteControls.filter(p => p.type === 'collar')}
           onClose={closeColeiraSheet}
           onRefresh={loadParasiteControls}
@@ -1662,6 +1760,7 @@ export default function HomePage() {
       {showFoodSheet && currentPet && (
         <FoodItemSheet
           pet={currentPet}
+          petPhotoUrl={(currentPet as { photo?: string | null; photo_url?: string | null }).photo ?? (currentPet as { photo_url?: string | null }).photo_url ?? null}
           onClose={() => { setFoodSheetInitialMode('view'); closeFoodSheet(); }}
           onSaved={handleFoodSaved}
           initialMode={foodSheetInitialMode}
@@ -1672,6 +1771,7 @@ export default function HomePage() {
         <VaccineItemSheet
           petName={currentPet?.pet_name}
           petSpecies={currentPet?.species}
+          petPhotoUrl={currentPet?.photo}
           vaccines={vaccines}
           onClose={closeVaccineSheet}
           onQuickAdd={handleVaccineQuickAdd}
@@ -1694,6 +1794,8 @@ export default function HomePage() {
         <MedicationItemSheet
           petId={selectedPetId}
           petName={currentPet?.pet_name}
+          petSpecies={currentPet?.species}
+          petPhotoUrl={currentPet?.photo}
           petEvents={petEvents}
           onClose={closeMedicationSheet}
           onRefresh={refreshMedicationHistory}
@@ -1704,6 +1806,8 @@ export default function HomePage() {
         <GroomingItemSheet
           petId={selectedPetId}
           petName={currentPet?.pet_name}
+          petSpecies={currentPet?.species}
+          petPhotoUrl={currentPet?.photo}
           groomingRecords={groomingRecords}
           onClose={closeGroomingSheet}
           onRefresh={loadGroomingRecords}

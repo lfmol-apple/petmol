@@ -9,11 +9,14 @@ import { API_BACKEND_BASE } from '@/lib/api';
 import { getToken } from '@/lib/auth-token';
 import { localTodayISO } from '@/lib/localDate';
 import { resolvePetPhotoUrl } from '@/lib/petPhoto';
+import { ProductDetectionSheetGold } from '@/components/ProductDetectionSheet';
+import type { ScannedProduct } from '@/lib/productScanner';
 import {
   HOME_SHOPPING_PARTNERS,
   buildFoodHandoffUrl,
   type HomeShoppingPartnerId,
 } from '@/features/commerce/homeShoppingPartners';
+import { resolveFoodCommerceSnapshot } from '@/features/commerce/homeContextualCommerce';
 
 export interface FoodItemSheetProps {
   pet: PetHealthProfile;
@@ -27,13 +30,35 @@ export interface FoodItemSheetProps {
 type SheetMode = 'view' | 'edit' | 'buy';
 
 // Internal submodes within view — no router.push, no sheet close
-type FoodSubMode = 'main' | 'adjustDuration' | 'finished' | 'channel';
+type FoodSubMode = 'main' | 'adjustDuration' | 'finished' | 'channel' | 'restockConfirm';
 
-type PreferredStore = 'petz' | 'petlove' | 'cobasi';
 type PurchaseChannel = 'petz' | 'cobasi' | 'amazon' | 'petlove' | 'loja_fisica' | 'outro';
 
-const PREFERRED_STORE_KEY = 'petmol_preferred_store';
-const STORE_PARTNERS: PreferredStore[] = ['petz', 'petlove', 'cobasi'];
+type FeedingPlanApiResponse = {
+  status: string;
+  pet_id: string;
+  plan: {
+    food_brand?: string | null;
+    package_size_kg?: number | null;
+    daily_amount_g?: number | null;
+    last_refill_date?: string | null;
+    safety_buffer_days?: number | null;
+    manual_reminder_days_before?: number | null;
+    reminder_time?: string | null;
+    items?: Array<{
+      food_brand?: string | null;
+      package_size_kg?: number | null;
+      daily_amount_g?: number | null;
+      last_refill_date?: string | null;
+      is_primary?: boolean;
+    }>;
+  } | null;
+  estimate?: {
+    estimated_end_date?: string | null;
+    estimated_days_left?: number | null;
+    recommended_alert_date?: string | null;
+  } | null;
+};
 
 // ── utils ─────────────────────────────────────────────────────────────────────
 
@@ -69,7 +94,6 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
   });
 
   // Partner / commerce
-  const [preferredStore, setPreferredStore] = useState<PreferredStore | null>(null);
   const [formRequest, setFormRequest]       = useState<FoodControlTabFormRequest | null>(null);
 
   // Date pickers (shared across submodes — only one active at a time)
@@ -82,8 +106,14 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
   const [showDetails, setShowDetails]             = useState(false);
   const [photoLoadFailed, setPhotoLoadFailed]     = useState(false);
   const [successMessage, setSuccessMessage]       = useState<string | null>(null);
-  const [foodStateRefreshKey, setFoodStateRefreshKey] = useState(0);
+  const [hasFoodConfigured, setHasFoodConfigured] = useState(false);
+  const [alertDaysBefore, setAlertDaysBefore]     = useState<number | null>(null);
+  const [nextReminderDate, setNextReminderDate]   = useState<string | null>(null);
+  const [reminderTime, setReminderTime]           = useState<string | null>(null);
+  const [showFoodPhotoFlow, setShowFoodPhotoFlow] = useState(false);
+  const [foodPhotoEntry, setFoodPhotoEntry] = useState<'camera' | 'gallery' | null>(null);
   const successMessageTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollBodyRef                               = useRef<HTMLDivElement>(null);
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const photoSource = petPhotoUrl
@@ -91,7 +121,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
     ?? pet.photo;
   const petPhotoSrc = resolvePetPhotoUrl(photoSource);
 
-  const hasFood  = foodState.commerceStatus !== null;
+  const hasFood  = hasFoodConfigured;
   const estEnd   = endISO(foodState.daysLeft);
 
   const clearSuccessMessageTimer = () => {
@@ -129,8 +159,110 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
     setFeedback(null);
   };
 
-  const reloadFoodState = () => {
-    setFoodStateRefreshKey((prev) => prev + 1);
+  const openFoodPhotoFlow = (entry: 'camera' | 'gallery') => {
+    setFoodPhotoEntry(entry);
+    setShowFoodPhotoFlow(true);
+  };
+
+  const handleFoodProductConfirmed = (product: ScannedProduct) => {
+    try {
+      sessionStorage.setItem(
+        'petmol_pending_scanned_product',
+        JSON.stringify({
+          petId: pet.pet_id,
+          product: {
+            ...product,
+            category: 'food',
+          },
+        }),
+      );
+    } catch {
+      // non-blocking
+    }
+    setShowFoodPhotoFlow(false);
+    setFoodPhotoEntry(null);
+    setFormRequest({ id: Date.now(), mode: 'quick_setup' });
+    setMode('edit');
+  };
+
+  const refreshFoodPlan = async () => {
+    try {
+      const response = await fetch(`${API_BACKEND_BASE}/health/pets/${pet.pet_id}/feeding/plan`, {
+        headers: authH(),
+        credentials: 'include',
+      });
+
+      if (response.status === 404) {
+        setHasFoodConfigured(false);
+        setAlertDaysBefore(null);
+        setNextReminderDate(null);
+        setReminderTime(null);
+        setFoodBrand('');
+        setFoodState({
+          showForm: false,
+          commerceStatus: null,
+          foodBrand: '',
+          daysLeft: null,
+          restockDate: null,
+          packageSizeKg: null,
+          dailyConsumptionG: null,
+          startDate: null,
+        });
+        return;
+      }
+
+      if (!response.ok) return;
+      const payload: FeedingPlanApiResponse = await response.json();
+      const plan = payload.plan;
+      const estimate = payload.estimate;
+
+      const items = Array.isArray(plan?.items) ? plan.items : [];
+      const primary = items.find((item) => item?.is_primary) ?? items[0] ?? null;
+
+      const brand = (primary?.food_brand ?? plan?.food_brand ?? '').trim();
+      const packageSizeKg = primary?.package_size_kg ?? plan?.package_size_kg ?? null;
+      const dailyConsumptionG = primary?.daily_amount_g ?? plan?.daily_amount_g ?? null;
+      const startDate = (primary?.last_refill_date ?? plan?.last_refill_date ?? null);
+      const estimatedEndDate = estimate?.estimated_end_date ?? null;
+      const daysLeft = estimate?.estimated_days_left ?? null;
+      const nextReminder = estimate?.recommended_alert_date ?? null;
+      const manualReminderDays = plan?.manual_reminder_days_before ?? null;
+      const safetyBufferDays = plan?.safety_buffer_days ?? null;
+      const resolvedReminderDays = manualReminderDays ?? safetyBufferDays;
+
+      const hasConfiguredData = Boolean(
+        brand ||
+        packageSizeKg != null ||
+        dailyConsumptionG != null ||
+        startDate ||
+        items.some((item) => Boolean(item?.food_brand || item?.package_size_kg != null || item?.daily_amount_g != null || item?.last_refill_date)),
+      );
+
+      const commerce = resolveFoodCommerceSnapshot({
+        brand,
+        packageSizeKg: packageSizeKg != null ? String(packageSizeKg) : null,
+        daysLeft,
+        estimatedEndDate: estimatedEndDate ? fmtDate(estimatedEndDate) : null,
+      });
+
+      setHasFoodConfigured(hasConfiguredData);
+      setAlertDaysBefore(resolvedReminderDays);
+      setNextReminderDate(nextReminder);
+      setReminderTime(plan?.reminder_time ?? null);
+      setFoodBrand(brand);
+      setFoodState({
+        showForm: false,
+        commerceStatus: commerce?.status ?? null,
+        foodBrand: brand,
+        daysLeft,
+        restockDate: estimatedEndDate,
+        packageSizeKg: packageSizeKg ?? null,
+        dailyConsumptionG: dailyConsumptionG ?? null,
+        startDate: startDate ? startDate.split('T')[0] : null,
+      });
+    } catch {
+      // Preserve current view state on transient failures
+    }
   };
 
   // ── API ────────────────────────────────────────────────────────────────────
@@ -162,15 +294,22 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
 
   // ── Action handlers ────────────────────────────────────────────────────────
 
-  // "✅ Comprei" → restock → channel picker
-  const handleComprei = async () => {
+  const handleCompreiMesmoPacote = async () => {
     if (busy) return;
     setBusy(true);
     setFeedback(null);
     try {
       trackV1Metric('food_restock_confirmed', { pet_id: pet.pet_id, source: 'sheet' });
+      trackV1Metric('food_purchase_confirmed', { pet_id: pet.pet_id, source: 'sheet', channel: 'same_package' });
       const ok = await callRestock();
-      if (ok) { onSaved?.(); reloadFoodState(); showSuccessAndReturnToMain('Compra registrada'); }
+      if (ok) {
+        onSaved?.();
+        await refreshFoodPlan();
+        setMode('view');
+        setSubMode('channel');
+        setShowDatePicker(false);
+        setFeedback(null);
+      }
       else setFeedback({ msg: 'Não foi possível registrar. Tente novamente.', tone: 'red' });
     } catch {
       setFeedback({ msg: 'Sem conexão. Tente novamente.', tone: 'red' });
@@ -190,6 +329,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
       (new Date(targetDate + 'T00:00:00').getTime() - new Date(localTodayISO() + 'T00:00:00').getTime()) / 86400000
     );
     try {
+      trackV1Metric('food_still_has_food', { pet_id: pet.pet_id, days_from_now: daysFromNow, source: 'adjust_duration' });
       trackV1Metric('food_duration_adjusted', {
         pet_id: pet.pet_id,
         new_end_date: targetDate,
@@ -202,7 +342,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
         delta_days: daysFromNow - (foodState.daysLeft ?? 0),
       });
       const ok = await callAdjust(targetDate);
-      if (ok) { onSaved?.(); reloadFoodState(); showSuccessAndReturnToMain('Previsão ajustada'); }
+      if (ok) { onSaved?.(); await refreshFoodPlan(); showSuccessAndReturnToMain('Previsão ajustada'); }
       else {
         setFeedback({ msg: 'Não foi possível ajustar. Tente novamente.', tone: 'red' });
       }
@@ -231,7 +371,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
         delta_days: -(foodState.daysLeft ?? 0),
       });
       const ok = await callAdjust(targetDate);
-      if (ok) { onSaved?.(); reloadFoodState(); showSuccessAndReturnToMain('Ração marcada como finalizada'); }
+      if (ok) { onSaved?.(); await refreshFoodPlan(); showSuccessAndReturnToMain('Previsão corrigida'); }
       else {
         setFeedback({ msg: 'Não foi possível atualizar. Tente novamente.', tone: 'red' });
       }
@@ -249,15 +389,14 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
       channel_type: channel === 'loja_fisica' || channel === 'outro' ? 'physical' : 'online',
       source: 'food_sheet',
     });
-    showSuccessAndReturnToMain('Compra registrada');
+    trackV1Metric('food_purchase_confirmed', { pet_id: pet.pet_id, channel, source: 'channel_picker' });
+    void refreshFoodPlan().finally(() => showSuccessAndReturnToMain('Novo ciclo iniciado'));
   };
 
-  const handlePartnerClick = (partnerId: PreferredStore) => {
-    try { localStorage.setItem(PREFERRED_STORE_KEY, partnerId); } catch { /* silent */ }
-    setPreferredStore(partnerId);
+  const handlePartnerClick = (partnerId: HomeShoppingPartnerId) => {
     trackV1Metric('food_partner_selected', { source: 'food_sheet', pet_id: pet.pet_id, store: partnerId });
     trackPartnerClicked({ source: 'food_sheet', partner: partnerId, pet_id: pet.pet_id, control_type: 'food' });
-    window.open(buildFoodHandoffUrl(foodBrand || '', pet.pet_id, partnerId as HomeShoppingPartnerId), '_blank', 'noopener,noreferrer');
+    window.open(buildFoodHandoffUrl(foodBrand || '', pet.pet_id, partnerId), '_blank', 'noopener,noreferrer');
   };
 
   // ── Effects ────────────────────────────────────────────────────────────────
@@ -269,11 +408,9 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
   }, [onClose]);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PREFERRED_STORE_KEY) as PreferredStore | null;
-      if (raw && STORE_PARTNERS.includes(raw)) setPreferredStore(raw);
-    } catch { /* silent */ }
-  }, []);
+    void refreshFoodPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pet.pet_id]);
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -297,6 +434,11 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
   // Reset submode when switching to view
   useEffect(() => { if (mode === 'view') setSubMode('main'); }, [mode]);
 
+  // Scroll to top when subMode changes so new content is visible from the beginning
+  useEffect(() => {
+    scrollBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [subMode]);
+
   // ── Pet photo ──────────────────────────────────────────────────────────────
 
   const PhotoBubble = ({ size }: { size: number }) => (
@@ -319,8 +461,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
     <button
       type="button"
       onClick={onClick}
-      onTouchEnd={(e) => { e.preventDefault(); onClick(); }}
-      className="relative z-10 pointer-events-auto flex items-center gap-1.5 h-10 px-3 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all flex-shrink-0 text-sm font-semibold"
+      className="relative z-10 pointer-events-auto flex items-center gap-1.5 h-11 px-3 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all flex-shrink-0 text-sm font-semibold"
       aria-label="Voltar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 flex-shrink-0">
         <path d="M15 18l-6-6 6-6" />
@@ -356,7 +497,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
         <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={onClose} />
 
         <div
-          className="relative w-full max-w-md bg-white rounded-t-[32px] sm:rounded-[28px] shadow-2xl border-t border-x sm:border border-gray-200/60 flex flex-col overflow-hidden animate-slideUp sm:animate-scaleIn"
+          className="relative w-full max-w-md bg-white rounded-t-[32px] sm:rounded-[28px] shadow-2xl border-t border-x sm:border border-gray-200/60 flex flex-col overflow-hidden animate-slideUp sm:animate-scaleIn touch-manipulation"
           style={{ maxHeight: '92dvh' }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -378,8 +519,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                 <button
                   type="button"
                   onClick={handleEditBackToView}
-                  onTouchEnd={handleEditBackToView}
-                  className="pointer-events-auto flex items-center gap-1.5 h-10 px-3 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all flex-shrink-0 text-sm font-semibold"
+                  className="pointer-events-auto flex items-center gap-1.5 h-11 px-3 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all flex-shrink-0 text-sm font-semibold"
                   aria-label="Voltar"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 flex-shrink-0">
@@ -396,8 +536,16 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                   petId={pet.pet_id} petName={pet.pet_name}
                   species={(pet.species as 'dog' | 'cat') || 'dog'}
                   formRequest={formRequest}
+                  embedded
+                  hideInternalHeader
+                  onRequestBack={handleEditBackToView}
                   onStateChange={(s) => { setFoodState(s); setFoodBrand(s.foodBrand); }}
-                  onSaved={() => { onSaved?.(); showSuccessAndReturnToMain('Controle atualizado'); }}
+                  onSaved={async () => {
+                    onSaved?.();
+                    await refreshFoodPlan();
+                    const isQuickSetup = formRequest?.mode === 'quick_setup';
+                    showSuccessAndReturnToMain(isQuickSetup ? 'Ração cadastrada' : 'Plano atualizado');
+                  }}
                 />
               </div>
             </>
@@ -418,67 +566,29 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                 <div className="p-5 pb-8 space-y-4">
-                  {preferredStore ? (
-                    <>
-                      {(() => {
-                        const partner = HOME_SHOPPING_PARTNERS.find((p) => p.id === preferredStore);
-                        if (!partner) return null;
-                        return (
-                          <button type="button" onClick={() => handlePartnerClick(preferredStore)}
-                            className="w-full flex items-center gap-4 p-5 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-lg active:scale-[0.98] transition-all text-left">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={partner.logoSrc} alt={partner.logoAlt} className="w-12 h-12 rounded-xl object-contain bg-white p-1.5 flex-shrink-0 shadow-sm"
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                            <p className="flex-1 font-bold text-white text-base">Comprar na {partner.name} →</p>
-                          </button>
-                        );
-                      })()}
-                      <button type="button" onClick={() => setPreferredStore(null)} className="w-full text-center text-xs text-gray-400 hover:text-gray-600 py-1">compro em outro lugar ›</button>
-                    </>
-                  ) : (
-                    <>
-                      {(() => {
-                        const petz = HOME_SHOPPING_PARTNERS.find((p) => p.id === 'petz');
-                        if (!petz) return null;
-                        return (
-                          <button type="button" onClick={() => handlePartnerClick('petz')}
-                            className="w-full flex items-center gap-4 p-5 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-lg active:scale-[0.98] transition-all text-left">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={petz.logoSrc} alt={petz.logoAlt} className="w-12 h-12 rounded-xl object-contain bg-white p-1.5 flex-shrink-0 shadow-sm"
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                            <p className="flex-1 font-bold text-white text-base">Comprar na Petz →</p>
-                          </button>
-                        );
-                      })()}
-                      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-                        {(['cobasi', 'petlove'] as const).map((id) => {
-                          const p = HOME_SHOPPING_PARTNERS.find((partner) => partner.id === id);
-                          if (!p) return null;
-                          return (
-                            <button type="button" key={id} onClick={() => handlePartnerClick(id)} className="text-xs text-gray-400 hover:text-gray-700 underline underline-offset-2 decoration-gray-300">
-                              {p.name}
-                            </button>
-                          );
-                        })}
-                        <button type="button"
-                          onClick={() => {
-                            trackV1Metric('food_partner_selected', { source: 'food_sheet', pet_id: pet.pet_id, store: 'amazon' });
-                            trackPartnerClicked({ source: 'food_sheet', partner: 'amazon', pet_id: pet.pet_id, control_type: 'food' });
-                            window.open(buildFoodHandoffUrl(foodBrand || '', pet.pet_id, 'amazon'), '_blank', 'noopener,noreferrer');
-                          }}
-                          className="text-xs text-gray-400 hover:text-gray-700 underline underline-offset-2 decoration-gray-300"
-                        >outro lugar</button>
-                      </div>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setMode('view')}
-                    onTouchEnd={(e) => { e.preventDefault(); setMode('view'); }}
-                    className="w-full py-3 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 border border-gray-200"
-                  >
-                    ← Voltar
-                  </button>
+                  <div className="grid grid-cols-1 gap-3">
+                    {HOME_SHOPPING_PARTNERS.map((partner) => (
+                      <button
+                        key={partner.id}
+                        type="button"
+                        onClick={() => handlePartnerClick(partner.id)}
+                        className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-2xl bg-white hover:bg-gray-50 active:scale-[0.98] transition-all text-left"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={partner.logoSrc}
+                          alt={partner.logoAlt}
+                          className="w-12 h-12 rounded-xl object-contain bg-white p-1.5 flex-shrink-0 shadow-sm border border-gray-100"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-gray-900 text-[15px] leading-tight">{partner.name}</p>
+                          <p className="text-[12px] text-gray-500">{partner.description}</p>
+                        </div>
+                        <span className="text-sm font-bold text-blue-700">Abrir</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </>
@@ -502,7 +612,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                     type="button"
                     onClick={handleSubModeBackToMain}
                     onTouchEnd={(e) => { e.preventDefault(); handleSubModeBackToMain(); }}
-                    className="relative z-10 pointer-events-auto flex items-center gap-1.5 h-10 px-3 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all flex-shrink-0 text-sm font-semibold"
+                    className="relative z-10 pointer-events-auto flex items-center gap-1.5 h-11 px-3 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all flex-shrink-0 text-sm font-semibold"
                     aria-label="Voltar"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 flex-shrink-0">
@@ -512,7 +622,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                   </button>
                 ) : (
                   <button type="button" onClick={onClose}
-                    className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 active:scale-90 transition-all flex-shrink-0"
+                    className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 active:scale-90 transition-all flex-shrink-0"
                     aria-label="Fechar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-4 h-4">
                       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -521,48 +631,54 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                 )}
               </div>
 
-              {/* Hidden FoodControlTab — loads API data and fires onStateChange */}
-              <div className="hidden" aria-hidden="true">
-                <FoodControlTab
-                  key={`food-view-state-${foodStateRefreshKey}`}
-                  petId={pet.pet_id} petName={pet.pet_name}
-                  species={(pet.species as 'dog' | 'cat') || 'dog'}
-                  onStateChange={(s) => { setFoodState(s); setFoodBrand(s.foodBrand); }}
-                  onSaved={() => onSaved?.()}
-                />
-              </div>
+              {/* Fixed success toast — outside scroll area */}
+              {successMessage && (
+                <div className="flex-shrink-0 px-4 pb-2">
+                  <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-900">
+                    {successMessage}
+                  </div>
+                </div>
+              )}
 
               {/* Scrollable body */}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div ref={scrollBodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                 <div className="px-4 pb-8 space-y-4">
-                  {successMessage && (
-                    <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
-                      {successMessage}
-                    </div>
-                  )}
-
                   {/* ── SEM RAÇÃO ──────────────────────────────────────────── */}
                   {!hasFood && (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
                       <div>
-                        <h3 className="text-[20px] font-black text-gray-900 leading-tight">Vamos começar pela ração</h3>
-                        <p className="text-[13px] text-gray-500 mt-1">Registre o produto para saber quando vai acabar.</p>
+                        <h3 className="text-[20px] font-black text-gray-900 leading-tight">Vamos cadastrar a ração do {pet.pet_name}?</h3>
                       </div>
                       <div className="space-y-2">
                         <button type="button"
-                          onClick={() => { setFormRequest({ id: Date.now(), mode: 'add' }); setMode('edit'); }}
+                          onClick={() => openFoodPhotoFlow('camera')}
                           className="w-full py-3.5 rounded-2xl bg-blue-600 text-white text-[15px] font-black shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
                         >
-                          <span>📷</span> Escanear produto
+                          <span>📷</span> Tirar foto da embalagem
                         </button>
                         <button type="button"
-                          onClick={() => { setFormRequest({ id: Date.now(), mode: 'edit' }); setMode('edit'); }}
-                          className="w-full py-3 rounded-2xl bg-white border border-gray-300 text-[14px] font-semibold text-gray-700 active:scale-95 transition-all"
+                          onClick={() => openFoodPhotoFlow('gallery')}
+                          className="w-full py-3 min-h-[44px] rounded-2xl bg-white border border-gray-300 text-[14px] font-semibold text-gray-700 active:scale-95 transition-all flex items-center justify-center gap-2"
                         >
-                          ✏️ Cadastrar manualmente
+                          <span>🖼</span> Escolher foto do celular
                         </button>
                       </div>
-                      <p className="text-[11px] text-gray-400 text-center">Você pode ajustar depois.</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setFormRequest({ id: Date.now(), mode: 'edit' }); setMode('edit'); }}
+                          className="w-full py-2.5 min-h-[44px] rounded-xl border border-gray-300 bg-white text-[12px] font-semibold text-gray-600 active:scale-95 transition-all"
+                        >
+                          Cadastrar manualmente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onClose}
+                          className="w-full py-2.5 min-h-[44px] rounded-xl border border-transparent bg-transparent text-[12px] font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                          Fazer depois
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -625,26 +741,30 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                             <span className="text-xl">🛒</span>
                             Comprar novamente
                           </button>
-                          <p className="text-center text-[10px] text-gray-400 -mt-2 select-none">
-                            Petz · Cobasi · Amazon · Petlove e mais
-                          </p>
 
                           {/* 4. Ações secundárias */}
                           <div className="grid grid-cols-3 gap-2">
-                            <button type="button" onClick={handleComprei} disabled={busy}
-                              className="py-3 rounded-2xl bg-green-50 border border-green-200 text-[12px] font-bold text-green-800 active:scale-95 transition-all disabled:opacity-50">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSubMode('restockConfirm');
+                                setShowDatePicker(false);
+                                setFeedback(null);
+                              }}
+                              disabled={busy}
+                              className="py-3 min-h-[44px] rounded-2xl bg-green-50 border border-green-200 text-[12px] font-bold text-green-800 active:scale-95 transition-all disabled:opacity-50">
                               ✅ Comprei
                             </button>
                             <button type="button"
                               onClick={() => { setSubMode('adjustDuration'); setShowDatePicker(false); setFeedback(null); }}
                               disabled={busy}
-                              className="py-3 rounded-2xl bg-gray-50 border border-gray-200 text-[12px] font-bold text-gray-600 active:scale-95 transition-all disabled:opacity-50">
-                              📦 Ajustar
+                              className="py-3 min-h-[44px] rounded-2xl bg-gray-50 border border-gray-200 text-[12px] font-bold text-gray-600 active:scale-95 transition-all disabled:opacity-50">
+                              📦 Ainda vai durar
                             </button>
                             <button type="button"
                               onClick={() => { setSubMode('finished'); setShowDatePicker(false); setFeedback(null); }}
                               disabled={busy}
-                              className="py-3 rounded-2xl bg-orange-50 border border-orange-200 text-[12px] font-bold text-orange-700 active:scale-95 transition-all disabled:opacity-50">
+                              className="py-3 min-h-[44px] rounded-2xl bg-orange-50 border border-orange-200 text-[12px] font-bold text-orange-700 active:scale-95 transition-all disabled:opacity-50">
                               ⚠️ Acabou
                             </button>
                           </div>
@@ -665,6 +785,9 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                                 ['Início do ciclo', fmtDate(foodState.startDate)],
                                 ['Previsão de término', fmtDate(estEnd)],
                                 ['Dias restantes', foodState.daysLeft !== null ? `${Math.max(0, foodState.daysLeft)} dias` : '—'],
+                                ['Dias antes do alerta', alertDaysBefore != null ? `${alertDaysBefore} dias` : '—'],
+                                ['Próximo alerta', fmtDate(nextReminderDate)],
+                                ['Horário do alerta', reminderTime ?? '—'],
                               ].map(([label, value]) => (
                                 <div key={label} className="flex items-center justify-between px-4 py-2.5">
                                   <span className="text-[12px] text-gray-500">{label}</span>
@@ -790,6 +913,41 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                         </div>
                       )}
 
+                      {/* ─── SUBMODE: restockConfirm ─────────────────────── */}
+                      {subMode === 'restockConfirm' && (
+                        <div className="space-y-4 pt-1">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Comprei</p>
+                            <h3 className="text-[20px] font-black text-gray-900 leading-tight mt-1">Você comprou novamente?</h3>
+                          </div>
+
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={handleCompreiMesmoPacote}
+                              disabled={busy}
+                              className="w-full py-3.5 rounded-2xl border border-green-200 bg-green-50 text-[15px] font-semibold text-green-800 text-left px-5 hover:bg-green-100 active:scale-[0.98] transition-all disabled:opacity-50"
+                            >
+                              Mesmo pacote
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormRequest({ id: Date.now(), mode: 'edit' });
+                                setMode('edit');
+                                setSubMode('main');
+                              }}
+                              disabled={busy}
+                              className="w-full py-3.5 rounded-2xl border border-gray-200 bg-white text-[15px] font-semibold text-gray-800 text-left px-5 hover:bg-gray-50 active:scale-[0.98] transition-all disabled:opacity-50"
+                            >
+                              Outro pacote
+                            </button>
+                          </div>
+
+                          <FeedbackBanner />
+                        </div>
+                      )}
+
                       {/* ─── SUBMODE: channel ───────────────────────────────── */}
                       {subMode === 'channel' && (
                         <div className="space-y-4 pt-1">
@@ -815,8 +973,10 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                               </button>
                             ))}
                           </div>
-                          <button type="button" onClick={() => showSuccessAndReturnToMain('Compra registrada com sucesso.')}
-                            className="w-full text-center text-sm text-gray-400 hover:text-gray-600 py-2 transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => { void refreshFoodPlan().finally(() => showSuccessAndReturnToMain('Novo ciclo iniciado')); }}
+                            className="w-full text-center text-sm text-gray-400 hover:text-gray-600 min-h-[44px] py-3 transition-colors">
                             Pular
                           </button>
                         </div>
@@ -829,6 +989,21 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
           )}
         </div>
       </div>
+      {showFoodPhotoFlow && (
+        <ProductDetectionSheetGold
+          petId={pet.pet_id}
+          petName={pet.pet_name}
+          hint="food"
+          defaultMode="photo"
+          photoEntry={foodPhotoEntry ?? undefined}
+          allowScanning={false}
+          onProductConfirmed={handleFoodProductConfirmed}
+          onClose={() => {
+            setShowFoodPhotoFlow(false);
+            setFoodPhotoEntry(null);
+          }}
+        />
+      )}
     </ModalPortal>
   );
 }

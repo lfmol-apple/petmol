@@ -7,7 +7,7 @@ Integrates with existing backend structure.
 import json
 
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -895,6 +895,10 @@ class RestockFeedingPlanRequest(BaseModel):
     refill_date: Optional[str] = None  # YYYY-MM-DD; defaults to today
 
 
+class SetFeedingReminderDateRequest(BaseModel):
+    next_reminder_date: str  # YYYY-MM-DD
+
+
 @router.post("/pets/{pet_id}/feeding/plan/restock")
 async def restock_feeding_plan(
     pet_id: str,
@@ -986,6 +990,131 @@ async def snooze_feeding_plan(
         "status": "ok",
         "next_reminder_date": plan.next_reminder_date.isoformat(),
         "snooze_days": body.snooze_days,
+    }
+
+
+@router.patch("/pets/{pet_id}/feeding/plan/reminder-date")
+async def set_feeding_reminder_date(
+    pet_id: str,
+    body: SetFeedingReminderDateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Define manualmente a próxima data de lembrete de ração (YYYY-MM-DD)."""
+    _check_pet_ownership(pet_id, current_user, db)
+    plan = _get_active_feeding_plan(db, pet_id)
+
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plano de alimentação não encontrado para este pet",
+        )
+
+    try:
+        next_reminder = datetime.strptime(body.next_reminder_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Data inválida. Use YYYY-MM-DD",
+        )
+
+    if next_reminder < date.today():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A data de lembrete não pode ser no passado",
+        )
+
+    plan.next_reminder_date = next_reminder
+    plan.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "status": "ok",
+        "next_reminder_date": next_reminder.isoformat(),
+    }
+
+
+class AdjustFeedingCycleRequest(BaseModel):
+    action: Literal['finished_early', 'still_has', 'remind_earlier', 'remind_later', 'set_end_date']
+    days: int = 3
+    target_date: Optional[str] = None  # YYYY-MM-DD, obrigatório para set_end_date
+
+
+@router.patch("/pets/{pet_id}/feeding/plan/adjust")
+async def adjust_feeding_cycle(
+    pet_id: str,
+    body: AdjustFeedingCycleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ajuste inteligente do ciclo de alimentação.
+
+    - finished_early: ração acabou antes do previsto — zera estimativa e agenda lembrete imediato
+    - still_has: ainda tem ração — adia next_reminder_date por `days` dias
+    - remind_earlier: lembrar mais cedo nos próximos ciclos — aumenta safety_buffer_days
+    - remind_later: lembrar mais tarde nos próximos ciclos — diminui safety_buffer_days
+    """
+    _check_pet_ownership(pet_id, current_user, db)
+    plan = _get_active_feeding_plan(db, pet_id)
+
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Plano de alimentação não encontrado para este pet",
+        )
+
+    today = date.today()
+
+    if body.action == 'finished_early':
+        plan.estimated_end_date = today
+        plan.next_reminder_date = today
+
+    elif body.action == 'still_has':
+        base = plan.next_reminder_date or today
+        plan.next_reminder_date = base + timedelta(days=body.days)
+
+    elif body.action == 'remind_earlier':
+        plan.safety_buffer_days = (plan.safety_buffer_days or 3) + body.days
+        if plan.estimated_end_date:
+            plan.next_reminder_date = plan.estimated_end_date - timedelta(days=plan.safety_buffer_days)
+
+    elif body.action == 'remind_later':
+        plan.safety_buffer_days = max(0, (plan.safety_buffer_days or 3) - body.days)
+        if plan.estimated_end_date:
+            plan.next_reminder_date = plan.estimated_end_date - timedelta(days=plan.safety_buffer_days)
+
+    elif body.action == 'set_end_date':
+        if not body.target_date:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="target_date é obrigatório para a ação set_end_date",
+            )
+        try:
+            target = datetime.strptime(body.target_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="target_date inválido. Use YYYY-MM-DD",
+            )
+        plan.estimated_end_date = target
+        plan.next_reminder_date = target - timedelta(days=plan.safety_buffer_days or 3)
+        # Recalculate daily consumption so future cycles learn the real rate
+        start = plan.last_refill_date
+        if start and plan.package_size_kg and start < target:
+            days_real = (target - start).days
+            if days_real > 0:
+                plan.daily_amount_g = round((plan.package_size_kg * 1000) / days_real, 1)
+
+    plan.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "status": "ok",
+        "action": body.action,
+        "estimated_end_date": plan.estimated_end_date.isoformat() if plan.estimated_end_date else None,
+        "next_reminder_date": plan.next_reminder_date.isoformat() if plan.next_reminder_date else None,
+        "safety_buffer_days": plan.safety_buffer_days,
+        "daily_amount_g": plan.daily_amount_g,
     }
 
 

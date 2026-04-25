@@ -7,6 +7,7 @@ from typing import Optional, Tuple, List
 import json
 import logging
 import os
+import secrets
 from datetime import datetime, timedelta, time
 from pywebpush import webpush, WebPushException
 
@@ -203,6 +204,36 @@ def _normalize_push_payload(payload: dict) -> dict:
     if require_interaction:
         auto_close_ms = 0
 
+    raw_actions = payload.get("actions") if isinstance(payload.get("actions"), list) else []
+    normalized_actions = []
+    for candidate in raw_actions[:4]:
+        if not isinstance(candidate, dict):
+            continue
+        action = str(candidate.get("action") or "").strip()
+        label = str(candidate.get("title") or "").strip()
+        if not action or not label:
+            continue
+        entry = {"action": action, "title": label}
+        icon = str(candidate.get("icon") or "").strip()
+        if icon:
+            entry["icon"] = icon
+        normalized_actions.append(entry)
+
+    normalized_data = {"url": raw_url}
+    if isinstance(raw_data.get("pet_id"), str):
+        normalized_data["pet_id"] = raw_data["pet_id"]
+    if isinstance(raw_data.get("type"), str):
+        normalized_data["type"] = raw_data["type"]
+    if isinstance(raw_data.get("item_name"), str):
+        normalized_data["item_name"] = raw_data["item_name"]
+    if isinstance(raw_data.get("action_urls"), dict):
+        action_urls: dict[str, str] = {}
+        for key, value in raw_data["action_urls"].items():
+            if isinstance(key, str) and isinstance(value, str) and key.strip() and value.strip():
+                action_urls[key.strip()] = value.strip()
+        if action_urls:
+            normalized_data["action_urls"] = action_urls
+
     normalized = {
         "title": title,
         "body": body,
@@ -210,7 +241,8 @@ def _normalize_push_payload(payload: dict) -> dict:
         "badge": str(payload.get("badge") or "/icons/badge-mono.png"),
         "image": str(payload.get("image") or "/brand/notification-banner.png"),
         "tag": tag,
-        "data": {"url": raw_url},
+        "data": normalized_data,
+        "actions": normalized_actions,
         "requireInteraction": require_interaction,
         "autoCloseMs": auto_close_ms,
         "renotify": bool(payload.get("renotify", False)),
@@ -663,6 +695,7 @@ def send_care_pushes() -> None:
         due_date,
         reminder_time: str,
         deep_link: str,
+        cycle_key: str,
     ) -> dict:
         days_to_due = (due_date - today).days
         if days_to_due > 1:
@@ -676,7 +709,9 @@ def send_care_pushes() -> None:
         else:
             body = f"Em atraso há {abs(days_to_due)} dias. Toque para atualizar."
 
-        tag = f"petmol-care-{domain}-{record_id}-{today_str}-{reminder_time.replace(':', '')}"
+        # cycle_key ensures each alert fires at most twice per cycle: once at window entry,
+        # once on due date — not every day between them.
+        tag = f"petmol-care-{domain}-{record_id}-{cycle_key}"
         return {
             "title": f"🐾 {pet_name} — {label}",
             "body": body,
@@ -687,6 +722,7 @@ def send_care_pushes() -> None:
             "requireInteraction": True,
             "autoCloseMs": 0,
             "_deep_link": deep_link,
+            "_due_date": due_date,
             "_priority": 75 if days_to_due < 0 else 70,
         }
 
@@ -739,14 +775,14 @@ def send_care_pushes() -> None:
                     alert_days = int(getattr(record, "alert_days_before", None) or 3)
                     reminder_time = _normalize_time(getattr(record, "reminder_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
-                    date_ok = today >= start_date
                     time_ok = _care_time_reached(now, reminder_time, brt)
                     logger.info(
-                        "care_eval pet=%s domain=vaccine id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
-                        pet.id, record.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
+                        "care_eval pet=%s domain=vaccine id=%s due=%s start=%s today=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
+                        pet.id, record.id, due, start_date, today, reminder_time, now.hour, now.minute, time_ok,
                     )
-                    if not date_ok or not time_ok:
+                    if not time_ok or today < start_date or today > due:
                         continue
+                    cycle_key = f"start-{start_date.isoformat()}" if today < due else f"due-{due.isoformat()}"
                     scheduled_items.append(
                         _build_care_payload(
                             pet_name=pet.name,
@@ -757,6 +793,7 @@ def send_care_pushes() -> None:
                             due_date=due,
                             reminder_time=reminder_time,
                             deep_link=f"/home?modal=vaccines&petId={pet.id}",
+                            cycle_key=cycle_key,
                         )
                     )
 
@@ -782,14 +819,24 @@ def send_care_pushes() -> None:
                     alert_days = int(getattr(control, "alert_days_before", None) or getattr(control, "reminder_days", None) or 3)
                     reminder_time = _normalize_time(getattr(control, "reminder_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
-                    date_ok = today >= start_date
                     time_ok = _care_time_reached(now, reminder_time, brt)
                     logger.info(
-                        "care_eval pet=%s domain=%s id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
-                        pet.id, key, control.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
+                        "care_eval pet=%s domain=%s id=%s due=%s start=%s today=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
+                        pet.id, key, control.id, due, start_date, today, reminder_time, now.hour, now.minute, time_ok,
                     )
-                    if not date_ok or not time_ok:
-                        continue
+                    if key == "dewormer":
+                        trigger_minus_two = due - timedelta(days=2)
+                        if not time_ok or today not in {trigger_minus_two, due}:
+                            continue
+                        cycle_key = (
+                            f"d-2-{due.isoformat()}"
+                            if today == trigger_minus_two
+                            else f"due-{due.isoformat()}"
+                        )
+                    else:
+                        if not time_ok or today < start_date or today > due:
+                            continue
+                        cycle_key = f"start-{start_date.isoformat()}" if today < due else f"due-{due.isoformat()}"
                     label = parasite_labels.get(key) or control.product_name or "Antiparasitário"
                     scheduled_items.append(
                         _build_care_payload(
@@ -801,6 +848,7 @@ def send_care_pushes() -> None:
                             due_date=due,
                             reminder_time=reminder_time,
                             deep_link=f"/home?modal={_parasite_modal_for_type(key)}&petId={pet.id}",
+                            cycle_key=cycle_key,
                         )
                     )
 
@@ -823,14 +871,14 @@ def send_care_pushes() -> None:
                     alert_days = int(getattr(record, "alert_days_before", None) or getattr(record, "reminder_days_before", None) or 3)
                     reminder_time = _normalize_time(getattr(record, "scheduled_time", None), "09:00")
                     start_date = due - timedelta(days=max(0, alert_days))
-                    date_ok = today >= start_date
                     time_ok = _care_time_reached(now, reminder_time, brt)
                     logger.info(
-                        "care_eval pet=%s domain=grooming-%s id=%s due=%s start=%s today=%s date_ok=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
-                        pet.id, key, record.id, due, start_date, today, date_ok, reminder_time, now.hour, now.minute, time_ok,
+                        "care_eval pet=%s domain=grooming-%s id=%s due=%s start=%s today=%s reminder_time=%s now_hhmm=%02d:%02d time_ok=%s",
+                        pet.id, key, record.id, due, start_date, today, reminder_time, now.hour, now.minute, time_ok,
                     )
-                    if not date_ok or not time_ok:
+                    if not time_ok or today < start_date or today > due:
                         continue
+                    cycle_key = f"start-{start_date.isoformat()}" if today < due else f"due-{due.isoformat()}"
                     label = grooming_labels.get(key, "Higiene")
                     scheduled_items.append(
                         _build_care_payload(
@@ -842,6 +890,7 @@ def send_care_pushes() -> None:
                             due_date=due,
                             reminder_time=reminder_time,
                             deep_link=f"/home?modal=grooming&petId={pet.id}",
+                            cycle_key=cycle_key,
                         )
                     )
 
@@ -860,7 +909,7 @@ def send_care_pushes() -> None:
                         message=payload["body"],
                         deep_link=payload["_deep_link"],
                         priority=payload["_priority"],
-                        expires_at=datetime.combine(today, time(23, 59, 59)).replace(tzinfo=brt),
+                        expires_at=datetime.combine(payload.get("_due_date", today), time(23, 59, 59)).replace(tzinfo=brt) + timedelta(days=30),
                     )
                     ok = _send_push(sub, payload)
                     if not ok:
@@ -908,6 +957,16 @@ def _food_push_body(brand: str, days_left: int) -> str:
     return f"{brand} — quer garantir a próxima embalagem?"
 
 
+def _food_cycle_bucket(days_left: int) -> str:
+    if days_left < 0:
+        return "D+1+"
+    if days_left == 0:
+        return "D"
+    if days_left == 1:
+        return "D-1"
+    return "D-3"
+
+
 def send_food_reminder_pushes() -> None:
     """Daily job at 11:00 BRT.
 
@@ -918,6 +977,7 @@ def send_food_reminder_pushes() -> None:
     - days_left > 0  => urgent priority (60), skipped when critical is active
     Dedup: plan.last_food_push_date persisted in DB — survives service restarts.
     One push per pet per calendar day.
+    Frequency guard: food push only in key cycle windows (D-1, D, D+1).
     """
     from datetime import timezone as _tz, timedelta as _td
 
@@ -967,6 +1027,10 @@ def send_food_reminder_pushes() -> None:
                     if plan.estimated_end_date
                     else 0
                 )
+                # Smart cadence: avoid noisy daily pushes without a concrete moment.
+                # Keep only D-1, D and D+1.
+                if days_left not in {1, 0, -1}:
+                    continue
                 priority = 80 if days_left <= 0 else 60
                 if priority < 75 and _has_active_blocker(
                     db,
@@ -983,7 +1047,13 @@ def send_food_reminder_pushes() -> None:
 
                 title = _food_push_title(pet.name, days_left)
                 body = _food_push_body(brand, days_left)
-                deep_link = f"/home?modal=food&petId={pet.id}&action=buy"
+                deep_link = f"/food?pet_id={pet.id}&mode=buy&source=push"
+                action_urls = {
+                    "buy": f"/food?pet_id={pet.id}&mode=buy&push_action=buy&source=push",
+                    "still_has": f"/food?pet_id={pet.id}&mode=main&push_action=still_has&source=push",
+                    "finished": f"/food?pet_id={pet.id}&mode=main&push_action=finished&source=push",
+                    "purchase_confirmed": f"/food?pet_id={pet.id}&mode=main&push_action=purchase_confirmed&source=push",
+                }
 
                 _upsert_pend(
                     user_id=pet.user_id,
@@ -1003,7 +1073,19 @@ def send_food_reminder_pushes() -> None:
                     "badge": "/icons/badge-mono.png",
                     "image": "/brand/notification-banner.png",
                     "tag": pend_id,
-                    "data": {"url": deep_link},
+                    "data": {
+                        "url": deep_link,
+                        "pet_id": str(pet.id),
+                        "type": "food",
+                        "item_name": brand,
+                        "action_urls": action_urls,
+                    },
+                    "actions": [
+                        {"action": "buy", "title": "Comprar"},
+                        {"action": "still_has", "title": "Ainda tem"},
+                        {"action": "finished", "title": "Acabou"},
+                        {"action": "purchase_confirmed", "title": "Comprei"},
+                    ],
                     "requireInteraction": True,
                     "autoCloseMs": 0,
                 }
@@ -1013,6 +1095,27 @@ def send_food_reminder_pushes() -> None:
                 else:
                     # Persist dedup date so restart cannot double-send today
                     plan.last_food_push_date = today
+                    try:
+                        from ..analytics.models import AnalyticsEvent
+                        event = AnalyticsEvent(
+                            lead_id=secrets.token_hex(16),
+                            source="notifications",
+                            cta_type="food_alert_sent",
+                            target=None,
+                            pet_id=pet.id,
+                            metadata_json=json.dumps({
+                                "pet_id": pet.id,
+                                "days_left": days_left,
+                                "cycle_bucket": _food_cycle_bucket(days_left),
+                                "next_reminder_date": plan.next_reminder_date.isoformat() if plan.next_reminder_date else None,
+                                "estimated_end_date": plan.estimated_end_date.isoformat() if plan.estimated_end_date else None,
+                                "scheduled_hour_brt": 11,
+                            }, ensure_ascii=False)[:500],
+                        )
+                        db.add(event)
+                    except Exception:
+                        # Metric ingestion must never block push delivery.
+                        pass
                     db.commit()
                     logger.info(f"Push ração enviado -> pet {pet.id} user {pet.user_id} days_left={days_left}")
 

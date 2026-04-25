@@ -1,91 +1,83 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getToken } from '@/lib/auth-token';
 import { API_BASE_URL } from '@/lib/api';
 import { PetPhotoPicker } from '@/components/PetPhotoPicker';
 import { localTodayISO } from '@/lib/localDate';
-
 import { BrandBackground, PetmolTextLogo } from '@/components/ui/BrandBackground';
 
-const G   = 'divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100 bg-white/50 backdrop-blur-sm shadow-sm';
-const ROW = 'px-4 py-4';
-const CTA = 'w-full py-4 bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-base font-bold rounded-2xl active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/10';
+type PetFieldKey = 'name' | 'species' | 'size';
 
-function Switch({ on, onChange }: { on: boolean; onChange: () => void }) {
-  return (
-    <button type="button" onClick={onChange} role="switch" aria-checked={on}
-      className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-blue-500' : 'bg-gray-200'}`}>
-      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${on ? 'translate-x-5' : ''}`} />
-    </button>
-  );
-}
-
-function Seg({ opts, val, onChange }: { opts: { l: string; v: string }[]; val: string; onChange: (v: string) => void }) {
-  return (
-    <div className="flex h-9 rounded-xl bg-gray-100 p-0.5 gap-0.5 w-full">
-      {opts.map((o) => (
-        <button key={o.v} type="button" onClick={() => onChange(o.v)}
-          className={`flex-1 rounded-[0.6rem] text-xs font-semibold transition-all ${val === o.v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
-          {o.l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const DOG_BREEDS = [
-  'SRD (Sem Raça Definida)','Affenpinscher','Afghan Hound (Galgo Afegão)','Airedale Terrier',
-  'Akita Americano','Akita Japonês','Malamute do Alasca','American Bully','American Pit Bull Terrier',
-  'American Staffordshire Terrier','Pastor Australiano','Basenji','Basset Hound','Beagle',
-  'Bernese Mountain Dog','Bichon Frisé','Bloodhound','Border Collie','Border Terrier',
-  'Boston Terrier','Boxer','Braco Alemão','Bull Terrier','Bulldog Americano','Bulldog Francês',
-  'Bulldog Inglês','Bullmastiff','Cairn Terrier','Cane Corso','Cavalier King Charles Spaniel',
-  'Chihuahua','Chow Chow','Cocker Spaniel Americano','Cocker Spaniel Inglês','Collie',
-  'Corgi Cardigan','Corgi Pembroke','Dachshund (Salsicha)','Dálmata','Doberman Pinscher',
-  'Dogue Alemão','Dogue de Bordeaux','Dogo Argentino','Fila Brasileiro','Fox Terrier',
-  'Golden Retriever','Greyhound','Husky Siberiano','Jack Russell Terrier','Labrador Retriever',
-  'Lhasa Apso','Maltês','Mastiff Inglês','Miniature Pinscher','Old English Sheepdog','Papillón',
-  'Pastor Alemão','Pastor Belga Malinois','Pekingese','Pointer','Pomerânia (Spitz Anão)',
-  'Poodle Gigante','Poodle Médio','Poodle Miniatura','Poodle Toy','Pug','Rottweiler','Samoyed',
-  'Schnauzer Gigante','Schnauzer Médio','Schnauzer Miniatura','Shar-Pei','Shiba Inu','Shih Tzu',
-  'St. Bernard','Staffordshire Bull Terrier','Vizsla','Weimaraner','West Highland White Terrier',
-  'Whippet','Yorkshire Terrier','Outro',
-];
-
-const CAT_BREEDS = [
-  'SRD (Sem Raça Definida)','Abissínio','American Shorthair','Bengal','Birmanês','British Shorthair',
-  'Devon Rex','Exótico','Maine Coon','Munchkin','Persa','Ragdoll','Siamês','Sphynx','Outro',
-];
+const DOG_BREEDS = ['SRD (Sem Raça Definida)', 'Labrador Retriever', 'Golden Retriever', 'Bulldog Francês', 'Shih Tzu', 'Poodle', 'Outro'];
+const CAT_BREEDS = ['SRD (Sem Raça Definida)', 'Siamês', 'Persa', 'Maine Coon', 'Sphynx', 'Outro'];
 
 export default function RegisterPetPage() {
   const router = useRouter();
 
-  const [name,           setName]           = useState('');
-  const [species,        setSpecies]        = useState('dog');
-  const [breed,          setBreed]          = useState('');
-  const [birthDate,      setBirthDate]      = useState('');
-  const [weightValue,    setWeightValue]    = useState('');
-  const [weightUnit,     setWeightUnit]     = useState('kg');
-  const [sex,            setSex]            = useState('');
-  const [neutered,       setNeutered]       = useState(false);
-  const [petPhoto,       setPetPhoto]       = useState('');
-  const [petPhotoDataUrl,setPetPhotoDataUrl]= useState<string | null>(null);
-  const [showPhotoPicker,setShowPhotoPicker]= useState(false);
-  const [extrasOpen,     setExtrasOpen]     = useState(false);
-  const [loading,        setLoading]        = useState(false);
-  const [error,          setError]          = useState('');
+  const [name, setName] = useState('');
+  const [species, setSpecies] = useState<'dog' | 'cat' | ''>('');
+  const [sizeProfile, setSizeProfile] = useState<'small' | 'medium' | 'large' | ''>('');
+  const [weightValue, setWeightValue] = useState('');
+  const [weightUnit, setWeightUnit] = useState('kg');
+  const [breed, setBreed] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [sex, setSex] = useState('');
+  const [neutered, setNeutered] = useState(false);
+  const [petPhoto, setPetPhoto] = useState('');
+  const [petPhotoDataUrl, setPetPhotoDataUrl] = useState<string | null>(null);
+  const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<PetFieldKey, string>>({ name: '', species: '', size: '' });
+  const [currentField, setCurrentField] = useState<PetFieldKey>('name');
+
+  const nameRef = useRef<HTMLInputElement>(null);
+  const weightRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const token = getToken();
-    if (!token) router.push('/login');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    nameRef.current?.focus();
   }, [router]);
 
-  const speciesSeg = ['dog', 'cat'].includes(species) ? species : 'other';
-  const breedOptions = species === 'dog' ? DOG_BREEDS : species === 'cat' ? CAT_BREEDS : ['SRD (Sem Raça Definida)', 'Outro'];
   const today = localTodayISO();
-  const canSubmit = name.trim().length > 0;
+  const breedOptions = species === 'dog' ? DOG_BREEDS : species === 'cat' ? CAT_BREEDS : ['SRD (Sem Raça Definida)', 'Outro'];
+
+  const hasApproxWeight = Number.isFinite(parseFloat(weightValue.replace(',', '.'))) && parseFloat(weightValue.replace(',', '.')) > 0;
+  const hasSizeSignal = Boolean(sizeProfile || hasApproxWeight);
+  const canContinue = name.trim().length > 0 && Boolean(species) && hasSizeSignal;
+
+  const fieldClass = (field: PetFieldKey) =>
+    `w-full px-4 py-3 rounded-2xl border text-[15px] outline-none transition-all bg-white ${
+      errors[field]
+        ? 'border-rose-400 ring-4 ring-rose-500/10'
+        : currentField === field
+          ? 'border-blue-400 ring-4 ring-blue-500/10'
+          : 'border-slate-200'
+    }`;
+
+  const setFieldError = (field: PetFieldKey, value: string) => setErrors((prev) => ({ ...prev, [field]: value }));
+
+  const focusError = (field: PetFieldKey) => {
+    if (field === 'name') nameRef.current?.focus();
+    if (field === 'size') weightRef.current?.focus();
+    const el = field === 'name' ? nameRef.current : field === 'size' ? weightRef.current : null;
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setCurrentField(field);
+  };
+
+  const estimatedWeightFromSize = (): number | undefined => {
+    if (hasApproxWeight) return parseFloat(weightValue.replace(',', '.'));
+    if (sizeProfile === 'small') return 6;
+    if (sizeProfile === 'medium') return 16;
+    if (sizeProfile === 'large') return 30;
+    return undefined;
+  };
 
   const handlePhotoPickerConfirm = useCallback((dataUrl: string) => {
     setShowPhotoPicker(false);
@@ -94,11 +86,23 @@ export default function RegisterPetPage() {
   }, []);
 
   const handleSubmit = async () => {
-    setError('');
-    if (!name.trim()) { setError('Preencha o nome do pet.'); return; }
+    const nextErrors: Record<PetFieldKey, string> = { name: '', species: '', size: '' };
+    if (!name.trim()) nextErrors.name = 'Informe o nome do pet.';
+    if (!species) nextErrors.species = 'Escolha a espécie.';
+    if (!hasSizeSignal) nextErrors.size = 'Informe o porte ou peso aproximado.';
+    setErrors(nextErrors);
+
+    const firstInvalid = (Object.keys(nextErrors) as PetFieldKey[]).find((k) => nextErrors[k]);
+    if (firstInvalid) {
+      focusError(firstInvalid);
+      return;
+    }
 
     const token = getToken();
-    if (!token) { router.push('/login'); return; }
+    if (!token) {
+      router.push('/login');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -108,8 +112,8 @@ export default function RegisterPetPage() {
         breed: breed || undefined,
         birth_date: birthDate || undefined,
         sex: sex || undefined,
-        weight_value: weightValue ? parseFloat(weightValue.replace(',', '.')) : undefined,
-        weight_unit: weightValue ? weightUnit : undefined,
+        weight_value: estimatedWeightFromSize(),
+        weight_unit: estimatedWeightFromSize() ? weightUnit : undefined,
         neutered,
       };
 
@@ -123,7 +127,9 @@ export default function RegisterPetPage() {
         const data = await res.json().catch(() => ({})) as { detail?: string | Array<{ msg?: string }> };
         const msg = typeof data.detail === 'string'
           ? data.detail
-          : Array.isArray(data.detail) ? data.detail.map((i: { msg?: string }) => i.msg ?? 'Erro').join('\n') : `Erro ${res.status}`;
+          : Array.isArray(data.detail)
+            ? data.detail.map((i) => i.msg ?? 'Erro').join('\n')
+            : `Erro ${res.status}`;
         throw new Error(msg);
       }
 
@@ -135,18 +141,19 @@ export default function RegisterPetPage() {
           const fd = new FormData();
           fd.append('file', new File([blob], 'pet-photo.jpg', { type: 'image/jpeg' }));
           await fetch(`${API_BASE_URL}/pets/${savedPet.id}/photo`, {
-            method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
           });
-        } catch { /* non-fatal */ }
+        } catch {
+          // non-blocking
+        }
       }
 
-      localStorage.setItem('petmol_checkup_v1', JSON.stringify({
-        petName: name.trim(),
-        vaccines: 'pending', vermifugo: 'pending', antipulgas: 'pending', food: 'pending',
-      }));
-      router.push('/check-up');
+      router.push(`/food?pet_id=${encodeURIComponent(savedPet.id)}&mode=main&source=onboarding`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar o pet.');
+      setFieldError('name', err instanceof Error ? err.message : 'Erro ao salvar o pet.');
+      focusError('name');
     } finally {
       setLoading(false);
     }
@@ -154,140 +161,151 @@ export default function RegisterPetPage() {
 
   return (
     <BrandBackground showLogo={false}>
-      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-40px)] w-full px-4 py-8 animate-fadeIn">
-        <div className="w-full max-w-sm flex flex-col items-center mb-10 animate-scaleIn">
-          <PetmolTextLogo className="text-6xl drop-shadow-3xl" />
-        </div>
-
-        <div className="bg-white/95 backdrop-blur-xl rounded-[40px] shadow-premium border border-white/60 w-full max-w-md p-8 md:p-10 animate-scaleIn overflow-hidden max-h-[85dvh] flex flex-col">
-          <div className="mb-6 flex-shrink-0">
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Apresente seu pet</h2>
-            <p className="text-sm text-slate-500 font-medium">Vamos começar cuidando do seu melhor amigo.</p>
+      <div className="min-h-[calc(100dvh-40px)] w-full px-4 py-8 flex items-center justify-center">
+        <div className="w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] border border-white/60 shadow-premium p-6">
+          <div className="flex justify-center mb-5">
+            <PetmolTextLogo className="text-5xl drop-shadow-3xl" />
           </div>
 
-          <div className="flex-1 overflow-y-auto pr-1 space-y-6">
-            {error && (
-              <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-700 text-sm flex items-center gap-3 animate-shake">
-                <span className="text-lg">⚠️</span>
-                {error}
-              </div>
-            )}
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-500">Etapa 2 de 3</p>
+          <h1 className="mt-1 text-2xl font-black text-slate-900">Cadastrar pet</h1>
+          <p className="text-sm text-slate-500 mt-1">Só o mínimo para começar agora.</p>
 
-            {/* Photo + name */}
-            <div className="flex flex-col items-center gap-4 py-2">
-              <button type="button" onClick={() => setShowPhotoPicker(true)}
-                className="w-24 h-24 rounded-3xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-200 flex-shrink-0 flex items-center justify-center group hover:border-[#0056D2] hover:bg-white transition-all">
-                {petPhoto ? (
-                  <img src={petPhoto} alt="Pet" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="flex flex-col items-center text-slate-400 group-hover:text-blue-600">
-                    <span className="text-2xl mb-1">📸</span>
-                    <span className="text-[10px] font-bold uppercase tracking-tighter">Foto</span>
-                  </div>
-                )}
-              </button>
-              <div className="w-full">
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-                  placeholder="Nome do seu pet"
-                  className="w-full text-center text-xl font-bold bg-transparent outline-none placeholder:text-slate-300 text-slate-800 border-b-2 border-slate-50 focus:border-[#0056D2] transition-colors pb-2" />
+          <div className="mt-5 space-y-3 max-h-[65dvh] overflow-y-auto pr-1">
+            <button
+              type="button"
+              onClick={() => setShowPhotoPicker(true)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 flex items-center gap-3"
+            >
+              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center">
+                {petPhoto ? <img src={petPhoto} alt="Foto do pet" className="w-full h-full object-cover" /> : <span className="text-2xl">📷</span>}
               </div>
+              <div className="text-left">
+                <p className="font-semibold text-slate-800">Adicionar foto do pet</p>
+                <p className="text-xs text-slate-500">Deixa o PETMOL mais pessoal (opcional).</p>
+              </div>
+            </button>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Nome do pet *</label>
+              <input
+                ref={nameRef}
+                type="text"
+                value={name}
+                onFocus={() => setCurrentField('name')}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (errors.name) setFieldError('name', e.target.value.trim() ? '' : 'Informe o nome do pet.');
+                }}
+                placeholder="Ex: Baby"
+                className={fieldClass('name')}
+              />
+              {errors.name && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.name}</p>}
             </div>
 
-            {/* Species + sex */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Tipo de animal</p>
-                <Seg
-                  opts={[{ l: 'Cão', v: 'dog' }, { l: 'Gato', v: 'cat' }, { l: 'Outro', v: 'other' }]}
-                  val={speciesSeg}
-                  onChange={(v) => { setSpecies(v); setBreed(''); }}
-                />
-              </div>
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Sexo</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['male', 'female'] as const).map((v) => (
-                    <button key={v} type="button" onClick={() => setSex(sex === v ? '' : v)}
-                      className={`py-3.5 rounded-2xl border-2 text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                        sex === v ? 'border-[#0056D2] bg-blue-50 text-[#0047ad]' : 'border-slate-50 bg-white text-slate-400 hover:border-slate-100'
-                      }`}>
-                      <span className="text-lg">{v === 'male' ? '♂' : '♀'}</span>
-                      {v === 'male' ? 'Macho' : 'Fêmea'}
-                    </button>
-                  ))}
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Espécie *</label>
+              <div className={`${errors.species ? 'border-rose-400 ring-4 ring-rose-500/10' : currentField === 'species' ? 'border-blue-400 ring-4 ring-blue-500/10' : 'border-slate-200'} rounded-2xl border p-1 bg-white`}>
+                <div className="grid grid-cols-2 gap-1">
+                  <button type="button" onClick={() => { setSpecies('dog'); setBreed(''); setFieldError('species', ''); setCurrentField('species'); }} className={`py-2.5 rounded-xl text-sm font-semibold ${species === 'dog' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}>🐶 Cachorro</button>
+                  <button type="button" onClick={() => { setSpecies('cat'); setBreed(''); setFieldError('species', ''); setCurrentField('species'); }} className={`py-2.5 rounded-xl text-sm font-semibold ${species === 'cat' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}>🐱 Gato</button>
                 </div>
               </div>
+              {errors.species && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.species}</p>}
             </div>
 
-            {/* Detalhes extras */}
-            <div className={G}>
-              <button type="button" onClick={() => setExtrasOpen((v) => !v)}
-                className={`${ROW} flex w-full items-center justify-between group`}>
-                <span className="text-xs font-bold text-slate-600 uppercase tracking-tighter group-hover:text-blue-600 transition-colors">Detalhes adicionais</span>
-                <span className={`text-slate-400 text-xs transition-transform ${extrasOpen ? 'rotate-180 text-blue-600' : ''}`}>▾</span>
-              </button>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Porte ou peso aproximado *</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'small', label: 'Pequeno' },
+                  { key: 'medium', label: 'Médio' },
+                  { key: 'large', label: 'Grande' },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => { setSizeProfile(opt.key as 'small' | 'medium' | 'large'); setCurrentField('size'); setFieldError('size', ''); }}
+                    className={`py-2.5 rounded-xl border text-sm font-semibold ${sizeProfile === opt.key ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  ref={weightRef}
+                  type="text"
+                  inputMode="decimal"
+                  value={weightValue}
+                  onFocus={() => setCurrentField('size')}
+                  onChange={(e) => {
+                    setWeightValue(e.target.value);
+                    if (errors.size) setFieldError('size', (sizeProfile || e.target.value.trim()) ? '' : 'Informe o porte ou peso aproximado.');
+                  }}
+                  placeholder="ou digite o peso"
+                  className={fieldClass('size')}
+                />
+                <select value={weightUnit} onChange={(e) => setWeightUnit(e.target.value)} className="h-[50px] rounded-2xl border border-slate-200 px-3 bg-white">
+                  <option value="kg">kg</option>
+                  <option value="lb">lb</option>
+                </select>
+              </div>
+              {errors.size && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.size}</p>}
+            </div>
 
-              {extrasOpen && (
-                <div className="px-1 py-1 space-y-1">
-                  <div className="bg-white/30 p-4 space-y-4">
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Raça</label>
-                      <select value={breed} onChange={(e) => setBreed(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#0056D2]">
-                        <option value="">Selecionar raça</option>
-                        {breedOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Nascimento</label>
-                      <input type="date" max={today} value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#0056D2]" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Peso</label>
-                        <div className="relative">
-                          <input type="text" inputMode="decimal" value={weightValue}
-                            onChange={(e) => setWeightValue(e.target.value)} placeholder="0.0"
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-900 focus:bg-white focus:ring-2 focus:ring-[#0056D2]" />
-                          <select value={weightUnit} onChange={(e) => setWeightUnit(e.target.value)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 bg-transparent outline-none">
-                            <option value="kg">kg</option>
-                            <option value="lb">lb</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase pl-1">Castrado?</label>
-                        <div className="flex h-[46px] items-center justify-center bg-slate-50 rounded-xl border border-slate-100">
-                          <Switch on={neutered} onChange={() => setNeutered((v) => !v)} />
-                        </div>
-                      </div>
+            <div className="pt-1">
+              <button type="button" onClick={() => setShowMoreDetails((v) => !v)} className="text-sm font-semibold text-slate-600 hover:text-blue-600">
+                {showMoreDetails ? 'Ocultar detalhes' : 'Adicionar mais detalhes'}
+              </button>
+              {showMoreDetails && (
+                <div className="mt-3 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Raça (opcional)</label>
+                    <select value={breed} onChange={(e) => setBreed(e.target.value)} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-[15px] outline-none">
+                      <option value="">Selecionar raça</option>
+                      {breedOptions.map((item) => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Sexo (opcional)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setSex(sex === 'male' ? '' : 'male')} className={`py-2.5 rounded-xl border text-sm font-semibold ${sex === 'male' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}>Macho</button>
+                      <button type="button" onClick={() => setSex(sex === 'female' ? '' : 'female')} className={`py-2.5 rounded-xl border text-sm font-semibold ${sex === 'female' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}>Fêmea</button>
                     </div>
                   </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Data de nascimento (opcional)</label>
+                    <input type="date" max={today} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-[15px] outline-none" />
+                  </div>
+                  <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                    <span className="text-sm text-slate-700">Castrado (opcional)</span>
+                    <input type="checkbox" checked={neutered} onChange={(e) => setNeutered(e.target.checked)} />
+                  </label>
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="mt-6 flex-shrink-0 pt-2 border-t border-slate-100 bg-white/95">
-            <button type="button" onClick={handleSubmit} disabled={loading || !canSubmit} className={CTA}>
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Salvando pet...
-                </span>
-              ) : 'Concluir cadastro'}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading || !canContinue}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[15px] font-black uppercase tracking-widest disabled:opacity-40"
+            >
+              {loading ? 'Salvando pet...' : 'Continuar'}
             </button>
           </div>
         </div>
       </div>
 
       {showPhotoPicker && (
-        <PetPhotoPicker initialSrc={petPhoto || null} onConfirm={handlePhotoPickerConfirm} onCancel={() => setShowPhotoPicker(false)} />
+        <PetPhotoPicker
+          initialSrc={petPhoto || null}
+          onConfirm={handlePhotoPickerConfirm}
+          onCancel={() => setShowPhotoPicker(false)}
+        />
       )}
     </BrandBackground>
   );
