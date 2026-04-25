@@ -155,7 +155,16 @@ export function HomePetHeader({
   return (
     <>    <div className="px-4 pt-4 space-y-3">
       {/* Container da Foto + Navegação Estilo Apple */}
-      <div className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 h-64 sm:h-72">
+      <div 
+        className="relative group rounded-[32px] overflow-hidden shadow-2xl shadow-blue-500/10 border border-white/40 ring-1 ring-black/5 bg-gradient-to-br from-blue-400 to-purple-500 h-64 sm:h-72"
+        style={{ 
+          backfaceVisibility: 'hidden', 
+          WebkitBackfaceVisibility: 'hidden', 
+          transform: 'translate3d(0,0,0)', 
+          WebkitTransform: 'translate3d(0,0,0)',
+          WebkitMaskImage: '-webkit-radial-gradient(white, black)'
+        }}
+      >
         
         {/* Emoji de Fundo para Pets sem Foto */}
         <div className="w-full h-full flex items-center justify-center opacity-40">
@@ -169,7 +178,14 @@ export function HomePetHeader({
           <img
             src={currentPetPhotoUrl}
             alt={currentPet.pet_name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 sm:group-hover:scale-105"
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ 
+              backfaceVisibility: 'hidden', 
+              WebkitBackfaceVisibility: 'hidden', 
+              transform: 'translateZ(0)', 
+              WebkitTransform: 'translateZ(0)',
+              willChange: 'transform'
+            }}
             draggable={false}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
