@@ -148,49 +148,32 @@ export default function CheckupPage() {
           </>
         ) : (
           <>
-            {/* Primary CTA */}
-            <button
-              onClick={() => { if (pet) setOpenFood(true); }}
-              disabled={!pet}
-              className="w-full flex items-center gap-4 rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-100 to-orange-200 px-5 py-5 active:scale-[0.98] transition-transform disabled:opacity-50 text-left"
-            >
-              <div className="w-14 h-14 rounded-xl bg-amber-200 flex items-center justify-center text-3xl flex-shrink-0 shadow-sm">
-                📷
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-bold text-amber-950">Escanear a ração agora</p>
-                <p className="text-xs text-amber-700 mt-0.5 leading-snug">
-                  Aponte a câmera para a embalagem
-                </p>
-              </div>
-              <span className="text-amber-600 text-xl font-semibold flex-shrink-0">›</span>
-            </button>
-
-            {/* What happens next */}
-            <div className="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-4 space-y-2.5">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">O que acontece depois</p>
-              {[
-                { icon: '⏱', text: 'Calculamos quando a ração vai acabar' },
-                { icon: '🔔', text: 'Você recebe um aviso antes de faltar' },
-                { icon: '🛒', text: 'Um toque para comprar onde quiser' },
-              ].map(({ icon, text }) => (
-                <div key={text} className="flex items-center gap-3">
-                  <span className="text-lg flex-shrink-0">{icon}</span>
-                  <p className="text-xs text-gray-600 leading-snug">{text}</p>
-                </div>
-              ))}
+            {/* Light suggestion - not blocking */}
+            <div className="rounded-2xl bg-blue-50 border-2 border-blue-200 px-5 py-4 text-left">
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">💡 Próximo passo (opcional)</p>
+              <p className="text-base font-bold text-blue-950 mt-1">Cadastre a ração do {petName}</p>
+              <p className="text-sm text-blue-700 mt-1 leading-snug">
+                Assim o PETMOL avisa antes de acabar. Leva menos de 1 minuto.
+              </p>
+              <button
+                onClick={() => { if (pet) setOpenFood(true); }}
+                disabled={!pet}
+                className="w-full mt-3 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                Adicionar ração
+              </button>
             </div>
 
-            {/* Secondary action */}
+            {/* Primary action - enter home */}
             <button
               onClick={() => goHome(false)}
               className="w-full py-4 bg-gray-900 text-white text-sm font-semibold rounded-2xl active:scale-[0.98] transition-transform"
             >
-              Configurar depois →
+              Entrar no app →
             </button>
 
             <p className="text-center text-xs text-gray-400 pb-2">
-              Você pode escanear a qualquer momento pelo app.
+              Você pode adicionar a ração a qualquer momento na Home.
             </p>
           </>
         )}

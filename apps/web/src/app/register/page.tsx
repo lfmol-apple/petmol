@@ -123,32 +123,32 @@ export default function RegisterPage() {
   };
 
   const fieldClass = (field: FieldKey) =>
-    `w-full px-4 py-3 rounded-2xl border text-[15px] outline-none transition-all bg-white ${
+    `w-full px-4 py-3 rounded-2xl border text-[15px] outline-none transition-all bg-white text-slate-900 ${
       errors[field]
         ? 'border-rose-400 ring-4 ring-rose-500/10'
         : currentField === field
-          ? 'border-blue-400 ring-4 ring-blue-500/10'
-          : 'border-slate-200'
+          ? 'border-blue-300 ring-4 ring-blue-300/20'
+          : 'border-blue-200'
     }`;
 
   return (
     <BrandBackground showLogo={false}>
       <div className="min-h-[calc(100dvh-40px)] w-full px-4 py-8 flex items-center justify-center">
-        <div className="w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] border border-white/60 shadow-premium p-6">
+        <div className="w-full max-w-md bg-gradient-to-br from-blue-600 to-blue-700 rounded-[32px] border border-blue-400/30 shadow-2xl shadow-blue-900/30 p-6">
           <div className="flex justify-center mb-5">
             <PetmolTextLogo className="text-5xl drop-shadow-3xl" />
           </div>
 
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-500">Etapa 1 de 3</p>
-          <h1 className="mt-1 text-2xl font-black text-slate-900">Criar conta</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-100">Etapa 1 de 3</p>
+          <h1 className="mt-1 text-2xl font-black text-white">Criar conta</h1>
+          <p className="text-sm text-blue-100 mt-1">
             Preencha o mínimo para começar. Já tem conta?{' '}
-            <Link href="/login" className="text-blue-600 font-bold hover:underline">Entrar</Link>
+            <Link href="/login" className="text-white font-bold hover:underline">Entrar</Link>
           </p>
 
           <div className="mt-6 space-y-3">
             <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Nome *</label>
+              <label className="text-[11px] font-bold text-blue-100 uppercase tracking-wide">Nome *</label>
               <input
                 ref={nameRef}
                 type="text"
@@ -161,11 +161,11 @@ export default function RegisterPage() {
                 placeholder="Seu nome"
                 className={fieldClass('name')}
               />
-              {errors.name && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.name}</p>}
+              {errors.name && <p className="mt-1 text-xs text-rose-200 font-semibold">{errors.name}</p>}
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">E-mail *</label>
+              <label className="text-[11px] font-bold text-blue-100 uppercase tracking-wide">E-mail *</label>
               <input
                 ref={emailRef}
                 type="email"
@@ -178,11 +178,11 @@ export default function RegisterPage() {
                 placeholder="voce@email.com"
                 className={fieldClass('email')}
               />
-              {errors.email && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.email}</p>}
+              {errors.email && <p className="mt-1 text-xs text-rose-200 font-semibold">{errors.email}</p>}
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Senha *</label>
+              <label className="text-[11px] font-bold text-blue-100 uppercase tracking-wide">Senha *</label>
               <div className="relative">
                 <input
                   ref={passwordRef}
@@ -199,26 +199,26 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-blue-100"
                 >
                   {showPassword ? 'Ocultar' : 'Ver'}
                 </button>
               </div>
-              {errors.password && <p className="mt-1 text-xs text-rose-600 font-semibold">{errors.password}</p>}
+              {errors.password && <p className="mt-1 text-xs text-rose-200 font-semibold">{errors.password}</p>}
             </div>
 
             <div className="pt-1">
               <button
                 type="button"
                 onClick={() => setShowMoreInfo((v) => !v)}
-                className="text-sm font-semibold text-slate-600 hover:text-blue-600"
+                className="text-sm font-semibold text-blue-100 hover:text-white"
               >
                 {showMoreInfo ? 'Ocultar informações extras' : 'Adicionar mais informações'}
               </button>
               {showMoreInfo && (
                 <div className="mt-3 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Telefone (opcional)</label>
+                    <label className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">Telefone (opcional)</label>
                     <input
                       type="tel"
                       value={phone}
@@ -228,7 +228,7 @@ export default function RegisterPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Cidade (opcional)</label>
+                    <label className="text-[11px] font-bold text-blue-900 uppercase tracking-wide">Cidade (opcional)</label>
                     <input
                       type="text"
                       value={city}
@@ -241,7 +241,7 @@ export default function RegisterPage() {
               )}
             </div>
 
-            <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${errors.terms ? 'border-rose-300 bg-rose-50' : 'border-slate-200'}`}>
+            <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer ${errors.terms ? 'border-rose-300 bg-rose-50' : 'border-blue-400/30 bg-blue-500/10'}`}>
               <input
                 ref={termsRef}
                 type="checkbox"
@@ -253,20 +253,20 @@ export default function RegisterPage() {
                 }}
                 className="mt-0.5"
               />
-              <span className="text-xs text-slate-600">
+              <span className="text-xs text-blue-50">
                 Li e aceito os{' '}
-                <Link href="/legal/terms" target="_blank" className="text-blue-600 font-bold hover:underline">Termos</Link>
+                <Link href="/legal/terms" target="_blank" className="text-white font-bold hover:underline">Termos</Link>
                 {' '}e a{' '}
-                <Link href="/legal/privacy" target="_blank" className="text-blue-600 font-bold hover:underline">Política de Privacidade</Link>.
+                <Link href="/legal/privacy" target="_blank" className="text-white font-bold hover:underline">Política de Privacidade</Link>.
               </span>
             </label>
-            {errors.terms && <p className="text-xs text-rose-600 font-semibold -mt-2">{errors.terms}</p>}
+            {errors.terms && <p className="text-xs text-rose-200 font-semibold -mt-2">{errors.terms}</p>}}
 
             <button
               type="button"
               onClick={handleSubmit}
               disabled={loading || !minValid}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[15px] font-black uppercase tracking-widest disabled:opacity-40"
+              className="w-full py-3.5 rounded-2xl bg-white text-blue-700 text-[15px] font-black uppercase tracking-widest disabled:opacity-40 hover:bg-blue-50 active:scale-[0.98] transition-all"
             >
               {loading ? 'Criando conta...' : 'Continuar'}
             </button>
