@@ -821,50 +821,83 @@ async def get_feeding_plan(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get feeding plan for a pet."""
-    # Validate pet belongs to user
-    pet = _check_pet_ownership(pet_id, current_user, db)
+    """Get feeding plan for a pet.
     
-    # Get plan
-    plan = _get_active_feeding_plan(db, pet_id)
+    Logs all steps for debugging intermittent empty responses.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
     
-    if not plan:
+    try:
+        # Validate pet belongs to user
+        pet = _check_pet_ownership(pet_id, current_user, db)
+        logger.info(f"[FeedingPlan] GET start for pet {pet_id}")
+        
+        # Get plan
+        plan = _get_active_feeding_plan(db, pet_id)
+        
+        if not plan:
+            logger.warning(f"[FeedingPlan] No active plan found for pet {pet_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Plano de alimentação não encontrado para este pet"
+            )
+        
+        logger.info(f"[FeedingPlan] Plan found: {plan.id}, enabled={plan.enabled}, brand={plan.food_brand}")
+        
+        plan_items = _parse_feeding_items_from_plan(plan)
+        plan_data = _build_feeding_plan_data(plan, plan_items)
+        
+        # Validate that plan_data has required fields
+        if not plan_data.pet_id:
+            logger.error(f"[FeedingPlan] Invalid plan_data: missing pet_id for pet {pet_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao processar plano de alimentação"
+            )
+        
+        # Recalculate estimate with fresh data
+        today = date.today()
+        estimated_end, next_reminder, _ = calculate_food_stock_estimates(
+            package_size_kg=plan.package_size_kg,
+            daily_amount_g=plan.daily_amount_g,
+            last_refill_date=plan.last_refill_date,
+            safety_buffer_days=plan.safety_buffer_days,
+            enabled=plan.enabled,
+            no_consumption_control=plan.no_consumption_control,
+        )
+        
+        estimate = None
+        if plan.enabled and not plan.no_consumption_control and estimated_end:
+            days_left = calculate_days_until_out(estimated_end, today)
+            estimate = FeedingEstimate(
+                estimated_end_date=estimated_end.isoformat(),
+                estimated_days_left=days_left,
+                low_stock=is_food_stock_low(estimated_end, next_reminder, today),
+                recommended_alert_date=next_reminder.isoformat() if next_reminder else None,
+                calculated_at=datetime.now().isoformat(),
+            )
+        
+        response = FeedingPlanResponse(
+            status="ok",
+            pet_id=pet_id,
+            plan=plan_data,
+            estimate=estimate,
+        )
+        
+        logger.info(f"[FeedingPlan] GET success for pet {pet_id}, estimate={estimate is not None}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"[FeedingPlan] Unexpected error for pet {pet_id}: {str(e)}")
+        logger.error(f"[FeedingPlan] Traceback: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Plano de alimentação não encontrado para este pet"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao carregar plano: {str(e)[:100]}"
         )
-    
-    plan_items = _parse_feeding_items_from_plan(plan)
-    plan_data = _build_feeding_plan_data(plan, plan_items)
-    
-    # Recalculate estimate with fresh data
-    today = date.today()
-    estimated_end, next_reminder, _ = calculate_food_stock_estimates(
-        package_size_kg=plan.package_size_kg,
-        daily_amount_g=plan.daily_amount_g,
-        last_refill_date=plan.last_refill_date,
-        safety_buffer_days=plan.safety_buffer_days,
-        enabled=plan.enabled,
-        no_consumption_control=plan.no_consumption_control,
-    )
-    
-    estimate = None
-    if plan.enabled and not plan.no_consumption_control and estimated_end:
-        days_left = calculate_days_until_out(estimated_end, today)
-        estimate = FeedingEstimate(
-            estimated_end_date=estimated_end.isoformat(),
-            estimated_days_left=days_left,
-           low_stock=is_food_stock_low(estimated_end, next_reminder, today),
-            recommended_alert_date=next_reminder.isoformat() if next_reminder else None,
-            calculated_at=datetime.now().isoformat(),
-        )
-    
-    return FeedingPlanResponse(
-        status="ok",
-        pet_id=pet_id,
-        plan=plan_data,
-        estimate=estimate,
-    )
 
 
 @router.delete("/pets/{pet_id}/feeding/plan", status_code=status.HTTP_204_NO_CONTENT)
@@ -1273,3 +1306,93 @@ async def get_supported_countries():
         )
 
     return CountriesResponse(status="ok", countries=country_list)
+
+
+@router.get("/pets/{pet_id}/feeding/plan/debug")
+async def debug_feeding_plan(
+    pet_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Debug endpoint to diagnose feeding plan loading issues.
+    
+    Returns detailed info about:
+    - Plan existence and state
+    - Database consistency
+    - Plan items
+    - Estimate calculations
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        pet = _check_pet_ownership(pet_id, current_user, db)
+        
+        # Get all plans for this pet (including deleted)
+        all_plans = db.query(FeedingPlan).filter(
+            FeedingPlan.pet_id == pet_id
+        ).order_by(
+            FeedingPlan.updated_at.desc(),
+            FeedingPlan.created_at.desc(),
+            FeedingPlan.id.desc(),
+        ).all()
+        
+        # Get active plan
+        active_plan = _get_active_feeding_plan(db, pet_id)
+        
+        debug_info = {
+            "pet_id": pet_id,
+            "total_plans": len(all_plans),
+            "active_plan": None,
+            "all_plans_summary": [],
+            "issues": [],
+        }
+        
+        if active_plan:
+            plan_items = _parse_feeding_items_from_plan(active_plan)
+            debug_info["active_plan"] = {
+                "id": active_plan.id,
+                "enabled": active_plan.enabled,
+                "food_brand": active_plan.food_brand,
+                "package_size_kg": active_plan.package_size_kg,
+                "daily_amount_g": active_plan.daily_amount_g,
+                "last_refill_date": active_plan.last_refill_date.isoformat() if active_plan.last_refill_date else None,
+                "created_at": active_plan.created_at.isoformat(),
+                "updated_at": active_plan.updated_at.isoformat(),
+                "deleted_at": active_plan.deleted_at.isoformat() if active_plan.deleted_at else None,
+                "items_count": len(plan_items),
+                "items": plan_items[:3],  # First 3 items
+            }
+            
+            # Validate plan data
+            plan_data = _build_feeding_plan_data(active_plan, plan_items)
+            if not plan_data.pet_id:
+                debug_info["issues"].append("CRITICAL: plan_data.pet_id is missing")
+            if not plan_data.food_brand and active_plan.food_brand:
+                debug_info["issues"].append("WARNING: food_brand lost during flattenFeedingPlan")
+        else:
+            debug_info["issues"].append("No active plan found")
+        
+        # Summarize all plans
+        for plan in all_plans:
+            debug_info["all_plans_summary"].append({
+                "id": plan.id,
+                "enabled": plan.enabled,
+                "deleted_at": plan.deleted_at.isoformat() if plan.deleted_at else None,
+                "created_at": plan.created_at.isoformat(),
+            })
+        
+        return {
+            "status": "ok",
+            "debug": debug_info,
+        }
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"[DebugFeedingPlan] Error for pet {pet_id}: {str(e)}")
+        logger.error(f"[DebugFeedingPlan] Traceback: {traceback.format_exc()}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "pet_id": pet_id,
+        }

@@ -70,15 +70,27 @@ function flattenFeedingPlan(raw: Record<string, unknown>): FeedingPlanEntry {
 export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | null }) {
   const [feedingPlan, setFeedingPlan] = useState<Record<string, FeedingPlanEntry>>({});
 
-  const fetchFeedingPlan = async (petId: string) => {
+  const fetchFeedingPlan = async (petId: string, attempt = 1) => {
     const token = getToken();
     if (!petId) return;
+
+    const maxRetries = 3;
+    const isValidFeedingPlan = (entry: FeedingPlanEntry | null): boolean => {
+      // Validar que o plano tem pelo menos alguns dados relevantes
+      if (!entry) return false;
+      // Se tem pet_id, consideramos válido (pode ter plano vazio, mas é válido)
+      if (entry.pet_id) return true;
+      // Se não tem pet_id, é inválido
+      return false;
+    };
 
     const readLocalFoodPlan = (): FeedingPlanEntry | null => {
       try {
         const raw = localStorage.getItem(`petmol_food_control_${petId}`);
         if (!raw) return null;
-        return flattenFeedingPlan(JSON.parse(raw));
+        const parsed = flattenFeedingPlan(JSON.parse(raw));
+        // Só retorna se for válido
+        return isValidFeedingPlan(parsed) ? parsed : null;
       } catch {
         return null;
       }
@@ -96,26 +108,60 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
     };
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const res = await fetch(`${API_BACKEND_BASE}/health/pets/${petId}/feeding/plan`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         credentials: 'include',
         cache: 'no-store',
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
+
       if (res.ok) {
         const data = await res.json();
+        
+        // Validar que data.plan existe e tem campos
+        if (!data.plan || (typeof data.plan === 'object' && Object.keys(data.plan).length === 0)) {
+          console.warn(`[FoodPlanSync] Plano vazio para pet ${petId}, tentativa ${attempt}/${maxRetries}`);
+          // Se é a primeira tentativa, tentar novamente
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff exponencial
+            return fetchFeedingPlan(petId, attempt + 1);
+          }
+          // Usar fallback local
+          const fallback = readLocalFoodPlan();
+          syncFoodPlan(fallback);
+          return;
+        }
+
         const flat = flattenFeedingPlan({
           ...(data.plan ?? {}),
           next_reminder_date: data.estimate?.recommended_alert_date ?? null,
           estimated_end_date: data.estimate?.estimated_end_date ?? null,
           estimated_days_left: data.estimate?.estimated_days_left ?? null,
         });
+
+        // Validar plano achatado antes de sincronizar
+        if (!isValidFeedingPlan(flat)) {
+          console.warn(`[FoodPlanSync] Plano inválido após flattenFeedingPlan para pet ${petId}`);
+          const fallback = readLocalFoodPlan();
+          syncFoodPlan(fallback);
+          return;
+        }
+
         syncFoodPlan(flat);
+        
+        // Salvar no localStorage com validação
         try {
           const stored = localStorage.getItem(`petmol_food_control_${petId}`);
           const local = stored ? JSON.parse(stored) : {};
           const merged = {
             ...local,
             ...flat,
+            pet_id: flat.pet_id || local.pet_id || petId, // Garantir pet_id
             next_purchase_date: flat.next_purchase_date ?? local.next_purchase_date,
             next_reminder_date: flat.next_reminder_date ?? local.next_reminder_date,
             estimated_end_date: flat.estimated_end_date ?? local.estimated_end_date,
@@ -127,15 +173,49 @@ export function useFoodPlanSync({ selectedPetId }: { selectedPetId: string | nul
             food_brand: flat.food_brand ?? local.food_brand ?? local.brand,
             brand: flat.brand ?? local.brand ?? local.food_brand,
           };
-          localStorage.setItem(`petmol_food_control_${petId}`, JSON.stringify(merged));
-        } catch {}
+          // Validar antes de salvar
+          if (merged.pet_id) {
+            localStorage.setItem(`petmol_food_control_${petId}`, JSON.stringify(merged));
+          }
+        } catch (storageError) {
+          console.error(`[FoodPlanSync] Erro ao salvar localStorage para ${petId}:`, storageError);
+        }
         return;
       }
 
-      syncFoodPlan(null);
+      // Status não 200 OK
+      if (res.status === 404) {
+        console.info(`[FoodPlanSync] Plano não encontrado para pet ${petId} (404)`);
+        syncFoodPlan(null);
+        return;
+      }
+
+      // Erro 5xx ou outro erro — tentar novamente
+      if (attempt < maxRetries && res.status >= 500) {
+        console.warn(`[FoodPlanSync] Erro ${res.status} para pet ${petId}, tentativa ${attempt}/${maxRetries}`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff exponencial
+        return fetchFeedingPlan(petId, attempt + 1);
+      }
+
+      // Erro final — usar fallback local
+      console.error(`[FoodPlanSync] Erro ${res.status} ao carregar plano para ${petId}`);
+      const fallback = readLocalFoodPlan();
+      syncFoodPlan(fallback);
     } catch (e) {
-      console.error('Erro ao carregar plano alimentar:', e);
-      syncFoodPlan(null);
+      // Timeout ou erro de rede
+      if (e instanceof Error && e.name === 'AbortError') {
+        console.warn(`[FoodPlanSync] Timeout ao carregar plano para pet ${petId}, tentativa ${attempt}/${maxRetries}`);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff exponencial
+          return fetchFeedingPlan(petId, attempt + 1);
+        }
+      } else {
+        console.error(`[FoodPlanSync] Erro ao carregar plano alimentar para ${petId}:`, e);
+      }
+      
+      // Usar fallback local em caso de erro
+      const fallback = readLocalFoodPlan();
+      syncFoodPlan(fallback);
     }
   };
 

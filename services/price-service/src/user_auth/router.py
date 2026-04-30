@@ -135,6 +135,9 @@ def request_password_reset(
     Always returns success to avoid leaking which e-mails are registered.
     """
     email = payload.email.lower()
+    if settings.env == "prod" and not all(os.environ.get(k) for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASS")):
+        raise HTTPException(status_code=503, detail="Envio de e-mail não configurado. Configure SMTP e tente novamente.")
+
     user = db.query(User).filter(User.email == email).first()
     generic = PasswordResetResponse(
         ok=True,
@@ -154,9 +157,6 @@ def request_password_reset(
     db.commit()
 
     from ..email_otp import send_password_reset_email
-
-    if settings.env == "prod" and not all(os.environ.get(k) for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASS")):
-        raise HTTPException(status_code=503, detail="Envio de e-mail não configurado. Configure SMTP e tente novamente.")
 
     sent = send_password_reset_email(user.email, _password_reset_url(token), PASSWORD_RESET_TTL_MINUTES)
     if not sent:
