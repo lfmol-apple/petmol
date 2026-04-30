@@ -66,6 +66,11 @@ export default function RegisterPage() {
     setErrors((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleCancel = () => {
+    if (loading) return;
+    router.push('/login');
+  };
+
   const handleSubmit = async () => {
     const values = { name, email, password, termsAccepted };
     const ordered: FieldKey[] = ['name', 'email', 'password', 'terms'];
@@ -262,14 +267,24 @@ export default function RegisterPage() {
             </label>
             {errors.terms && <p className="text-xs text-rose-600 font-semibold -mt-2">{errors.terms}</p>}
 
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading || !minValid}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[15px] font-black uppercase tracking-widest disabled:opacity-40"
-            >
-              {loading ? 'Criando conta...' : 'Continuar'}
-            </button>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={loading}
+                className="py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-[13px] font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading || !minValid}
+                className="py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[13px] font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                {loading ? 'Criando...' : 'Continuar'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -89,6 +89,11 @@ export default function RegisterPetPage() {
     if (errors.name) setFieldError('name', '');
   }, [errors.name]);
 
+  const handleCancel = () => {
+    if (loading || photoProcessing) return;
+    router.push('/home');
+  };
+
   const handleSubmit = async () => {
     const nextErrors: Record<PetFieldKey, string> = { name: '', species: '', size: '' };
     if (!name.trim()) nextErrors.name = 'Informe o nome do pet.';
@@ -300,14 +305,24 @@ export default function RegisterPetPage() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading || photoProcessing || !canContinue}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[15px] font-black uppercase tracking-widest disabled:opacity-40"
-            >
-              {loading ? 'Salvando pet...' : 'Continuar'}
-            </button>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={loading || photoProcessing}
+                className="py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-[13px] font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={loading || photoProcessing || !canContinue}
+                className="py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[13px] font-black uppercase tracking-widest disabled:opacity-40"
+              >
+                {loading ? 'Salvando...' : 'Continuar'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
