@@ -12,6 +12,7 @@ type PetFieldKey = 'name' | 'species' | 'size';
 
 const DOG_BREEDS = ['SRD (Sem Raça Definida)', 'Labrador Retriever', 'Golden Retriever', 'Bulldog Francês', 'Shih Tzu', 'Poodle', 'Outro'];
 const CAT_BREEDS = ['SRD (Sem Raça Definida)', 'Siamês', 'Persa', 'Maine Coon', 'Sphynx', 'Outro'];
+const MAX_PHOTO_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export default function RegisterPetPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function RegisterPetPage() {
   const [petPhoto, setPetPhoto] = useState('');
   const [petPhotoDataUrl, setPetPhotoDataUrl] = useState<string | null>(null);
   const [showPhotoPicker, setShowPhotoPicker] = useState(false);
+  const [photoProcessing, setPhotoProcessing] = useState(false);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<PetFieldKey, string>>({ name: '', species: '', size: '' });
@@ -83,7 +85,9 @@ export default function RegisterPetPage() {
     setShowPhotoPicker(false);
     setPetPhoto(dataUrl);
     setPetPhotoDataUrl(dataUrl);
-  }, []);
+    setPhotoProcessing(false);
+    if (errors.name) setFieldError('name', '');
+  }, [errors.name]);
 
   const handleSubmit = async () => {
     const nextErrors: Record<PetFieldKey, string> = { name: '', species: '', size: '' };
@@ -114,6 +118,7 @@ export default function RegisterPetPage() {
         sex: sex || undefined,
         weight_value: estimatedWeightFromSize(),
         weight_unit: estimatedWeightFromSize() ? weightUnit : undefined,
+        photo: petPhotoDataUrl || undefined,
         neutered,
       };
 
@@ -133,24 +138,29 @@ export default function RegisterPetPage() {
         throw new Error(msg);
       }
 
-      const savedPet = await res.json() as { id: string };
+      const savedPet = await res.json() as { id?: string; pet_id?: string };
+      const savedPetId = savedPet.id || savedPet.pet_id;
+      if (!savedPetId) {
+        throw new Error('Pet criado, mas o identificador não foi retornado para enviar a foto.');
+      }
 
       if (petPhotoDataUrl) {
-        try {
-          const blob = await (await fetch(petPhotoDataUrl)).blob();
-          const fd = new FormData();
-          fd.append('file', new File([blob], 'pet-photo.jpg', { type: 'image/jpeg' }));
-          await fetch(`${API_BASE_URL}/pets/${savedPet.id}/photo`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: fd,
-          });
-        } catch {
-          // non-blocking
+        const blob = await (await fetch(petPhotoDataUrl)).blob();
+        const fd = new FormData();
+        fd.append('file', new File([blob], 'pet-photo.jpg', { type: 'image/jpeg' }));
+        const photoRes = await fetch(`${API_BASE_URL}/pets/${savedPetId}/photo`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          body: fd,
+        });
+        if (!photoRes.ok) {
+          const data = await photoRes.json().catch(() => ({})) as { detail?: string };
+          console.warn(data.detail || 'Pet criado com foto embutida; upload de arquivo não concluído.');
         }
       }
 
-      router.push(`/food?pet_id=${encodeURIComponent(savedPet.id)}&mode=main&source=onboarding`);
+      router.push(`/food?pet_id=${encodeURIComponent(savedPetId)}&mode=main&source=onboarding`);
     } catch (err: unknown) {
       setFieldError('name', err instanceof Error ? err.message : 'Erro ao salvar o pet.');
       focusError('name');
@@ -164,10 +174,9 @@ export default function RegisterPetPage() {
       <div className="min-h-[calc(100dvh-40px)] w-full px-4 py-8 flex items-center justify-center">
         <div className="w-full max-w-md bg-white/95 backdrop-blur-xl rounded-[32px] border border-white/60 shadow-premium p-6">
           <div className="flex justify-center mb-5">
-            <PetmolTextLogo className="text-5xl drop-shadow-3xl" />
+            <PetmolTextLogo className="text-5xl drop-shadow-sm" color="#2563EB" />
           </div>
 
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-500">Etapa 2 de 3</p>
           <h1 className="mt-1 text-2xl font-black text-slate-900">Cadastrar pet</h1>
           <p className="text-sm text-slate-500 mt-1">Só o mínimo para começar agora.</p>
 
@@ -175,14 +184,17 @@ export default function RegisterPetPage() {
             <button
               type="button"
               onClick={() => setShowPhotoPicker(true)}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 flex items-center gap-3"
+              disabled={photoProcessing || loading}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 flex items-center gap-3 text-left disabled:opacity-60 active:scale-[0.99] transition-transform"
             >
-              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center">
+              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
                 {petPhoto ? <img src={petPhoto} alt="Foto do pet" className="w-full h-full object-cover" /> : <span className="text-2xl">📷</span>}
               </div>
-              <div className="text-left">
-                <p className="font-semibold text-slate-800">Adicionar foto do pet</p>
-                <p className="text-xs text-slate-500">Deixa o PETMOL mais pessoal (opcional).</p>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800">{petPhoto ? 'Foto selecionada' : 'Adicionar foto do pet'}</p>
+                <p className="text-xs text-slate-500">
+                  {photoProcessing ? 'Preparando foto...' : petPhoto ? 'Toque para trocar.' : 'Câmera ou galeria. Opcional.'}
+                </p>
               </div>
             </button>
 
@@ -291,7 +303,7 @@ export default function RegisterPetPage() {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={loading || !canContinue}
+              disabled={loading || photoProcessing || !canContinue}
               className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#0066ff] to-[#0056D2] text-white text-[15px] font-black uppercase tracking-widest disabled:opacity-40"
             >
               {loading ? 'Salvando pet...' : 'Continuar'}
@@ -304,7 +316,10 @@ export default function RegisterPetPage() {
         <PetPhotoPicker
           initialSrc={petPhoto || null}
           onConfirm={handlePhotoPickerConfirm}
-          onCancel={() => setShowPhotoPicker(false)}
+          onCancel={() => {
+            setPhotoProcessing(false);
+            setShowPhotoPicker(false);
+          }}
         />
       )}
     </BrandBackground>

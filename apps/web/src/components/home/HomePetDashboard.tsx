@@ -210,8 +210,9 @@ export function HomePetDashboard({
   const foodDaysLeft = typeof foodPlan?.estimated_days_left === 'number'
     ? foodPlan.estimated_days_left
     : (foodPlan?.estimated_end_date ? diffDaysFromIso(foodPlan.estimated_end_date) : null);
+  const foodTitle = !hasFoodData ? `Ração do ${currentPet.pet_name}` : undefined;
   const foodHeadline = !hasFoodData
-    ? null
+    ? 'Cadastre a ração para o PETMOL avisar antes de acabar.'
     : foodDaysLeft == null
       ? 'Plano de alimentação ativo'
       : foodDaysLeft < 0
@@ -220,7 +221,7 @@ export function HomePetDashboard({
           ? `Acabando em ${foodDaysLeft} dia${foodDaysLeft === 1 ? '' : 's'}`
           : `${foodDaysLeft} dias restantes`;
   const foodSubline = !hasFoodData
-    ? null
+    ? 'Adicionar ração'
     : foodPlan?.estimated_end_date
       ? `Acaba em ${formatReminderDate(foodPlan.estimated_end_date)}`
       : null;
@@ -235,6 +236,7 @@ export function HomePetDashboard({
         onMedicacaoClick={onOpenMedication}
         onFamilyClick={onOpenFamily}
         hasFoodData={hasFoodData}
+        foodTitle={foodTitle}
         foodHeadline={foodHeadline ?? undefined}
         foodSubline={foodSubline ?? undefined}
         alertHealth={alertHealth}

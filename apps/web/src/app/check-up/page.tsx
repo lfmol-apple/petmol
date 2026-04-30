@@ -123,7 +123,7 @@ export default function CheckupPage() {
           Vamos cuidar de {petName}
         </h1>
         <p className="text-sm text-gray-500 mt-2.5 leading-relaxed">
-          Escaneie a ração e o PETMOL calcula<br />quando vai acabar e te avisa antes.
+          Cadastre a ração e o PETMOL calcula<br />quando vai acabar e te avisa antes.
         </p>
       </div>
 

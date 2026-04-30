@@ -14,6 +14,7 @@ interface AppleControlButtonsProps {
   onMedicacaoClick?: () => void;
   onFamilyClick?: () => void;
   hasFoodData?: boolean;
+  foodTitle?: string;
   foodHeadline?: string;
   foodSubline?: string;
 
@@ -67,6 +68,7 @@ export function AppleControlButtons({
   onBanhoTosaClick,
   onFamilyClick,
   hasFoodData,
+  foodTitle,
   foodHeadline,
   foodSubline,
   alertHealth,
@@ -100,14 +102,14 @@ export function AppleControlButtons({
               <span className="text-2xl">🥣</span>
             </span>
             <div className="flex h-full flex-col justify-center pr-8 pt-3 text-left">
-              <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-amber-950">{t('home.food.title')}</h3>
+              <h3 className="truncate text-[14px] sm:text-base font-bold leading-tight text-amber-950">{foodTitle || t('home.food.title')}</h3>
               <p className="mt-0.5 line-clamp-2 text-[10px] sm:text-xs leading-[1.15] text-amber-800">
                 {hasFoodData
                   ? (foodHeadline || t('home.food.desc'))
-                  : 'Toque para escanear a ração'}
+                  : (foodHeadline || 'Toque para escanear a ração')}
               </p>
-              {hasFoodData && foodSubline && (
-                <p className="mt-0.5 line-clamp-1 text-[10px] sm:text-xs leading-[1.15] text-amber-900/80">
+              {foodSubline && (
+                <p className="mt-1 line-clamp-1 text-[10px] sm:text-xs font-bold leading-[1.15] text-blue-700">
                   {foodSubline}
                 </p>
               )}

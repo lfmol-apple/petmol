@@ -308,7 +308,6 @@ export function FoodControlTab({
   const [formMode, setFormMode] = useState<'add' | 'edit' | 'quick_setup'>('edit');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
-  const [restockFeedback, setRestockFeedback] = useState<string | null>(null);
   const [apiEstimate, setApiEstimate] = useState<{ estimated_end_date: string | null; estimated_days_left: number | null } | null>(null);
 
   const applyScannedProduct = (itemId: string, product: ScannedProduct) => {
@@ -653,7 +652,6 @@ export function FoodControlTab({
   const openEditForm = () => {
     setApiError(null);
     setDeleteFeedback(null);
-    setRestockFeedback(null);
     setSavedOk(false);
     setFormMode('edit');
     setFormOpen(true);
@@ -662,7 +660,6 @@ export function FoodControlTab({
   const openAddNewItem = () => {
     setApiError(null);
     setDeleteFeedback(null);
-    setRestockFeedback(null);
     setSavedOk(false);
     setItems((current) => ensurePrimaryItem([...current, createEmptyFoodItem(false)]));
     setFormMode('add');
@@ -700,7 +697,6 @@ export function FoodControlTab({
     if (!formRequest) return;
     setApiError(null);
     setDeleteFeedback(null);
-    setRestockFeedback(null);
     setSavedOk(false);
     setShowAdvanced(false);
     if (formRequest.mode === 'add') {
@@ -744,12 +740,6 @@ export function FoodControlTab({
               <span>ℹ️</span><span className="text-base text-slate-700">{deleteFeedback}</span>
             </div>
           )}
-          {restockFeedback && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2">
-              <span>🥣</span><span className="text-base text-amber-900">{restockFeedback}</span>
-            </div>
-          )}
-
           {/* Status card */}
           <div className="space-y-2">
             {orderPrimaryFirst(normalizedItems).map((item, index) => {

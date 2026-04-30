@@ -17,11 +17,11 @@ export function PetmolMark({ className, style }: { className?: string; style?: R
   );
 }
 
-export function PetmolTextLogo({ className, showMark = true }: { className?: string; showMark?: boolean }) {
+export function PetmolTextLogo({ className, showMark = true, color }: { className?: string; showMark?: boolean; color?: string }) {
   return (
     <div className={`relative flex items-center gap-3 select-none pointer-events-none ${className}`}>
       <span className="font-bold tracking-[-0.04em]" 
-            style={{ fontFamily: 'var(--font-fredoka), sans-serif', color: '#FFFFFF' }}>
+            style={{ fontFamily: 'var(--font-fredoka), sans-serif', color: color || '#FFFFFF' }}>
         petmol
       </span>
 
@@ -32,13 +32,13 @@ export function PetmolTextLogo({ className, showMark = true }: { className?: str
             src="/brand/pata-custom.png" 
             alt="🐾" 
             className="w-5 h-5 object-contain rotate-[-10deg]" 
-            style={{ filter: 'brightness(0) invert(1)' }}
+            style={{ filter: color ? 'brightness(0) invert(32%) sepia(86%) saturate(1478%) hue-rotate(204deg) brightness(97%) contrast(93%)' : 'brightness(0) invert(1)' }}
           />
           <img 
             src="/brand/pata-custom.png" 
             alt="🐾" 
             className="w-5 h-5 object-contain rotate-[15deg] -mt-3 opacity-70" 
-            style={{ filter: 'brightness(0) invert(1)' }}
+            style={{ filter: color ? 'brightness(0) invert(32%) sepia(86%) saturate(1478%) hue-rotate(204deg) brightness(97%) contrast(93%)' : 'brightness(0) invert(1)' }}
           />
         </div>
       )}

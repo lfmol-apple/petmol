@@ -178,8 +178,8 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
     setFeedback(null);
   };
 
-  const openFoodPhotoFlow = (entry: 'camera' | 'gallery') => {
-    setFoodPhotoEntry(entry);
+  const openFoodPhotoFlow = (entry?: 'camera' | 'gallery') => {
+    setFoodPhotoEntry(entry ?? null);
     setShowFoodPhotoFlow(true);
   };
 
@@ -691,33 +691,32 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 space-y-4">
                       <div>
                         <h3 className="text-[20px] font-black text-gray-900 leading-tight">Vamos cadastrar a ração do {pet.pet_name}?</h3>
+                        <p className="text-[13px] text-amber-900/80 mt-1">Fotografe a embalagem para identificar automaticamente, ou preencha manualmente.</p>
                       </div>
                       <div className="space-y-2">
-                        <button type="button"
-                          onClick={() => openFoodPhotoFlow('camera')}
-                          className="w-full py-3.5 rounded-2xl bg-blue-600 text-white text-[15px] font-black shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                        {/* Opção 1 — foto ou galeria */}
+                        <button
+                          type="button"
+                          onClick={() => openFoodPhotoFlow()}
+                          className="w-full flex items-center justify-center gap-2.5 py-3.5 min-h-[44px] rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-black shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
                         >
-                          <span>📷</span> Tirar foto da embalagem
+                          <span className="text-xl">📷</span>
+                          Fotografar ou escolher imagem
                         </button>
-                        <button type="button"
-                          onClick={() => openFoodPhotoFlow('gallery')}
-                          className="w-full py-3 min-h-[44px] rounded-2xl bg-white border border-gray-300 text-[14px] font-semibold text-gray-700 active:scale-95 transition-all flex items-center justify-center gap-2"
-                        >
-                          <span>🖼</span> Escolher foto do celular
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
+
+                        {/* Opção 2 — manual */}
                         <button
                           type="button"
                           onClick={() => { setFormRequest({ id: Date.now(), mode: 'edit' }); setMode('edit'); }}
-                          className="w-full py-2.5 min-h-[44px] rounded-xl border border-gray-300 bg-white text-[12px] font-semibold text-gray-600 active:scale-95 transition-all"
+                          className="w-full py-3 min-h-[44px] rounded-2xl border border-gray-200 bg-white text-[13px] font-semibold text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
                         >
-                          Cadastrar manualmente
+                          ✏️ Cadastrar manualmente
                         </button>
+
                         <button
                           type="button"
                           onClick={onClose}
-                          className="w-full py-2.5 min-h-[44px] rounded-xl border border-transparent bg-transparent text-[12px] font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+                          className="w-full py-2 text-[12px] font-medium text-gray-400 hover:text-gray-600 transition-colors"
                         >
                           Fazer depois
                         </button>
@@ -833,7 +832,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                           <div className="pt-1 pb-1">
                             <button type="button"
                               onClick={() => { setFormRequest({ id: Date.now(), mode: 'edit' }); setMode('edit'); }}
-                              className="w-full py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600 hover:bg-gray-100 active:scale-95 transition-all"
+                              className="w-full py-3 min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-600 hover:bg-gray-100 active:scale-95 transition-all"
                             >
                               Editar plano
                             </button>
@@ -867,7 +866,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                           {!showDatePicker ? (
                             <button type="button"
                               onClick={() => { setCustomDate(isoPlus(7)); setShowDatePicker(true); }}
-                              className="w-full py-3 rounded-2xl border border-dashed border-gray-300 bg-white text-sm font-semibold text-gray-500 hover:bg-gray-50 active:scale-95 transition-all">
+                              className="w-full py-3 min-h-[44px] rounded-2xl border border-dashed border-gray-300 bg-white text-sm font-semibold text-gray-500 hover:bg-gray-50 active:scale-95 transition-all">
                               Escolher data específica
                             </button>
                           ) : (
@@ -914,7 +913,7 @@ export function FoodItemSheet({ pet, onClose, onSaved, initialMode, petPhotoUrl 
                           {!showDatePicker ? (
                             <button type="button"
                               onClick={() => { setCustomDate(localTodayISO()); setShowDatePicker(true); }}
-                              className="w-full py-3 rounded-2xl border border-dashed border-gray-300 bg-white text-sm font-semibold text-gray-500 hover:bg-gray-50 active:scale-95 transition-all">
+                              className="w-full py-3 min-h-[44px] rounded-2xl border border-dashed border-gray-300 bg-white text-sm font-semibold text-gray-500 hover:bg-gray-50 active:scale-95 transition-all">
                               Escolher data
                             </button>
                           ) : (
