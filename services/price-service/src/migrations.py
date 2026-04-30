@@ -77,6 +77,18 @@ def run_pg_migrations(engine: Engine) -> None:
         _pg_add_column_if_missing(conn, "users", "monthly_checkin_day", "INTEGER DEFAULT 5")
         _pg_add_column_if_missing(conn, "users", "monthly_checkin_hour", "INTEGER DEFAULT 9")
         _pg_add_column_if_missing(conn, "users", "monthly_checkin_minute", "INTEGER DEFAULT 0")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL,
+                token_hash  TEXT UNIQUE NOT NULL,
+                expires_at  TIMESTAMPTZ NOT NULL,
+                used_at     TIMESTAMPTZ,
+                created_at  TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens (user_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens (token_hash)"))
 
         # establishments: CNPJ + terms
         _pg_add_column_if_missing(conn, "establishments", "cnpj", "TEXT")
@@ -190,6 +202,18 @@ def run_sqlite_migrations(engine: Engine) -> None:
         changed |= _sqlite_add_column_if_missing(conn, "users", "monthly_checkin_day", "INTEGER DEFAULT 5")
         changed |= _sqlite_add_column_if_missing(conn, "users", "monthly_checkin_hour", "INTEGER DEFAULT 9")
         changed |= _sqlite_add_column_if_missing(conn, "users", "monthly_checkin_minute", "INTEGER DEFAULT 0")
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id          TEXT PRIMARY KEY,
+                user_id     TEXT NOT NULL,
+                token_hash  TEXT UNIQUE NOT NULL,
+                expires_at  DATETIME NOT NULL,
+                used_at     DATETIME,
+                created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens (user_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash ON password_reset_tokens (token_hash)"))
 
         # Establishments: CNPJ + terms acceptance metadata
         changed |= _sqlite_add_column_if_missing(conn, "establishments", "cnpj", "TEXT")

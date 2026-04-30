@@ -45,6 +45,7 @@ from .health import models as _health_models  # Import health models to register
 from .admin import admin_router
 from .admin import models as _admin_models
 from .admin.models import AdminUser
+from .user_auth.models import PasswordResetToken as _password_reset_token_model  # noqa: F401
 from .user_auth.models import User
 from .user_auth.security import hash_password
 from .version import get_version_info

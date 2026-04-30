@@ -100,9 +100,14 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
-                Senha
-              </label>
+              <div className="flex items-center justify-between gap-3 pl-1">
+                <label htmlFor="password" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Senha
+                </label>
+                <Link href="/auth/forgot" className="text-xs font-bold text-[#0056D2] hover:underline">
+                  Esqueci minha senha
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
