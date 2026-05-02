@@ -7,7 +7,7 @@ import hashlib
 import os
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Query, Request, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Query, Request, File, UploadFile, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -45,10 +45,12 @@ from .health import models as _health_models  # Import health models to register
 from .admin import admin_router
 from .admin import models as _admin_models
 from .admin.models import AdminUser
+from .user_auth.models import PasswordResetToken as _password_reset_token_model  # noqa: F401
 from .user_auth.models import User
 from .user_auth.security import hash_password
 from .version import get_version_info
-
+from .product_lookup import router as product_lookup_router
+from .gtin_router import router as gtin_router
 # SLICE 1: Import new services models to register with Base
 from .services import models as _services_models
 
@@ -180,6 +182,10 @@ from .user_auth.users_router import router as users_router
 app.include_router(users_router)
 
 app.include_router(pets_router)
+app.include_router(product_lookup_router)
+app.include_router(product_lookup_router, prefix="/api")
+app.include_router(gtin_router)
+app.include_router(gtin_router, prefix="/api")
 
 # Pet Documents (cofre documental)
 from .pets.document_router import router as pet_documents_router
@@ -292,19 +298,36 @@ def init_db():
 
 @app.on_event("startup")
 def start_push_scheduler():
-    """Start APScheduler to send monthly checkin push notifications."""
+    """Start APScheduler for PETMOL notification jobs (4-layer model)."""
+    from .config import get_settings
+    settings = get_settings()
+    
+    if not settings.feature_reminders_push:
+        logger = __import__("logging").getLogger(__name__)
+        logger.info("[PETMOL] Push scheduler desativado via FEATURE_REMINDERS_PUSH")
+        return
+
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
-        from .notifications import send_checkin_pushes, send_medication_pushes, send_care_pushes
+        from .notifications import (
+            send_medication_pushes,
+            send_care_pushes,
+            send_food_reminder_pushes,
+        )
 
         scheduler = BackgroundScheduler()
-        scheduler.add_job(send_checkin_pushes, "interval", minutes=1, id="checkin_pushes")
+        # Camada 1 (crítico): medicação continua no horário exato configurado
         scheduler.add_job(send_medication_pushes, "interval", minutes=1, id="medication_pushes")
+        # Lembretes de cuidado baseados no cadastro do tutor (vacina/parasita/grooming)
         scheduler.add_job(send_care_pushes, "interval", minutes=1, id="care_pushes")
+        # Camadas 1/2 (ração): prioridade crítica quando acabou e urgente quando está acabando
+        scheduler.add_job(send_food_reminder_pushes, "interval", minutes=1, id="food_reminder_pushes")
         scheduler.start()
-        print("[PETMOL] Push scheduler iniciado (verifica a cada minuto)")
+        logger = __import__("logging").getLogger(__name__)
+        logger.info("[PETMOL] Push scheduler iniciado (verifica a cada minuto)")
     except Exception as e:
-        print(f"[PETMOL] Push scheduler nao iniciado: {e}")
+        logger = __import__("logging").getLogger(__name__)
+        logger.error(f"[PETMOL] Push scheduler nao iniciado: {e}")
 
 
 # Include autocomplete router
@@ -321,6 +344,11 @@ app.include_router(notifications_router)
 # Some deployments forward /api/* without stripping the prefix (direct access).
 app.include_router(notifications_router, prefix="/api")
 
+# Include notification pendencies router (persistent in-app alerts)
+from .notifications.pendencies import router as pendencies_router
+app.include_router(pendencies_router)
+app.include_router(pendencies_router, prefix="/api")
+
 # Family sharing router — SILENCIADO: desativar compartilhamento entre contas.
 # Para reativar: descomentar as 3 linhas abaixo.
 # from .family import family_router
@@ -334,10 +362,17 @@ app.include_router(health_router)
 # Include health v1 router (PETMOL MUNDO integration - feeding control + snapshot)
 from .health.router import router as health_v1_router
 app.include_router(health_v1_router)
+app.include_router(health_v1_router, prefix="/api")
+app.include_router(health_v1_router, prefix="/api/api")
 
 # Include analytics router (Motor de Intenção)
 from .analytics.router import router as analytics_router
 app.include_router(analytics_router)
+
+# Include product metrics router (food funnel summaries)
+from .metrics.router import router as metrics_router
+app.include_router(metrics_router)
+app.include_router(metrics_router, prefix="/api")
 
 # Include partner handoff router (shop/doglife)
 from .handoff_partner import router as handoff_partner_router
@@ -1245,9 +1280,9 @@ async def search_catalog_v2(
     # Check if results are from cache
     cached = catalog_cache.get(q, country, type)
     is_cached = cached is not None
-    
+
     candidates_raw = search_catalog_candidates(q, country.upper(), type, limit)
-    
+
     # Convert to model
     candidates = [
         CatalogCandidate(
@@ -1265,7 +1300,7 @@ async def search_catalog_v2(
         )
         for c in candidates_raw
     ]
-    
+
     return CatalogSearchResult(
         candidates=candidates,
         query=q,

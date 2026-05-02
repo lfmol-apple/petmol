@@ -1,0 +1,142 @@
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+import sys
+
+
+SERVICE_DIR = Path(__file__).resolve().parents[1]
+
+if str(SERVICE_DIR) not in sys.path:
+    sys.path.insert(0, str(SERVICE_DIR))
+
+from src.notifications import send_care_pushes  # noqa: E402
+import src.notifications as notifications  # noqa: E402
+
+
+def _frozen_datetime(now_utc: datetime):
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now_utc.astimezone(tz) if tz is not None else now_utc
+
+    return FrozenDateTime
+
+
+class FakeQuery:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def filter(self, *_args, **_kwargs):
+        return self
+
+    def all(self):
+        return list(self._rows)
+
+
+class FakeSession:
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+    def query(self, model):
+        return FakeQuery(self._mapping.get(model.__name__, []))
+
+    def close(self):
+        return None
+
+
+def test_send_care_pushes_uses_vaccine_tutor_time_and_advance(monkeypatch):
+    pet = SimpleNamespace(id="pet-1", name="Luna", user_id="user-1")
+    vaccine = SimpleNamespace(
+        id="vac-1",
+        pet_id="pet-1",
+        vaccine_name="Raiva",
+        vaccine_code="DOG_RABIES",
+        applied_date=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
+        next_dose_date=datetime(2026, 4, 20, 12, 0, tzinfo=timezone.utc),
+        alert_days_before=3,
+        reminder_time="14:25",
+        deleted=False,
+    )
+    sent_payloads = []
+
+    monkeypatch.setattr(notifications, "datetime", _frozen_datetime(datetime(2026, 4, 17, 17, 25, tzinfo=timezone.utc)))
+    monkeypatch.setattr(notifications, "_load_subscriptions", lambda: {"user-1": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}})
+    monkeypatch.setattr(notifications, "SessionLocal", lambda: FakeSession({
+        "Pet": [pet],
+        "VaccineRecord": [vaccine],
+        "ParasiteControlRecord": [],
+        "GroomingRecord": [],
+    }))
+    monkeypatch.setattr(notifications, "_send_push", lambda subscription, payload: sent_payloads.append(payload) or True)
+    monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
+
+    send_care_pushes()
+
+    assert len(sent_payloads) == 1
+    assert sent_payloads[0]["tag"] == "petmol-care-vaccine-pet-1-DOG_RABIES-2026-04-17"
+
+
+def test_send_care_pushes_uses_parasite_reminder_time(monkeypatch):
+    pet = SimpleNamespace(id="pet-1", name="Thor", user_id="user-1")
+    parasite = SimpleNamespace(
+        id="par-1",
+        pet_id="pet-1",
+        type="dewormer",
+        product_name="Drontal",
+        date_applied=datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc),
+        next_due_date=datetime(2026, 4, 17, 12, 0, tzinfo=timezone.utc),
+        alert_days_before=5,
+        reminder_days=5,
+        reminder_time="06:45",
+        deleted=False,
+    )
+    sent_payloads = []
+
+    monkeypatch.setattr(notifications, "datetime", _frozen_datetime(datetime(2026, 4, 17, 9, 45, tzinfo=timezone.utc)))
+    monkeypatch.setattr(notifications, "_load_subscriptions", lambda: {"user-1": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}})
+    monkeypatch.setattr(notifications, "SessionLocal", lambda: FakeSession({
+        "Pet": [pet],
+        "VaccineRecord": [],
+        "ParasiteControlRecord": [parasite],
+        "GroomingRecord": [],
+    }))
+    monkeypatch.setattr(notifications, "_send_push", lambda subscription, payload: sent_payloads.append(payload) or True)
+    monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
+
+    send_care_pushes()
+
+    assert len(sent_payloads) == 1
+    assert sent_payloads[0]["tag"] == "petmol-care-parasite-pet-1-dewormer-2026-04-17"
+
+
+def test_send_care_pushes_uses_grooming_scheduled_time(monkeypatch):
+    pet = SimpleNamespace(id="pet-1", name="Nina", user_id="user-1")
+    grooming = SimpleNamespace(
+        id="gro-1",
+        pet_id="pet-1",
+        type="bath",
+        date=datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc),
+        next_recommended_date=datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
+        reminder_enabled=True,
+        alert_days_before=2,
+        reminder_days_before=2,
+        scheduled_time="11:10",
+        deleted=False,
+    )
+    sent_payloads = []
+
+    monkeypatch.setattr(notifications, "datetime", _frozen_datetime(datetime(2026, 4, 17, 14, 10, tzinfo=timezone.utc)))
+    monkeypatch.setattr(notifications, "_load_subscriptions", lambda: {"user-1": {"endpoint": "https://example.test/push", "p256dh": "k", "auth": "a"}})
+    monkeypatch.setattr(notifications, "SessionLocal", lambda: FakeSession({
+        "Pet": [pet],
+        "VaccineRecord": [],
+        "ParasiteControlRecord": [],
+        "GroomingRecord": [grooming],
+    }))
+    monkeypatch.setattr(notifications, "_send_push", lambda subscription, payload: sent_payloads.append(payload) or True)
+    monkeypatch.setattr(notifications, "_upsert_pend", lambda **_kwargs: None)
+
+    send_care_pushes()
+
+    assert len(sent_payloads) == 1
+    assert sent_payloads[0]["tag"] == "petmol-care-grooming-pet-1-bath-2026-04-17"

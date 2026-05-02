@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '@/lib/I18nContext';
 import { defaultLocaleForCountry, isValidLocale, localeNames } from '@/lib/i18n';
+import { showBlockingNotice } from '@/features/interactions/userPromptChannel';
 
 const STORAGE_KEY_LAST_COUNTRY = 'petmol_last_detected_country';
 const CHECK_INTERVAL = 5 * 60 * 1000; // Verifica a cada 5 minutos
@@ -153,7 +154,7 @@ export function useLocationDetection() {
         setCountry(newCountry);
         setLocale(newLocale);
         console.log('✅ Idioma alterado para:', newLocale);
-        alert(`✅ App configurado para ${countryName}!\n\nAgora você pode buscar clínicas veterinárias locais.`);
+        showBlockingNotice(`App configurado para ${countryName}!`);
       } else {
         console.log('👤 Usuário optou por manter idioma atual');
       }

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { CanonicalPetEvent } from '@/features/events/types';
 import type { PetInteractionItem } from './types';
 import { loadMasterInteractionRules } from './preferences';
-import { isEventVisibleOnHome } from './interactionEngine';
+import { canonicalEventsToPetInteractions, isEventVisibleOnHome } from './interactionEngine';
 
 type CardTone = 'neutral' | 'ok' | 'warning' | 'critical';
 
@@ -36,6 +36,11 @@ function resolveTone(events: CanonicalPetEvent[]): CardTone {
   return 'neutral';
 }
 
+function shouldAlert(events: CanonicalPetEvent[]): boolean {
+  const tone = resolveTone(events);
+  return tone === 'warning' || tone === 'critical';
+}
+
 export function useHomeInteractionCenter(
   interactions: PetInteractionItem[],
   canonicalEvents: CanonicalPetEvent[],
@@ -52,16 +57,16 @@ export function useHomeInteractionCenter(
     );
     const topAttentionPetCount = new Set(topAttentionAlerts.map((alert) => alert.pet_id).filter(Boolean)).size;
 
-    const selectedPetAllAlerts = selectedPetId
-      ? visibleInteractions.filter((interaction) => interaction.pet_id === selectedPetId)
-      : [];
-    const selectedPetActiveAlerts = selectedPetAllAlerts.filter(
-      (interaction) => interaction.status === 'overdue' || interaction.status === 'today',
-    );
-
+    // selectedPet* são computados diretamente dos canonicalEvents (sem o cap maxItemsPerPet
+    // do loop multipet), garantindo que TODOS os itens em atraso do pet selecionado apareçam.
     const selectedPetEvents = selectedPetId
       ? canonicalEvents.filter((event) => event.pet_id === selectedPetId && isEventVisibleOnHome(event, rules))
       : [];
+
+    const selectedPetAllAlerts: PetInteractionItem[] = canonicalEventsToPetInteractions(selectedPetEvents, rules);
+    const selectedPetActiveAlerts = selectedPetAllAlerts.filter(
+      (interaction) => interaction.status === 'overdue' || interaction.status === 'today',
+    );
 
     const vaccineEvents = selectedPetEvents.filter((event) => event.domain === 'vaccine');
     const dewormerEvents = selectedPetEvents.filter((event) => event.action_target === 'health/parasites/dewormer');
@@ -76,12 +81,12 @@ export function useHomeInteractionCenter(
       selectedPetActiveAlerts,
       selectedPetAllAlerts,
       selectedPetCardAlerts: {
-        vacinas: vaccineEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        vermifugo: dewormerEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        antipulgas: fleaTickEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        coleira: collarEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        grooming: groomingEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
-        food: foodEvents.some((event) => event.status === 'overdue' || event.status === 'today'),
+        vacinas: shouldAlert(vaccineEvents),
+        vermifugo: shouldAlert(dewormerEvents),
+        antipulgas: shouldAlert(fleaTickEvents),
+        coleira: shouldAlert(collarEvents),
+        grooming: shouldAlert(groomingEvents),
+        food: shouldAlert(foodEvents),
       },
       selectedPetCardColors: {
         vacinas: resolveTone(vaccineEvents),

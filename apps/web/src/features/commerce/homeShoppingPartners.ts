@@ -35,7 +35,7 @@ export const HOME_SHOPPING_PARTNERS: HomeShoppingPartner[] = [
     description: 'Racao, brinquedos e mais',
     logoSrc: '/partner-logos/amazon.svg',
     logoAlt: 'Amazon',
-    directUrl: 'https://www.amazon.com.br/s?k=pet+shop&rh=n%3A16209062011',
+    fallbackUrl: 'https://www.amazon.com.br/s?k=pet+shop',
   },
   {
     id: 'petlove',
@@ -76,4 +76,29 @@ export async function openHomeShoppingPartner(partnerId: HomeShoppingPartnerId):
 
   const url = buildPartnerHandoffUrl(partner, leadId);
   window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/**
+ * Builds a contextual handoff URL for food/ração purchase.
+ * Passes the brand as q= so the partner can pre-fill search.
+ * Uses /api/handoff/shopping proxy for affiliate tracking.
+ */
+export function buildFoodHandoffUrl(
+  brand: string,
+  petId: string,
+  partnerId: HomeShoppingPartnerId,
+): string {
+  const partner = HOME_SHOPPING_PARTNERS.find((p) => p.id === partnerId);
+  if (!partner) return '#';
+
+  const searchQuery = [brand.trim(), 'ração'].filter(Boolean).join(' ');
+  const q = encodeURIComponent(searchQuery);
+  const leadId = `food-${petId}-${Date.now()}`;
+  const fallback = encodeURIComponent(
+    partner.fallbackUrl
+      ? `${partner.fallbackUrl}/search?q=${encodeURIComponent(searchQuery)}`
+      : `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(searchQuery)}`,
+  );
+
+  return `/api/handoff/shopping?partner=${partnerId}&q=${q}&lead_id=${encodeURIComponent(leadId)}&fallback=${fallback}`;
 }
